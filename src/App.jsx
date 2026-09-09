@@ -98,14 +98,14 @@ function VerifyEmail() {
           JSON.stringify(data.user)
         );
 
-       setMessage(
-  "Email verified successfully. Redirecting to account setup..."
-);
+        setMessage(
+          "Email verified successfully. Redirecting to account setup..."
+        );
 
-setTimeout(() => {
-  window.location.href =
-    "/create-account?setup=1";
-}, 1200);
+        setTimeout(() => {
+          window.location.href =
+            "/create-account?setup=1";
+        }, 1200);
 
       } catch (error) {
         console.error(
@@ -153,33 +153,140 @@ setTimeout(() => {
 }
 
 function CheckEmail() {
-  const email = new URLSearchParams(
+
+  const params = new URLSearchParams(
     window.location.search
-  ).get("email");
+  );
+
+  const email =
+    params.get("email") || "";
+
+  const [message, setMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+
+  const resendEmail = async () => {
+
+    if (!email) {
+
+      setError(
+        "Email address is missing."
+      );
+
+      return;
+    }
+
+
+    setLoading(true);
+
+    setMessage("");
+
+    setError("");
+
+
+    try {
+
+      const api =
+        getApiBaseUrl();
+
+
+      const response =
+        await fetch(
+          `${api}/api/auth/resend-verification`,
+          {
+
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              email,
+            }),
+
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        setError(
+          data.message ||
+          "Unable to resend verification email."
+        );
+
+        return;
+      }
+
+
+      setMessage(
+        data.message ||
+        "Verification email sent successfully."
+      );
+
+
+    } catch (err) {
+
+      console.error(
+        "Resend verification error:",
+        err
+      );
+
+      setError(
+        "Unable to connect to server. Please try again."
+      );
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  };
+
 
   return (
+
     <div
       style={{
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
         padding: "20px",
-        fontFamily: "Arial, sans-serif",
-        background: "#f7f9fc",
+        fontFamily:
+          "Arial, sans-serif",
+        background:
+          "linear-gradient(135deg, #f4f7fb 0%, #eef2f7 100%)",
       }}
     >
+
       <div
         style={{
           width: "100%",
-          maxWidth: "500px",
+          maxWidth: "520px",
           background: "#ffffff",
           padding: "50px 40px",
-          borderRadius: "20px",
+          borderRadius: "24px",
           textAlign: "center",
           boxShadow:
             "0 20px 60px rgba(0,0,0,0.12)",
         }}
       >
+
+        {/* EMAIL ICON */}
+
         <div
           style={{
             fontSize: "52px",
@@ -189,26 +296,41 @@ function CheckEmail() {
           ✉️
         </div>
 
+
+        {/* TITLE */}
+
         <h1
           style={{
-            marginBottom: "15px",
+            margin: "0 0 18px",
+            fontSize: "38px",
+            color: "#172b4d",
           }}
         >
           Check your email
         </h1>
 
+
+        {/* TEXT */}
+
         <p
           style={{
+            margin: "0 0 8px",
             color: "#667085",
+            fontSize: "18px",
             lineHeight: "1.7",
           }}
         >
           We sent a verification link to
         </p>
 
+
+        {/* EMAIL */}
+
         <p
           style={{
+            margin: "0 0 8px",
             fontWeight: "700",
+            fontSize: "19px",
             color: "#315a9b",
             wordBreak: "break-word",
           }}
@@ -216,17 +338,120 @@ function CheckEmail() {
           {email}
         </p>
 
+
+        {/* DESCRIPTION */}
+
         <p
           style={{
+            margin: "0 0 28px",
             color: "#667085",
+            fontSize: "17px",
             lineHeight: "1.7",
           }}
         >
-          Please open your email and click the verification link to continue.
+          Please open your email and click the
+          verification link to continue.
         </p>
+
+
+        {/* RESEND BUTTON */}
+
+        <button
+          type="button"
+          onClick={resendEmail}
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "15px 22px",
+            border: "none",
+            borderRadius: "10px",
+            background:
+              loading
+                ? "#94a3b8"
+                : "#00656A",
+            color: "#ffffff",
+            fontSize: "16px",
+            fontWeight: "700",
+            cursor:
+              loading
+                ? "not-allowed"
+                : "pointer",
+            transition: "0.2s ease",
+          }}
+        >
+
+          {loading
+            ? "Sending..."
+            : "Resend verification email"}
+
+        </button>
+
+
+        {/* SUCCESS MESSAGE */}
+
+        {message && (
+
+          <div
+            style={{
+              marginTop: "18px",
+              padding: "12px 15px",
+              borderRadius: "8px",
+              background: "#dcfce7",
+              color: "#166534",
+              fontSize: "14px",
+            }}
+          >
+
+            {message}
+
+          </div>
+
+        )}
+
+
+        {/* ERROR MESSAGE */}
+
+        {error && (
+
+          <div
+            style={{
+              marginTop: "18px",
+              padding: "12px 15px",
+              borderRadius: "8px",
+              background: "#fee2e2",
+              color: "#b91c1c",
+              fontSize: "14px",
+            }}
+          >
+
+            {error}
+
+          </div>
+
+        )}
+
+
+        {/* EXTRA INFO */}
+
+        <p
+          style={{
+            marginTop: "25px",
+            marginBottom: 0,
+            fontSize: "14px",
+            color: "#98a2b3",
+            lineHeight: "1.6",
+          }}
+        >
+          Didn't receive the email? Check your spam folder
+          or resend the verification email.
+        </p>
+
       </div>
+
     </div>
+
   );
+
 }
 
 
@@ -327,12 +552,12 @@ export default function App() {
   if (path === "/verify-email") { return <VerifyEmail />; }
 
   if (path === "/check-email") {
-  return <CheckEmail />;
-}
+    return <CheckEmail />;
+  }
 
-if (path === "/verify-email") {
-  return <VerifyEmail />;
-}
+  if (path === "/verify-email") {
+    return <VerifyEmail />;
+  }
 
   if (
     path === "/forgot-password" ||

@@ -1,132 +1,1213 @@
-const nodemailer=require("nodemailer");
+const nodemailer = require("nodemailer");
 
-const sendInvoiceEmail=async({user,order,paymentId})=>{
 
-const transporter=nodemailer.createTransport({
-host:process.env.SMTP_HOST,
-port:Number(process.env.SMTP_PORT),
-secure:process.env.SMTP_SECURE==="true",
-auth:{
-user:process.env.SMTP_USER,
-pass:process.env.SMTP_PASS,
-},
-});
+const sendInvoiceEmail = async ({
+    user,
+    order,
+    paymentId,
+}) => {
 
-const symbol=order.currency==="INR"?"₹":"$";
+    const transporter =
+        nodemailer.createTransport({
 
-const invoiceNumber=`SV-${String(order._id).slice(-8).toUpperCase()}`;
+            host: process.env.SMTP_HOST,
 
-const planAmount=Number(order.planAmount||0);
-const setupFee=Number(order.setupFee||0);
-const tax=Number(order.tax||0);
-const total=Number(order.amount||0);
+            port: Number(
+                process.env.SMTP_PORT || 587
+            ),
 
-await transporter.sendMail({
-from:process.env.SMTP_FROM,
-to:user.email,
-subject:`Payment Successful - Invoice ${invoiceNumber}`,
-html:`
-<div style="margin:0;padding:30px;background:#f5f7f8;font-family:Arial,sans-serif">
+            secure: process.env.SMTP_SECURE === "true",
 
-<div style="max-width:650px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+            auth: {
 
-<div style="background:#00656A;padding:30px;color:#fff">
-<h1 style="margin:0">SaleVitals</h1>
-<p style="margin:8px 0 0">Payment Successful</p>
-</div>
+                user: process.env.SMTP_USER,
 
-<div style="padding:35px">
+                pass: process.env.SMTP_PASS,
 
-<h2>Payment received successfully 🎉</h2>
+            },
 
-<p>Hi ${user.name||"Customer"},</p>
+        });
 
-<p>Thank you for choosing SaleVitals CRM. Your payment has been received successfully.</p>
 
-<div style="background:#E6F4F4;padding:20px;border-left:4px solid #00656A;margin:25px 0">
+    /* =========================================
+       CURRENCY
+    ========================================= */
 
-<strong>Your CRM activation</strong>
+    const symbol =
+        order.currency === "INR" ?
+        "₹" :
+        "$";
 
-<p style="margin-bottom:0">
-Your SaleVitals CRM will be activated soon. Our team will connect with you within 24 hours to complete your onboarding, setup and integration.
-</p>
 
-</div>
+   /* =========================================
+   INVOICE NUMBER
+========================================= */
 
-<h3>Invoice Details</h3>
+const invoiceNumber =
+    order.invoiceNumber ||
+    `SV-${new Date().getFullYear()}-001`;
 
-<table width="100%" style="border-collapse:collapse">
+
+    const planAmount =
+        Number(
+            order.planAmount ||
+            0
+        );
+
+
+    const setupFee =
+        Number(
+            order.setupFee ||
+            0
+        );
+
+
+    const tax =
+        Number(
+            order.tax ||
+            0
+        );
+
+
+    const total =
+        Number(
+            order.amount ||
+            0
+        );
+
+
+    /* =========================================
+       FORMAT PRICE
+    ========================================= */
+
+    const formatPrice =
+        (amount) =>
+        `${symbol}${Number(amount)
+                .toLocaleString(
+                    "en-IN",
+                    {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    }
+                )}`;
+
+
+    /* =========================================
+       DATE
+    ========================================= */
+
+    const invoiceDate =
+        new Date(
+            order.updatedAt ||
+            order.createdAt ||
+            Date.now()
+        )
+        .toLocaleDateString(
+            "en-IN", {
+                day: "2-digit",
+
+                month: "short",
+
+                year: "numeric",
+            }
+        );
+
+
+    /* =========================================
+       PERIOD
+    ========================================= */
+
+    const period =
+        Number(
+            order.period || 1
+        );
+
+
+    const periodLabel =
+        `${period} month${period > 1 ? "s" : ""}`;
+
+
+    /* =========================================
+       WEBSITE
+    ========================================= */
+
+    const websiteUrl =
+        "https://salevitals.com";
+
+
+    /* =========================================
+       LOGO URL
+       
+       IMPORTANT:
+       Public logo accessible hona chahiye.
+       Example:
+       https://salevitals.com/logo.png
+    ========================================= */
+
+    const logoUrl =
+        `${websiteUrl}/logo.png`;
+
+
+    await transporter.sendMail({
+
+        from: process.env.SMTP_FROM ||
+            `"SaleVitals" <${process.env.SMTP_USER}>`,
+
+
+        to: user.email,
+
+
+        subject: `Payment Successful - Invoice ${invoiceNumber}`,
+
+
+        html: `
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+</head>
+
+
+<body
+    style="
+        margin:0;
+        padding:0;
+        background:#f4f7f8;
+        font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        color:#1f2937;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="
+        background:#f4f7f8;
+        padding:35px 15px;
+    "
+>
 
 <tr>
-<td style="padding:10px 0">Invoice Number</td>
-<td align="right">${invoiceNumber}</td>
-</tr>
+
+<td align="center">
+
+
+<!-- =====================================
+     MAIN CONTAINER
+===================================== -->
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="
+        max-width:720px;
+        background:#ffffff;
+        border:1px solid #d9e0e3;
+        border-radius:16px;
+        overflow:hidden;
+        box-shadow:
+            0 10px 35px
+            rgba(0,0,0,0.08);
+    "
+>
+
+
+<!-- =====================================
+     HEADER
+===================================== -->
 
 <tr>
-<td style="padding:10px 0">Plan</td>
-<td align="right">${order.planName||order.planId}</td>
-</tr>
+
+<td
+    style="
+        background:#ffffff;
+        padding:22px 40px;
+        border-bottom:
+            1px solid #e5e7eb;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
 
 <tr>
-<td style="padding:10px 0">Subscription Period</td>
-<td align="right">${order.period} month${Number(order.period)>1?"s":""}</td>
-</tr>
 
-<tr>
-<td style="padding:10px 0">Payment ID</td>
-<td align="right">${paymentId}</td>
-</tr>
 
-<tr>
-<td colspan="2">
-<hr style="border:0;border-top:1px solid #e5e7eb">
+<!-- LOGO -->
+
+<td
+    align="left"
+    valign="middle"
+>
+
+
+<a
+    href="${websiteUrl}"
+    target="_blank"
+    style="
+        text-decoration:none;
+    "
+>
+
+<img
+    src="${logoUrl}"
+    alt="SaleVitals"
+    style="
+        display:block;
+        max-width:170px;
+        width:170px;
+        height:auto;
+        border:0;
+    "
+>
+
+</a>
+
+
 </td>
-</tr>
 
-<tr>
-<td style="padding:10px 0">Plan Amount</td>
-<td align="right">${symbol}${planAmount.toLocaleString()}</td>
-</tr>
 
-<tr>
-<td style="padding:10px 0">Setup & Integration</td>
-<td align="right">${symbol}${setupFee.toLocaleString()}</td>
-</tr>
 
-<tr>
-<td style="padding:10px 0">Tax</td>
-<td align="right">${symbol}${tax.toLocaleString()}</td>
-</tr>
+<!-- WEBSITE BUTTON -->
 
-<tr>
-<td colspan="2">
-<hr style="border:0;border-top:1px solid #e5e7eb">
+<td
+    align="right"
+    valign="middle"
+>
+
+
+<a
+    href="${websiteUrl}"
+    target="_blank"
+    style="
+        display:inline-block;
+        padding:
+            13px
+            24px;
+        border:
+            1px solid
+            #00656A;
+        border-radius:8px;
+        color:#00656A;
+        font-size:16px;
+        font-weight:700;
+        text-decoration:none;
+    "
+>
+
+Visit Website →
+
+</a>
+
+
 </td>
-</tr>
 
-<tr>
-<td style="font-size:20px;font-weight:bold;padding:15px 0">Total Paid</td>
-<td align="right" style="font-size:22px;font-weight:bold;color:#00656A">
-${symbol}${total.toLocaleString()}
-</td>
+
 </tr>
 
 </table>
 
+
+</td>
+
+</tr>
+
+
+
+<!-- =====================================
+     CONTENT
+===================================== -->
+
+<tr>
+
+<td
+    style="
+        padding:
+            32px
+            40px
+            25px;
+    "
+>
+
+
+<!-- TITLE -->
+
+<h1
+    style="
+        margin:
+            0
+            0
+            20px;
+        font-size:28px;
+        line-height:1.35;
+        color:#1f2937;
+    "
+>
+
+Payment received successfully 🎉
+
+</h1>
+
+
+<p
+    style="
+        margin:
+            0
+            0
+            15px;
+        font-size:16px;
+        color:#374151;
+    "
+>
+
+Hi ${user.name || "Customer"},
+
+</p>
+
+
+<p
+    style="
+        margin:
+            0
+            0
+            28px;
+        font-size:16px;
+        line-height:1.7;
+        color:#4b5563;
+    "
+>
+
+Thank you for choosing SaleVitals CRM.
+Your payment has been received successfully.
+
+</p>
+
+
+
+<!-- =====================================
+     CRM ACTIVATION
+===================================== -->
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="
+        background:#e6f4f4;
+        border-left:
+            5px solid
+            #00656A;
+        border-radius:10px;
+        margin-bottom:25px;
+    "
+>
+
+<tr>
+
+<td
+    style="
+        padding:
+            20px
+            22px;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
+
+<tr>
+
+
+<td
+    valign="top"
+    width="55"
+>
+
+<div
+    style="
+        width:45px;
+        height:45px;
+        border-radius:50%;
+        background:#00656A;
+        color:#ffffff;
+        text-align:center;
+        line-height:45px;
+        font-size:22px;
+    "
+>
+
+◷
+
 </div>
 
-<div style="background:#f8fafb;padding:20px;text-align:center;color:#6b7280">
-<strong>SaleVitals CRM</strong>
-<br><br>
-Your payment has been successfully received.
-</div>
+
+</td>
+
+
+<td
+    valign="top"
+>
+
+
+<div
+    style="
+        font-size:18px;
+        font-weight:700;
+        color:#00656A;
+        margin-bottom:7px;
+    "
+>
+
+Your CRM activation
 
 </div>
 
+
+<div
+    style="
+        font-size:15px;
+        line-height:1.7;
+        color:#374151;
+    "
+>
+
+Your SaleVitals CRM will be activated soon.
+Our team will connect with you soon to complete your onboarding,
+setup and integration.
+
 </div>
-`,
-});
+
+
+</td>
+
+
+</tr>
+
+</table>
+
+
+</td>
+
+</tr>
+
+</table>
+
+
+
+<!-- =====================================
+     INVOICE BOX
+===================================== -->
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="
+        border:
+            1px solid
+            #dce3e6;
+        border-radius:12px;
+        overflow:hidden;
+    "
+>
+
+
+<!-- INVOICE HEADER -->
+
+<tr>
+
+<td
+    style="
+        padding:
+            22px
+            22px
+            15px;
+        border-bottom:
+            1px solid
+            #e5e7eb;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
+
+<tr>
+
+
+<td
+    style="
+        font-size:22px;
+        font-weight:700;
+        color:#1f2937;
+    "
+>
+
+Invoice Details
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        font-size:15px;
+        color:#6b7280;
+    "
+>
+
+Invoice Date:
+${invoiceDate}
+
+</td>
+
+
+</tr>
+
+</table>
+
+
+</td>
+
+</tr>
+
+
+
+<!-- =====================================
+     BASIC DETAILS
+===================================== -->
+
+<tr>
+
+<td
+    style="
+        padding:
+            0
+            22px;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
+
+
+<tr>
+
+<td
+    style="
+        padding:14px 0;
+        color:#4b5563;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+Invoice Number
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:14px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+${invoiceNumber}
+
+</td>
+
+</tr>
+
+
+
+<tr>
+
+<td
+    style="
+        padding:14px 0;
+        color:#4b5563;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+Plan
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:14px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+${order.planName || order.planId || "Plan"}
+
+</td>
+
+</tr>
+
+
+
+<tr>
+
+<td
+    style="
+        padding:14px 0;
+        color:#4b5563;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+Subscription Period
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:14px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid #edf0f2;
+    "
+>
+
+${periodLabel}
+
+</td>
+
+</tr>
+
+
+
+<tr>
+
+<td
+    style="
+        padding:14px 0;
+        color:#4b5563;
+    "
+>
+
+Payment ID
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:14px 0;
+        font-weight:600;
+        color:#1f2937;
+        word-break:break-all;
+    "
+>
+
+${paymentId || "-"}
+
+</td>
+
+</tr>
+
+
+</table>
+
+
+</td>
+
+</tr>
+
+
+
+<!-- =====================================
+     PRICE DETAILS
+===================================== -->
+
+<tr>
+
+<td
+    style="
+        background:
+            linear-gradient(
+                90deg,
+                #eef8f8,
+                #f6fbfb
+            );
+        padding:
+            15px
+            22px
+            20px;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
+
+
+<tr>
+
+<td
+    style="
+        padding:10px 0;
+        color:#374151;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+Plan Amount
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:10px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+${formatPrice(planAmount)}
+
+</td>
+
+</tr>
+
+
+
+<tr>
+
+<td
+    style="
+        padding:10px 0;
+        color:#374151;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+Setup &amp; Integration
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:10px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+${formatPrice(setupFee)}
+
+</td>
+
+</tr>
+
+
+
+<tr>
+
+<td
+    style="
+        padding:10px 0;
+        color:#374151;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+Tax
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:10px 0;
+        font-weight:600;
+        color:#1f2937;
+        border-bottom:
+            1px solid
+            #dce9e9;
+    "
+>
+
+${formatPrice(tax)}
+
+</td>
+
+</tr>
+
+
+
+<!-- TOTAL -->
+
+<tr>
+
+<td
+    style="
+        padding:
+            22px
+            0
+            5px;
+        font-size:23px;
+        font-weight:700;
+        color:#1f2937;
+    "
+>
+
+Total Paid
+
+</td>
+
+
+<td
+    align="right"
+    style="
+        padding:
+            22px
+            0
+            5px;
+        font-size:28px;
+        font-weight:800;
+        color:#00656A;
+    "
+>
+
+${formatPrice(total)}
+
+</td>
+
+</tr>
+
+
+</table>
+
+
+</td>
+
+</tr>
+
+
+</table>
+
+
+
+<!-- =====================================
+     WELCOME BOX
+===================================== -->
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="
+        margin-top:24px;
+        background:
+            linear-gradient(
+                90deg,
+                #eef8f8,
+                #f6fbfb
+            );
+        border-radius:10px;
+    "
+>
+
+<tr>
+
+<td
+    style="
+        padding:
+            20px
+            22px;
+    "
+>
+
+
+<table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+>
+
+<tr>
+
+
+<td
+    width="55"
+    valign="top"
+    style="
+        font-size:35px;
+    "
+>
+
+🌱
+
+</td>
+
+
+<td
+    valign="top"
+>
+
+
+<div
+    style="
+        font-size:17px;
+        font-weight:700;
+        color:#00656A;
+        margin-bottom:6px;
+    "
+>
+
+Welcome to the SaleVitals Family!
+
+</div>
+
+
+<div
+    style="
+        font-size:15px;
+        line-height:1.6;
+        color:#4b5563;
+    "
+>
+
+We're excited to have you on board.
+If you have any questions, feel free to reply to this email.
+
+</div>
+
+
+</td>
+
+
+</tr>
+
+</table>
+
+
+</td>
+
+</tr>
+
+</table>
+
+
+</td>
+
+</tr>
+
+
+
+<!-- =====================================
+     FOOTER
+===================================== -->
+
+<tr>
+
+<td
+    style="
+        padding:
+            28px
+            30px;
+        text-align:center;
+        border-top:
+            1px solid
+            #e5e7eb;
+        background:#ffffff;
+    "
+>
+
+
+<div
+    style="
+        margin-bottom:18px;
+        font-size:14px;
+    "
+>
+
+
+<a
+    href="${websiteUrl}"
+    target="_blank"
+    style="
+        color:#4b5563;
+        text-decoration:none;
+        margin:0 8px;
+    "
+>
+
+Visit Website
+
+</a>
+
+
+<span style="color:#9ca3af">
+
+|
+
+</span>
+
+
+<a
+    href="${websiteUrl}"
+    target="_blank"
+    style="
+        color:#4b5563;
+        text-decoration:none;
+        margin:0 8px;
+    "
+>
+
+Support
+
+</a>
+
+
+<span style="color:#9ca3af">
+
+|
+
+</span>
+
+
+<a
+    href="${websiteUrl}"
+    target="_blank"
+    style="
+        color:#4b5563;
+        text-decoration:none;
+        margin:0 8px;
+    "
+>
+
+Privacy Policy
+
+</a>
+
+
+</div>
+
+
+<div
+    style="
+        font-size:13px;
+        color:#6b7280;
+    "
+>
+
+© ${new Date().getFullYear()}
+SaleVitals.
+All rights reserved.
+
+</div>
+
+
+</td>
+
+</tr>
+
+
+</table>
+
+
+</td>
+
+</tr>
+
+</table>
+
+
+</body>
+
+</html>
+
+        `,
+
+    });
+
 
 };
 
-module.exports=sendInvoiceEmail;
+
+module.exports =
+    sendInvoiceEmail;
