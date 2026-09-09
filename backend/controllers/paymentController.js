@@ -354,34 +354,51 @@ exports.verifyPayment =
             }
 
             const user =
-                await User.findById(
-                    order.userId
-                );
+    await User.findById(
+        order.userId
+    );
 
-            if (
-                user &&
-                user.email
-            ) {
-                try {
-                    await sendInvoiceEmail({
-                        user,
-                        order,
-                        paymentId:
-                            razorpay_payment_id,
-                    });
+console.log("=================================");
+console.log("INVOICE USER DEBUG");
+console.log("ORDER ID:", order._id);
+console.log("ORDER USER ID:", order.userId);
+console.log(
+    "USER FOUND:",
+    user ? user._id : "NOT FOUND"
+);
+console.log(
+    "USER EMAIL:",
+    user ? user.email : "NO EMAIL"
+);
+console.log("=================================");
 
-                    console.log(
-                        "Invoice email sent successfully to:",
-                        user.email
-                    );
-                } catch (emailError) {
-                    console.error(
-                        "INVOICE EMAIL ERROR:",
-                        emailError
-                    );
-                }
-            }
+if (
+    user &&
+    user.email
+) {
+    try {
 
+        await sendInvoiceEmail({
+            user,
+            order,
+            paymentId:
+                razorpay_payment_id,
+        });
+
+        console.log(
+            "Invoice email sent successfully to:",
+            user.email
+        );
+
+    } catch (emailError) {
+
+        console.error(
+            "INVOICE EMAIL ERROR:",
+            emailError
+        );
+
+    }
+}
             return res.status(200).json({
                 success: true,
 
