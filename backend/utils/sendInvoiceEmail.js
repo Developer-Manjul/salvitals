@@ -7,22 +7,31 @@ const sendInvoiceEmail = async ({
     paymentId,
 }) => {
 
+    /* =========================================
+       SMTP TRANSPORTER
+    ========================================= */
+
     const transporter =
         nodemailer.createTransport({
 
-            host: process.env.SMTP_HOST,
+            host:
+                process.env.SMTP_HOST,
 
-            port: Number(
-                process.env.SMTP_PORT || 587
-            ),
+            port:
+                Number(
+                    process.env.SMTP_PORT || 587
+                ),
 
-            secure: process.env.SMTP_SECURE === "true",
+            secure:
+                process.env.SMTP_SECURE === "true",
 
             auth: {
 
-                user: process.env.SMTP_USER,
+                user:
+                    process.env.SMTP_USER,
 
-                pass: process.env.SMTP_PASS,
+                pass:
+                    process.env.SMTP_PASS,
 
             },
 
@@ -30,50 +39,192 @@ const sendInvoiceEmail = async ({
 
 
     /* =========================================
+       HELPERS
+    ========================================= */
+
+    const getNumber =
+        (...values) => {
+
+            for (
+                const value
+                of values
+            ) {
+
+                if (
+                    value !== undefined &&
+                    value !== null &&
+                    value !== "" &&
+                    !isNaN(
+                        Number(value)
+                    )
+                ) {
+
+                    return Number(value);
+
+                }
+
+            }
+
+            return 0;
+
+        };
+
+
+    /* =========================================
        CURRENCY
     ========================================= */
 
     const symbol =
-        order.currency === "INR" ?
-        "₹" :
-        "$";
+        order.currency === "INR"
+            ? "₹"
+            : "$";
 
 
-   /* =========================================
-   INVOICE NUMBER
-========================================= */
+    /* =========================================
+       TOTAL AMOUNT
 
-const invoiceNumber =
-    order.invoiceNumber ||
-    `SV-${new Date().getFullYear()}-001`;
-
-
-    const planAmount =
-        Number(
-            order.planAmount ||
-            0
-        );
-
-
-    const setupFee =
-        Number(
-            order.setupFee ||
-            0
-        );
-
-
-    const tax =
-        Number(
-            order.tax ||
-            0
-        );
-
+       Multiple possible field names check
+    ========================================= */
 
     const total =
-        Number(
-            order.amount ||
-            0
+        getNumber(
+
+            order.amount,
+
+            order.totalAmount,
+
+            order.total,
+
+            order.finalAmount,
+
+            order.grandTotal,
+
+            order.paidAmount,
+
+            order.razorpayAmount
+                ? Number(
+                    order.razorpayAmount
+                ) / 100
+                : 0
+
         );
+
+
+    /* =========================================
+       SETUP / INTEGRATION FEE
+    ========================================= */
+
+    const setupFee =
+        getNumber(
+
+            order.setupFee,
+
+            order.setupAmount,
+
+            order.integrationFee,
+
+            order.integrationAmount,
+
+            order.setupIntegrationFee,
+
+            order.onboardingFee
+
+        );
+
+
+    /* =========================================
+       TAX
+    ========================================= */
+
+    const tax =
+        getNumber(
+
+            order.tax,
+
+            order.taxAmount,
+
+            order.gst,
+
+            order.gstAmount,
+
+            order.GST
+
+        );
+
+
+    /* =========================================
+       PLAN AMOUNT
+
+       If database does not contain separate
+       plan amount, calculate from total.
+    ========================================= */
+
+    let planAmount =
+        getNumber(
+
+            order.planAmount,
+
+            order.planPrice,
+
+            order.plan_amount,
+
+            order.baseAmount,
+
+            order.basePrice,
+
+            order.price,
+
+            order.subscriptionAmount
+
+        );
+
+
+    /*
+       FALLBACK:
+
+       If no plan amount is stored,
+       Total = Plan + Setup + Tax
+    */
+
+    if (
+        planAmount <= 0
+    ) {
+
+        planAmount =
+            total -
+            setupFee -
+            tax;
+
+    }
+
+
+    /*
+       Safety fallback
+    */
+
+    if (
+        planAmount < 0
+    ) {
+
+        planAmount = total;
+
+    }
+
+
+    /* =========================================
+       INVOICE NUMBER
+
+       Prefer saved DB invoice number.
+    ========================================= */
+
+    const invoiceNumber =
+        order.invoiceNumber ||
+        order.invoice_number ||
+        `SV-${new Date().getFullYear()}-${String(
+            order._id || Date.now()
+        )
+            .slice(-6)
+            .toUpperCase()}`;
 
 
     /* =========================================
@@ -82,34 +233,38 @@ const invoiceNumber =
 
     const formatPrice =
         (amount) =>
-        `${symbol}${Number(amount)
-                .toLocaleString(
-                    "en-IN",
-                    {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    }
-                )}`;
+            `${symbol}${Number(
+                amount || 0
+            ).toLocaleString(
+                "en-IN",
+                {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }
+            )}`;
 
 
     /* =========================================
-       DATE
+       INVOICE DATE
     ========================================= */
 
     const invoiceDate =
         new Date(
+
             order.updatedAt ||
             order.createdAt ||
             Date.now()
-        )
-        .toLocaleDateString(
-            "en-IN", {
+
+        ).toLocaleDateString(
+
+            "en-IN",
+
+            {
                 day: "2-digit",
-
                 month: "short",
-
                 year: "numeric",
             }
+
         );
 
 
@@ -118,13 +273,25 @@ const invoiceNumber =
     ========================================= */
 
     const period =
-        Number(
-            order.period || 1
+        getNumber(
+
+            order.period,
+
+            order.subscriptionPeriod,
+
+            order.duration,
+
+            1
+
         );
 
 
     const periodLabel =
-        `${period} month${period > 1 ? "s" : ""}`;
+        `${period} month${
+            period > 1
+                ? "s"
+                : ""
+        }`;
 
 
     /* =========================================
@@ -136,32 +303,85 @@ const invoiceNumber =
 
 
     /* =========================================
-       LOGO URL
-       
-       IMPORTANT:
-       Public logo accessible hona chahiye.
-       Example:
-       https://salevitals.com/logo.png
+       LOGO
     ========================================= */
 
     const logoUrl =
         `${websiteUrl}/logo.png`;
 
 
+    /* =========================================
+       DEBUG
+    ========================================= */
+
+    console.log(
+        "========== INVOICE DEBUG =========="
+    );
+
+    console.log(
+        "User Email:",
+        user.email
+    );
+
+    console.log(
+        "Order ID:",
+        order._id
+    );
+
+    console.log(
+        "Invoice Number:",
+        invoiceNumber
+    );
+
+    console.log(
+        "Plan Amount:",
+        planAmount
+    );
+
+    console.log(
+        "Setup Fee:",
+        setupFee
+    );
+
+    console.log(
+        "Tax:",
+        tax
+    );
+
+    console.log(
+        "Total:",
+        total
+    );
+
+    console.log(
+        "==================================="
+    );
+
+
+    /* =========================================
+       SEND EMAIL
+    ========================================= */
+
     await transporter.sendMail({
 
-        from: process.env.SMTP_FROM ||
+        from:
+
+            process.env.SMTP_FROM ||
+
             `"SaleVitals" <${process.env.SMTP_USER}>`,
 
 
-        to: user.email,
+        to:
+            user.email,
 
 
-        subject: `Payment Successful - Invoice ${invoiceNumber}`,
+        subject:
+            `Payment Successful - Invoice ${invoiceNumber}`,
 
 
-        html: `
+        html:
 
+            `
 <!DOCTYPE html>
 
 <html>
@@ -183,10 +403,7 @@ const invoiceNumber =
         margin:0;
         padding:0;
         background:#f4f7f8;
-        font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
+        font-family:Arial, Helvetica, sans-serif;
         color:#1f2937;
     "
 >
@@ -208,10 +425,6 @@ const invoiceNumber =
 <td align="center">
 
 
-<!-- =====================================
-     MAIN CONTAINER
-===================================== -->
-
 <table
     width="100%"
     cellpadding="0"
@@ -223,16 +436,11 @@ const invoiceNumber =
         border:1px solid #d9e0e3;
         border-radius:16px;
         overflow:hidden;
-        box-shadow:
-            0 10px 35px
-            rgba(0,0,0,0.08);
     "
 >
 
 
-<!-- =====================================
-     HEADER
-===================================== -->
+<!-- HEADER -->
 
 <tr>
 
@@ -240,11 +448,9 @@ const invoiceNumber =
     style="
         background:#ffffff;
         padding:22px 40px;
-        border-bottom:
-            1px solid #e5e7eb;
+        border-bottom:1px solid #e5e7eb;
     "
 >
-
 
 <table
     width="100%"
@@ -256,13 +462,10 @@ const invoiceNumber =
 <tr>
 
 
-<!-- LOGO -->
-
 <td
     align="left"
     valign="middle"
 >
-
 
 <a
     href="${websiteUrl}"
@@ -286,30 +489,21 @@ const invoiceNumber =
 
 </a>
 
-
 </td>
 
-
-
-<!-- WEBSITE BUTTON -->
 
 <td
     align="right"
     valign="middle"
 >
 
-
 <a
     href="${websiteUrl}"
     target="_blank"
     style="
         display:inline-block;
-        padding:
-            13px
-            24px;
-        border:
-            1px solid
-            #00656A;
+        padding:13px 24px;
+        border:1px solid #00656A;
         border-radius:8px;
         color:#00656A;
         font-size:16px;
@@ -322,7 +516,6 @@ Visit Website →
 
 </a>
 
-
 </td>
 
 
@@ -330,37 +523,25 @@ Visit Website →
 
 </table>
 
-
 </td>
 
 </tr>
 
 
-
-<!-- =====================================
-     CONTENT
-===================================== -->
+<!-- CONTENT -->
 
 <tr>
 
 <td
     style="
-        padding:
-            32px
-            40px
-            25px;
+        padding:32px 40px 25px;
     "
 >
 
 
-<!-- TITLE -->
-
 <h1
     style="
-        margin:
-            0
-            0
-            20px;
+        margin:0 0 20px;
         font-size:28px;
         line-height:1.35;
         color:#1f2937;
@@ -374,10 +555,7 @@ Payment received successfully 🎉
 
 <p
     style="
-        margin:
-            0
-            0
-            15px;
+        margin:0 0 15px;
         font-size:16px;
         color:#374151;
     "
@@ -390,10 +568,7 @@ Hi ${user.name || "Customer"},
 
 <p
     style="
-        margin:
-            0
-            0
-            28px;
+        margin:0 0 28px;
         font-size:16px;
         line-height:1.7;
         color:#4b5563;
@@ -406,10 +581,7 @@ Your payment has been received successfully.
 </p>
 
 
-
-<!-- =====================================
-     CRM ACTIVATION
-===================================== -->
+<!-- ACTIVATION -->
 
 <table
     width="100%"
@@ -418,9 +590,7 @@ Your payment has been received successfully.
     border="0"
     style="
         background:#e6f4f4;
-        border-left:
-            5px solid
-            #00656A;
+        border-left:5px solid #00656A;
         border-radius:10px;
         margin-bottom:25px;
     "
@@ -430,12 +600,9 @@ Your payment has been received successfully.
 
 <td
     style="
-        padding:
-            20px
-            22px;
+        padding:20px 22px;
     "
 >
-
 
 <table
     width="100%"
@@ -469,13 +636,10 @@ Your payment has been received successfully.
 
 </div>
 
-
 </td>
 
 
-<td
-    valign="top"
->
+<td valign="top">
 
 
 <div
@@ -514,7 +678,6 @@ setup and integration.
 
 </table>
 
-
 </td>
 
 </tr>
@@ -522,10 +685,7 @@ setup and integration.
 </table>
 
 
-
-<!-- =====================================
-     INVOICE BOX
-===================================== -->
+<!-- INVOICE -->
 
 <table
     width="100%"
@@ -533,9 +693,7 @@ setup and integration.
     cellspacing="0"
     border="0"
     style="
-        border:
-            1px solid
-            #dce3e6;
+        border:1px solid #dce3e6;
         border-radius:12px;
         overflow:hidden;
     "
@@ -548,16 +706,10 @@ setup and integration.
 
 <td
     style="
-        padding:
-            22px
-            22px
-            15px;
-        border-bottom:
-            1px solid
-            #e5e7eb;
+        padding:22px 22px 15px;
+        border-bottom:1px solid #e5e7eb;
     "
 >
-
 
 <table
     width="100%"
@@ -600,27 +752,20 @@ ${invoiceDate}
 
 </table>
 
-
 </td>
 
 </tr>
 
 
-
-<!-- =====================================
-     BASIC DETAILS
-===================================== -->
+<!-- BASIC DETAILS -->
 
 <tr>
 
 <td
     style="
-        padding:
-            0
-            22px;
+        padding:0 22px;
     "
 >
-
 
 <table
     width="100%"
@@ -636,8 +781,7 @@ ${invoiceDate}
     style="
         padding:14px 0;
         color:#4b5563;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -652,8 +796,7 @@ Invoice Number
         padding:14px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -664,15 +807,13 @@ ${invoiceNumber}
 </tr>
 
 
-
 <tr>
 
 <td
     style="
         padding:14px 0;
         color:#4b5563;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -687,8 +828,7 @@ Plan
         padding:14px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -699,15 +839,13 @@ ${order.planName || order.planId || "Plan"}
 </tr>
 
 
-
 <tr>
 
 <td
     style="
         padding:14px 0;
         color:#4b5563;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -722,8 +860,7 @@ Subscription Period
         padding:14px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid #edf0f2;
+        border-bottom:1px solid #edf0f2;
     "
 >
 
@@ -732,7 +869,6 @@ ${periodLabel}
 </td>
 
 </tr>
-
 
 
 <tr>
@@ -768,34 +904,21 @@ ${paymentId || "-"}
 
 </table>
 
-
 </td>
 
 </tr>
 
 
-
-<!-- =====================================
-     PRICE DETAILS
-===================================== -->
+<!-- PRICE DETAILS -->
 
 <tr>
 
 <td
     style="
-        background:
-            linear-gradient(
-                90deg,
-                #eef8f8,
-                #f6fbfb
-            );
-        padding:
-            15px
-            22px
-            20px;
+        background:#f6fbfb;
+        padding:15px 22px 20px;
     "
 >
-
 
 <table
     width="100%"
@@ -811,9 +934,7 @@ ${paymentId || "-"}
     style="
         padding:10px 0;
         color:#374151;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -828,9 +949,7 @@ Plan Amount
         padding:10px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -841,16 +960,13 @@ ${formatPrice(planAmount)}
 </tr>
 
 
-
 <tr>
 
 <td
     style="
         padding:10px 0;
         color:#374151;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -865,9 +981,7 @@ Setup &amp; Integration
         padding:10px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -878,16 +992,13 @@ ${formatPrice(setupFee)}
 </tr>
 
 
-
 <tr>
 
 <td
     style="
         padding:10px 0;
         color:#374151;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -902,9 +1013,7 @@ Tax
         padding:10px 0;
         font-weight:600;
         color:#1f2937;
-        border-bottom:
-            1px solid
-            #dce9e9;
+        border-bottom:1px solid #dce9e9;
     "
 >
 
@@ -915,17 +1024,11 @@ ${formatPrice(tax)}
 </tr>
 
 
-
-<!-- TOTAL -->
-
 <tr>
 
 <td
     style="
-        padding:
-            22px
-            0
-            5px;
+        padding:22px 0 5px;
         font-size:23px;
         font-weight:700;
         color:#1f2937;
@@ -940,10 +1043,7 @@ Total Paid
 <td
     align="right"
     style="
-        padding:
-            22px
-            0
-            5px;
+        padding:22px 0 5px;
         font-size:28px;
         font-weight:800;
         color:#00656A;
@@ -959,7 +1059,6 @@ ${formatPrice(total)}
 
 </table>
 
-
 </td>
 
 </tr>
@@ -968,10 +1067,7 @@ ${formatPrice(total)}
 </table>
 
 
-
-<!-- =====================================
-     WELCOME BOX
-===================================== -->
+<!-- WELCOME -->
 
 <table
     width="100%"
@@ -980,12 +1076,7 @@ ${formatPrice(total)}
     border="0"
     style="
         margin-top:24px;
-        background:
-            linear-gradient(
-                90deg,
-                #eef8f8,
-                #f6fbfb
-            );
+        background:#eef8f8;
         border-radius:10px;
     "
 >
@@ -994,38 +1085,8 @@ ${formatPrice(total)}
 
 <td
     style="
-        padding:
-            20px
-            22px;
+        padding:20px 22px;
     "
->
-
-
-<table
-    width="100%"
-    cellpadding="0"
-    cellspacing="0"
-    border="0"
->
-
-<tr>
-
-
-<td
-    width="55"
-    valign="top"
-    style="
-        font-size:35px;
-    "
->
-
-🌱
-
-</td>
-
-
-<td
-    valign="top"
 >
 
 
@@ -1034,11 +1095,11 @@ ${formatPrice(total)}
         font-size:17px;
         font-weight:700;
         color:#00656A;
-        margin-bottom:6px;
+        margin-bottom:8px;
     "
 >
 
-Welcome to the SaleVitals Family!
+🌱 Welcome to the SaleVitals Family!
 
 </div>
 
@@ -1059,7 +1120,6 @@ If you have any questions, feel free to reply to this email.
 
 </td>
 
-
 </tr>
 
 </table>
@@ -1069,103 +1129,19 @@ If you have any questions, feel free to reply to this email.
 
 </tr>
 
-</table>
 
-
-</td>
-
-</tr>
-
-
-
-<!-- =====================================
-     FOOTER
-===================================== -->
+<!-- FOOTER -->
 
 <tr>
 
 <td
     style="
-        padding:
-            28px
-            30px;
+        padding:28px 30px;
         text-align:center;
-        border-top:
-            1px solid
-            #e5e7eb;
+        border-top:1px solid #e5e7eb;
         background:#ffffff;
     "
 >
-
-
-<div
-    style="
-        margin-bottom:18px;
-        font-size:14px;
-    "
->
-
-
-<a
-    href="${websiteUrl}"
-    target="_blank"
-    style="
-        color:#4b5563;
-        text-decoration:none;
-        margin:0 8px;
-    "
->
-
-Visit Website
-
-</a>
-
-
-<span style="color:#9ca3af">
-
-|
-
-</span>
-
-
-<a
-    href="${websiteUrl}"
-    target="_blank"
-    style="
-        color:#4b5563;
-        text-decoration:none;
-        margin:0 8px;
-    "
->
-
-Support
-
-</a>
-
-
-<span style="color:#9ca3af">
-
-|
-
-</span>
-
-
-<a
-    href="${websiteUrl}"
-    target="_blank"
-    style="
-        color:#4b5563;
-        text-decoration:none;
-        margin:0 8px;
-    "
->
-
-Privacy Policy
-
-</a>
-
-
-</div>
 
 
 <div
@@ -1200,8 +1176,7 @@ All rights reserved.
 </body>
 
 </html>
-
-        `,
+            `,
 
     });
 
