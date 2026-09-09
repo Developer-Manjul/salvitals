@@ -9,16 +9,6 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const getStorage = () => {
-    const localToken = localStorage.getItem("token");
-
-    if (localToken) {
-      return localStorage;
-    }
-
-    return sessionStorage;
-  };
-
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -37,6 +27,12 @@ export default function SignIn() {
     setLoading(true);
 
     try {
+      /*
+      ======================================
+      LOGIN API
+      ======================================
+      */
+
       const response = await fetch(
         `${getApiBaseUrl()}/api/auth/login`,
         {
@@ -70,9 +66,13 @@ export default function SignIn() {
 
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      localStorage.removeItem("vitalsToken");
+      localStorage.removeItem("vitalsUser");
 
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
+      sessionStorage.removeItem("vitalsToken");
+      sessionStorage.removeItem("vitalsUser");
 
       /*
       ======================================
@@ -90,13 +90,23 @@ export default function SignIn() {
       );
 
       storage.setItem(
+        "vitalsToken",
+        data.token
+      );
+
+      storage.setItem(
         "user",
-        JSON.stringify(data.user)
+        JSON.stringify(data.user || {})
+      );
+
+      storage.setItem(
+        "vitalsUser",
+        JSON.stringify(data.user || {})
       );
 
       /*
       ======================================
-      CHECK REDIRECT FROM CART
+      GET REDIRECT URL
       ======================================
       */
 
@@ -108,6 +118,67 @@ export default function SignIn() {
           "redirectAfterLogin"
         );
 
+      /*
+      ======================================
+      CHECK ACCOUNT SETUP STATUS
+      ======================================
+      */
+
+      const userData = data.user || {};
+
+      const accountSetupCompleted =
+        userData.accountSetupCompleted === true ||
+        userData.profileCompleted === true ||
+        userData.setupCompleted === true;
+
+      /*
+      ======================================
+      PRIORITY 1
+
+      SETUP NOT COMPLETE
+      ALWAYS GO TO ACCOUNT SETUP
+
+      NO CART ACCESS BEFORE SETUP
+      ======================================
+      */
+
+      if (!accountSetupCompleted) {
+
+        /*
+        If user selected a plan before login,
+        remember that cart should open after setup.
+        */
+
+        if (redirectAfterLogin) {
+          storage.setItem(
+            "redirectAfterSetup",
+            redirectAfterLogin
+          );
+        }
+
+        localStorage.removeItem(
+          "redirectAfterLogin"
+        );
+
+        sessionStorage.removeItem(
+          "redirectAfterLogin"
+        );
+
+        setLoading(false);
+
+        window.location.href =
+          "/create-account?setup=1";
+
+        return;
+      }
+
+      /*
+      ======================================
+      SETUP IS COMPLETE
+      NOW CLEAR LOGIN REDIRECT
+      ======================================
+      */
+
       localStorage.removeItem(
         "redirectAfterLogin"
       );
@@ -118,46 +189,23 @@ export default function SignIn() {
 
       /*
       ======================================
-      IF USER CAME FROM CART
-      ALWAYS GO BACK TO CART
+      PRIORITY 2
+
+      CHECK PAYMENT STATUS
       ======================================
-      */
-
-      if (redirectAfterLogin) {
-        setLoading(false);
-
-        window.location.href =
-          redirectAfterLogin;
-
-        return;
-      }
-
-      /*
-      ======================================
-      PAYMENT STATUS CHECK
-      ======================================
-
-      IMPORTANT:
-      Backend API should return something like:
-
-      {
-        payment_completed: true
-      }
-
-      OR
-
-      {
-        payment_completed: false
-      }
       */
 
       try {
+
         const paymentResponse = await fetch(
           `${getApiBaseUrl()}/api/payment/status`,
           {
             method: "GET",
+
             headers: {
-              Authorization: `Bearer ${data.token}`,
+              Authorization:
+                `Bearer ${data.token}`,
+
               "Content-Type":
                 "application/json",
             },
@@ -167,25 +215,24 @@ export default function SignIn() {
         const paymentData =
           await paymentResponse.json();
 
-        setLoading(false);
-
         /*
         ======================================
-        PAYMENT SUCCESS
+        PAYMENT COMPLETE
+        → DASHBOARD
         ======================================
         */
 
         if (
           paymentResponse.ok &&
           (
-            paymentData.payment_completed ===
-              true ||
-            paymentData.payment_status ===
-              "paid" ||
-            paymentData.status ===
-              "paid"
+            paymentData.payment_completed === true ||
+            paymentData.payment_status === "paid" ||
+            paymentData.status === "paid"
           )
         ) {
+
+          setLoading(false);
+
           window.location.href =
             "/dashboard";
 
@@ -194,32 +241,49 @@ export default function SignIn() {
 
         /*
         ======================================
-        PAYMENT NOT COMPLETED
+        PAYMENT NOT COMPLETE
+
+        IF USER CAME FROM PRICING
+        → CART
+
+        OTHERWISE
+        → CART
         ======================================
         */
 
+        setLoading(false);
+
         window.location.href =
-          "/cart";
+          redirectAfterLogin || "/cart";
+
+        return;
 
       } catch (paymentError) {
+
         console.error(
           "Payment status check error:",
           paymentError
         );
 
         /*
-        If status API fails,
-        safer to send user to cart.
-        Never allow dashboard.
+        ======================================
+        PAYMENT API ERROR
+
+        SETUP ALREADY COMPLETE,
+        SO USER CAN GO TO CART
+        ======================================
         */
 
         setLoading(false);
 
         window.location.href =
-          "/cart";
+          redirectAfterLogin || "/cart";
+
+        return;
       }
 
     } catch (err) {
+
       console.error(
         "Login error:",
         err
@@ -234,6 +298,7 @@ export default function SignIn() {
   };
 
   const goToCreateAccount = () => {
+
     const redirectAfterLogin =
       localStorage.getItem(
         "redirectAfterLogin"
@@ -243,10 +308,12 @@ export default function SignIn() {
       );
 
     if (redirectAfterLogin) {
+
       localStorage.setItem(
         "redirectAfterRegister",
         redirectAfterLogin
       );
+
     }
 
     window.location.href =
@@ -254,8 +321,10 @@ export default function SignIn() {
   };
 
   const goToForgotPassword = () => {
+
     window.location.href =
       "/forgot-password";
+
   };
 
   return (
@@ -264,16 +333,19 @@ export default function SignIn() {
       {/* MOBILE BRAND */}
 
       <div className="auth-brand-mobile">
+
         <span className="auth-mark">
           <span>∿</span>
         </span>
 
         <div>
           <b>Vitals</b>
+
           <small>
             CLINIC GROWTH CRM
           </small>
         </div>
+
       </div>
 
 
@@ -324,9 +396,7 @@ export default function SignIn() {
           <div className="auth-stats">
 
             <div className="auth-stat">
-              <strong>
-                4,200+
-              </strong>
+              <strong>4,200+</strong>
 
               <span>
                 clinics &amp; practices
@@ -335,9 +405,7 @@ export default function SignIn() {
 
 
             <div className="auth-stat">
-              <strong>
-                38%
-              </strong>
+              <strong>38%</strong>
 
               <span>
                 avg. enquiry-to-consult
@@ -346,9 +414,7 @@ export default function SignIn() {
 
 
             <div className="auth-stat">
-              <strong>
-                &lt; 5 min
-              </strong>
+              <strong>&lt; 5 min</strong>
 
               <span>
                 first response time
@@ -366,8 +432,8 @@ export default function SignIn() {
                 RM
               </div>
 
-
               <div>
+
                 <strong>
                   Dr. Rahul Mehta
                 </strong>
@@ -376,6 +442,7 @@ export default function SignIn() {
                   Mehta Ortho &amp; Physio,
                   Pune
                 </small>
+
               </div>
 
             </div>
@@ -429,22 +496,17 @@ export default function SignIn() {
                 Work email
               </span>
 
-
               <div className="auth-input-wrap">
 
                 <span className="auth-input-icon">
                   ✉
                 </span>
 
-
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => {
-                    setEmail(
-                      e.target.value
-                    );
-
+                    setEmail(e.target.value);
                     setError("");
                   }}
                   placeholder="you@clinic.com"
@@ -467,13 +529,10 @@ export default function SignIn() {
                   Password
                 </span>
 
-
                 <button
                   type="button"
                   className="auth-forgot"
-                  onClick={
-                    goToForgotPassword
-                  }
+                  onClick={goToForgotPassword}
                 >
                   Forgot password?
                 </button>
@@ -487,7 +546,6 @@ export default function SignIn() {
                   🔒
                 </span>
 
-
                 <input
                   type={
                     showPassword
@@ -496,17 +554,13 @@ export default function SignIn() {
                   }
                   value={password}
                   onChange={(e) => {
-                    setPassword(
-                      e.target.value
-                    );
-
+                    setPassword(e.target.value);
                     setError("");
                   }}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   required
                 />
-
 
                 <button
                   type="button"
@@ -515,11 +569,6 @@ export default function SignIn() {
                     setShowPassword(
                       (value) => !value
                     )
-                  }
-                  aria-label={
-                    showPassword
-                      ? "Hide password"
-                      : "Show password"
                   }
                 >
                   {showPassword
@@ -578,22 +627,16 @@ export default function SignIn() {
           </form>
 
 
-          {/* DIVIDER */}
-
           <div className="auth-divider">
 
             <span></span>
 
-            <b>
-              OR
-            </b>
+            <b>OR</b>
 
             <span></span>
 
           </div>
 
-
-          {/* GOOGLE */}
 
           <button
             type="button"
@@ -614,25 +657,19 @@ export default function SignIn() {
           </button>
 
 
-          {/* CREATE ACCOUNT */}
-
           <div className="auth-switch">
 
             Don't have an account?{" "}
 
             <button
               type="button"
-              onClick={
-                goToCreateAccount
-              }
+              onClick={goToCreateAccount}
             >
               Create account
             </button>
 
           </div>
 
-
-          {/* SECURITY */}
 
           <div className="auth-security">
 

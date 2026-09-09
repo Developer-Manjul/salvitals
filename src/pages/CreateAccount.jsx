@@ -77,12 +77,7 @@ export default function CreateAccount() {
     // EMAIL VERIFIED → CONTINUE SETUP
     // ==========================================
 
-    if (
-      params.get("setup") === "1" &&
-      localStorage.getItem(
-        "vitalsContinueSetup"
-      ) === "true"
-    ) {
+    if (params.get("setup") === "1") {
 
       const savedData =
         localStorage.getItem(
@@ -435,6 +430,15 @@ export default function CreateAccount() {
       return;
     }
 
+    const selectedPlanId = Object.keys(PLANS).find(
+      (planId) => PLANS[planId].name === selectedPlan
+    );
+
+    if (!selectedPlanId) {
+      alert("Please select a valid plan.");
+      return;
+    }
+
     const planData = {
       selectedPlan,
       account: form,
@@ -451,7 +455,7 @@ export default function CreateAccount() {
       JSON.stringify(planData)
     );
 
-    window.location.href = "/cart";
+    window.location.href = `/cart?plan=${selectedPlanId}`;
   };
 
   // =====================================================

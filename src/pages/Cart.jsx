@@ -17,7 +17,34 @@ const goTo = (url) => {
 const Cart = () => {
     const [planId] = useState(() => {
         const params = new URLSearchParams(window.location.search);
-        return params.get("plan") || "starter";
+        const queryPlanId = params.get("plan");
+
+        if (queryPlanId && PLANS[queryPlanId]) {
+            return queryPlanId;
+        }
+
+        try {
+            const savedPlan = JSON.parse(
+                localStorage.getItem("selectedPlan") || "null"
+            );
+            const savedPlanId = savedPlan?.id || savedPlan?.planId;
+
+            if (savedPlanId && PLANS[savedPlanId]) {
+                return savedPlanId;
+            }
+
+            const savedPlanName = (
+                savedPlan?.name || savedPlan?.planName || ""
+            ).toLowerCase();
+            const matchingPlan = Object.values(PLANS).find(
+                (plan) => plan.name.toLowerCase() === savedPlanName
+            );
+
+            return matchingPlan?.id || "starter";
+        } catch (error) {
+            console.error("Selected plan read error:", error);
+            return "starter";
+        }
     });
 
     const [selectedMonths, setSelectedMonths] = useState(1);
