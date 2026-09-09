@@ -1,6 +1,7 @@
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
+
 const Order = require("../models/Order");
 const User = require("../models/User");
 const sendInvoiceEmail = require("../utils/sendInvoiceEmail");
@@ -39,6 +40,21 @@ function getUserId(req) {
     } catch (error) {
         return null;
     }
+}
+
+function getNumber(...values) {
+    for (const value of values) {
+        if (
+            value !== undefined &&
+            value !== null &&
+            value !== "" &&
+            Number.isFinite(Number(value))
+        ) {
+            return Number(value);
+        }
+    }
+
+    return 0;
 }
 
 exports.createOrder =
@@ -89,10 +105,22 @@ exports.createOrder =
                 period = 1,
                 periodLabel = "",
                 country = "",
+                planAmount = 0,
+                setupFee = 0,
+                tax = 0,
             } = req.body;
 
             const totalAmount =
-                Number(amount);
+                getNumber(amount);
+
+            const finalPlanAmount =
+                getNumber(planAmount);
+
+            const finalSetupFee =
+                getNumber(setupFee);
+
+            const finalTax =
+                getNumber(tax);
 
             if (
                 !Number.isFinite(
@@ -142,15 +170,23 @@ exports.createOrder =
             );
 
             console.log(
-                "CART TOTAL:",
-                totalAmount
+                "Plan Amount:",
+                finalPlanAmount
             );
 
             console.log(
-                "RAZORPAY AMOUNT:",
-                Math.round(
-                    totalAmount * 100
-                )
+                "Setup Fee:",
+                finalSetupFee
+            );
+
+            console.log(
+                "Tax:",
+                finalTax
+            );
+
+            console.log(
+                "Total Amount:",
+                totalAmount
             );
 
             console.log(
@@ -194,6 +230,21 @@ exports.createOrder =
                                 periodLabel || ""
                             ),
 
+                        planAmount:
+                            String(
+                                finalPlanAmount
+                            ),
+
+                        setupFee:
+                            String(
+                                finalSetupFee
+                            ),
+
+                        tax:
+                            String(
+                                finalTax
+                            ),
+
                         cartTotal:
                             String(
                                 totalAmount
@@ -219,11 +270,23 @@ exports.createOrder =
                     amount:
                         totalAmount,
 
+                    planAmount:
+                        finalPlanAmount,
+
+                    setupFee:
+                        finalSetupFee,
+
+                    tax:
+                        finalTax,
+
                     currency:
                         curr,
 
                     period:
                         Number(period) || 1,
+
+                    periodLabel:
+                        periodLabel || "",
 
                     paymentStatus:
                         "pending",
@@ -255,9 +318,20 @@ exports.createOrder =
                         dbOrder._id.toString(),
 
                     totalAmount,
+
+                    planAmount:
+                        finalPlanAmount,
+
+                    setupFee:
+                        finalSetupFee,
+
+                    tax:
+                        finalTax,
                 },
             });
+
         } catch (error) {
+
             console.error(
                 "CREATE ORDER ERROR:",
                 error
@@ -323,27 +397,11 @@ exports.verifyPayment =
                 });
             }
 
-            const order =
-                await Order.findOneAndUpdate(
-                    {
-                        razorpayOrderId:
-                            razorpay_order_id,
-                    },
-                    {
-                        paymentStatus:
-                            "paid",
-
-                        razorpayPaymentId:
-                            razorpay_payment_id,
-
-                        razorpaySignature:
-                            razorpay_signature,
-                    },
-                    {
-                        new:
-                            true,
-                    }
-                );
+            let order =
+                await Order.findOne({
+                    razorpayOrderId:
+                        razorpay_order_id,
+                });
 
             if (!order) {
                 return res.status(404).json({
@@ -353,52 +411,138 @@ exports.verifyPayment =
                 });
             }
 
+            const currentYear =
+                new Date().getFullYear();
+
+            if (
+                !order.invoiceNumber
+            ) {
+                const paidOrdersCount =
+                    await Order.countDocuments({
+                        paymentStatus:
+                            "paid",
+
+                        invoiceNumber: {
+                            $regex:
+                                `^SV_${currentYear}_`,
+                        },
+                    });
+
+                const invoiceSequence =
+                    String(
+                        paidOrdersCount + 1
+                    ).padStart(
+                        3,
+                        "0"
+                    );
+
+                order.invoiceNumber =
+                    `SV_${currentYear}_${invoiceSequence}`;
+            }
+
+            order.paymentStatus =
+                "paid";
+
+            order.razorpayPaymentId =
+                razorpay_payment_id;
+
+            order.razorpaySignature =
+                razorpay_signature;
+
+            await order.save();
+
             const user =
-    await User.findById(
-        order.userId
-    );
+                await User.findById(
+                    order.userId
+                );
 
-console.log("=================================");
-console.log("INVOICE USER DEBUG");
-console.log("ORDER ID:", order._id);
-console.log("ORDER USER ID:", order.userId);
-console.log(
-    "USER FOUND:",
-    user ? user._id : "NOT FOUND"
-);
-console.log(
-    "USER EMAIL:",
-    user ? user.email : "NO EMAIL"
-);
-console.log("=================================");
+            console.log(
+                "================================="
+            );
 
-if (
-    user &&
-    user.email
-) {
-    try {
+            console.log(
+                "INVOICE USER DEBUG"
+            );
 
-        await sendInvoiceEmail({
-            user,
-            order,
-            paymentId:
-                razorpay_payment_id,
-        });
+            console.log(
+                "ORDER ID:",
+                order._id
+            );
 
-        console.log(
-            "Invoice email sent successfully to:",
-            user.email
-        );
+            console.log(
+                "ORDER USER ID:",
+                order.userId
+            );
 
-    } catch (emailError) {
+            console.log(
+                "USER FOUND:",
+                user
+                    ? user._id
+                    : "NOT FOUND"
+            );
 
-        console.error(
-            "INVOICE EMAIL ERROR:",
-            emailError
-        );
+            console.log(
+                "USER EMAIL:",
+                user
+                    ? user.email
+                    : "NO EMAIL"
+            );
 
-    }
-}
+            console.log(
+                "INVOICE NUMBER:",
+                order.invoiceNumber
+            );
+
+            console.log(
+                "PLAN AMOUNT:",
+                order.planAmount
+            );
+
+            console.log(
+                "SETUP FEE:",
+                order.setupFee
+            );
+
+            console.log(
+                "TAX:",
+                order.tax
+            );
+
+            console.log(
+                "TOTAL:",
+                order.amount
+            );
+
+            console.log(
+                "================================="
+            );
+
+            if (
+                user &&
+                user.email
+            ) {
+                try {
+                    await sendInvoiceEmail({
+                        user,
+                        order,
+                        paymentId:
+                            razorpay_payment_id,
+                    });
+
+                    console.log(
+                        "Invoice email sent successfully to:",
+                        user.email
+                    );
+
+                } catch (emailError) {
+
+                    console.error(
+                        "INVOICE EMAIL ERROR:",
+                        emailError
+                    );
+                }
+            }
+
             return res.status(200).json({
                 success: true,
 
@@ -407,7 +551,9 @@ if (
 
                 order,
             });
+
         } catch (error) {
+
             console.error(
                 "VERIFY PAYMENT ERROR:",
                 error
