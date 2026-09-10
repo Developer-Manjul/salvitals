@@ -366,41 +366,101 @@ export default function CreateAccount() {
     }
   };
 
-  const continueClinicDetails = () => {
+  const continueClinicDetails = async () => {
     if (!clinicDetails.address.trim()) {
       alert("Please enter your clinic address.");
       return;
     }
 
-    const completeData = {
-      account: form,
+    const token =
+      localStorage.getItem("salevitals_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("vitalsToken") ||
+      sessionStorage.getItem("salevitals_token") ||
+      sessionStorage.getItem("token") ||
+      sessionStorage.getItem("vitalsToken");
 
-      clinic: {
-        ...clinicDetails,
+    if (!token) {
+      setError("Your session has expired. Please sign in again.");
+      return;
+    }
 
-        displayName:
-          clinicDetails.displayName || form.name,
-      },
+    setLoading(true);
 
-      logo: logoPreview,
+    try {
+      const response = await fetch(`${API_URL}/api/auth/complete-setup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...clinicDetails,
+          displayName: clinicDetails.displayName || form.name,
+          clinicLogo: logoPreview,
+        }),
+      });
 
-      doctors:
-        selectedDoctors === "custom"
-          ? customDoctors
-          : selectedDoctors,
-    };
+      const responseText = await response.text();
+      let data = {};
 
-    localStorage.setItem(
-      "vitalsClinicSetup",
-      JSON.stringify(completeData)
-    );
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        throw new Error(
+          `Server returned an invalid response (${response.status}). Please restart the backend server.`
+        );
+      }
 
-    setStep(2);
+      if (!response.ok || !data.success) {
+        if (response.status === 404 && data.message === "User not found") {
+          localStorage.removeItem("salevitals_token");
+          localStorage.removeItem("salevitals_user");
+          window.location.href = "/signin?message=session-expired";
+          return;
+        }
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+        throw new Error(data.message || "Unable to save clinic details.");
+      }
+
+      if (data.user) {
+        localStorage.setItem("salevitals_user", JSON.stringify(data.user));
+      }
+
+      const completeData = {
+        account: form,
+
+        clinic: {
+          ...clinicDetails,
+
+          displayName:
+            clinicDetails.displayName || form.name,
+        },
+
+        logo: logoPreview,
+
+        doctors:
+          selectedDoctors === "custom"
+            ? customDoctors
+            : selectedDoctors,
+      };
+
+      localStorage.setItem(
+        "vitalsClinicSetup",
+        JSON.stringify(completeData)
+      );
+
+      setStep(2);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (error) {
+      setError(error.message || "Unable to save clinic details.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const proceedToCart = () => {
@@ -984,6 +1044,12 @@ export default function CreateAccount() {
           <div className="setup-content">
 
             <div className="setup-card">
+
+              {error && (
+                <div className="auth-error">
+                  {error}
+                </div>
+              )}
 
               <div className="setup-card-title">
 

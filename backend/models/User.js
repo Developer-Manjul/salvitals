@@ -28,11 +28,32 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
-        phone: { type: String, trim: true, default: "" },
-        phoneCountryCode: { type: String, trim: true, default: "" },
-        emailVerified: { type: Boolean, default: false },
-        emailVerificationToken: { type: String, default: "" },
-        emailVerificationExpires: { type: Date, default: null },
+        phone: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        phoneCountryCode: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        emailVerified: {
+            type: Boolean,
+            default: false,
+        },
+
+        emailVerificationToken: {
+            type: String,
+            default: "",
+        },
+
+        emailVerificationExpires: {
+            type: Date,
+            default: null,
+        },
 
         speciality: {
             type: String,
@@ -75,6 +96,17 @@ const userSchema = new mongoose.Schema(
             type: String,
             trim: true,
             default: "",
+        },
+
+        clinicLogo: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        accountSetupCompleted: {
+            type: Boolean,
+            default: false,
         },
 
         role: {

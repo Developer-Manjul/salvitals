@@ -14,6 +14,7 @@ const generateToken = (user) =>
   jwt.sign(
     {
       id: user._id.toString(),
+      email: user.email,
       role: user.role,
     },
     process.env.JWT_SECRET,
@@ -51,6 +52,10 @@ const formatUserResponse = (user) => ({
   zipCode: user.zipCode || "",
 
   website: user.website || "",
+
+  clinicLogo: user.clinicLogo || "",
+
+  accountSetupCompleted: user.accountSetupCompleted === true,
 
   role: user.role,
 
@@ -1480,6 +1485,77 @@ exports.login =
             "Login failed",
 
         });
+
+    }
+
+  };
+
+
+/* =====================================================
+   COMPLETE ACCOUNT SETUP
+===================================================== */
+
+exports.completeSetup =
+  async (req, res) => {
+
+    try {
+
+      const authorization =
+        req.headers.authorization || "";
+
+      if (!authorization.startsWith("Bearer ")) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+      }
+
+      const decoded = jwt.verify(
+        authorization.slice(7),
+        process.env.JWT_SECRET
+      );
+
+      const user = await User.findById(decoded.id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const {
+        displayName,
+        address,
+        gstin,
+        zipCode,
+        website,
+        clinicLogo,
+      } = req.body;
+
+      user.displayName = String(displayName || "").trim();
+      user.address = String(address || "").trim();
+      user.gstin = String(gstin || "").trim().toUpperCase();
+      user.zipCode = String(zipCode || "").trim();
+      user.website = String(website || "").trim();
+      user.clinicLogo = String(clinicLogo || "").trim();
+      user.accountSetupCompleted = true;
+
+      await user.save();
+
+      return res.json({
+        success: true,
+        user: formatUserResponse(user),
+      });
+
+    } catch (error) {
+
+      console.error("Complete setup error:", error.message);
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired authentication token",
+      });
 
     }
 

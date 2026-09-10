@@ -78,6 +78,7 @@ export default function SignIn() {
 
       storage.setItem("token", token);
       storage.setItem("vitalsToken", token);
+      storage.setItem("salevitals_token", token);
 
       storage.setItem(
         "user",
@@ -86,6 +87,11 @@ export default function SignIn() {
 
       storage.setItem(
         "vitalsUser",
+        JSON.stringify(userData)
+      );
+
+      storage.setItem(
+        "salevitals_user",
         JSON.stringify(userData)
       );
 

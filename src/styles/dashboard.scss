@@ -2107,3 +2107,16 @@
   }
 
 }
+
+
+.dash-brand-logo {
+  width: 110px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.dash-mobile-brand .dash-brand-logo {
+  width: 110px;
+  height: auto;
+}

@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import "../styles/dashboard.scss";
 
-/* =========================================================
-   NAVIGATION
-========================================================= */
-
 const navGroups = [
   {
     label: "Acquire",
@@ -85,10 +81,6 @@ const kpis = [
   },
 ];
 
-/* =========================================================
-   LEAD SOURCES
-========================================================= */
-
 const sources = [
   ["Google", "412", "25.0%", "blue"],
   ["Instagram", "338", "20.5%", "pink"],
@@ -100,9 +92,6 @@ const sources = [
   ["Other", "41", "2.5%", "slate"],
 ];
 
-/* =========================================================
-   PIPELINE
-========================================================= */
 
 const pipeline = [
   ["New", 19, "slate"],
@@ -115,9 +104,6 @@ const pipeline = [
   ["Lost", 3, "red"],
 ];
 
-/* =========================================================
-   RECENT LEADS
-========================================================= */
 
 const leads = [
   {
@@ -154,9 +140,6 @@ const leads = [
   },
 ];
 
-/* =========================================================
-   FOLLOW UPS
-========================================================= */
 
 const followUps = [
   [
@@ -182,10 +165,6 @@ const followUps = [
   ],
 ];
 
-/* =========================================================
-   PLANS
-   DOLLAR PRICING - SAME AS SCREENSHOT
-========================================================= */
 
 const plans = [
   {
@@ -301,9 +280,6 @@ const plans = [
   },
 ];
 
-/* =========================================================
-   ICON
-========================================================= */
 
 function Icon({ name, size = 18 }) {
   const common = {
@@ -492,40 +468,36 @@ function Icon({ name, size = 18 }) {
   return <svg {...common}>{paths[name] || paths.users}</svg>;
 }
 
-/* =========================================================
-   BRAND
-========================================================= */
-
 function Brand({ mobile = false }) {
   return (
     <div className={mobile ? "dash-mobile-brand" : "dash-brand"}>
-      <span className="dash-brand-mark">
-        <Icon name="trend" size={18} />
-      </span>
-
-      <span>
-        <strong>Vitals</strong>
-        <small>CLINIC GROWTH CRM</small>
-      </span>
+      <img
+        src="/logo.png"
+        alt="Vitals Clinic Growth CRM"
+        className="dash-brand-logo"
+      />
     </div>
   );
 }
 
-/* =========================================================
-   AVATAR
-========================================================= */
+function Avatar({ initials, logo, alt = "Clinic logo", tone = "" }) {
+  if (logo) {
+    return (
+      <span className={`dash-avatar dash-avatar-logo ${tone}`}>
+        <img
+          src={logo}
+          alt={alt}
+        />
+      </span>
+    );
+  }
 
-function Avatar({ initials, tone = "" }) {
   return (
     <span className={`dash-avatar ${tone}`}>
       {initials}
     </span>
   );
 }
-
-/* =========================================================
-   GET USER INITIALS
-========================================================= */
 
 function getInitials(name = "") {
   return (
@@ -550,8 +522,8 @@ function ChoosePlan({
 }) {
 
   const fullName = user?.name
-  ? user.name.trim()
-  : "there";
+    ? user.name.trim()
+    : "there";
 
   const planName =
     selectedPlan?.name ||
@@ -615,8 +587,8 @@ function ChoosePlan({
               Our team is setting up your workspace
               so everything is ready for your clinic.
               One of our onboarding specialists will
-              contact you within
-              <strong> 24 hours </strong>
+              contact you within soon
+
               to complete the activation and help you
               get started.
 
@@ -745,7 +717,7 @@ function ChoosePlan({
             </div>
 
 
-       
+
 
             <p className="crm-support-text">
 
@@ -1497,10 +1469,10 @@ export default function Dashboard() {
       plan.id === "starter"
         ? 59
         : plan.id === "growth"
-        ? 79
-        : plan.id === "scale"
-        ? 99
-        : 0;
+          ? 79
+          : plan.id === "scale"
+            ? 99
+            : 0;
 
     const selectedPlan = {
       ...plan,
@@ -1567,9 +1539,8 @@ export default function Dashboard() {
       =================================================== */}
 
       <aside
-        className={`dash-sidebar ${
-          mobileOpen ? "open" : ""
-        }`}
+        className={`dash-sidebar ${mobileOpen ? "open" : ""
+          }`}
       >
 
         <Brand />
@@ -1599,11 +1570,10 @@ export default function Dashboard() {
           {/* DASHBOARD */}
 
           <button
-            className={`dash-nav-item ${
-              active === "Dashboard"
+            className={`dash-nav-item ${active === "Dashboard"
                 ? "active"
                 : ""
-            }`}
+              }`}
             onClick={() =>
               selectNav("Dashboard")
             }
@@ -1644,11 +1614,10 @@ export default function Dashboard() {
 
                     <button
                       key={name}
-                      className={`dash-nav-item ${
-                        active === name
+                      className={`dash-nav-item ${active === name
                           ? "active"
                           : ""
-                      }`}
+                        }`}
                       onClick={() =>
                         selectNav(name)
                       }
@@ -1667,7 +1636,7 @@ export default function Dashboard() {
                         <em
                           className={
                             countTone ===
-                            "hot"
+                              "hot"
                               ? "hot"
                               : ""
                           }
@@ -1871,10 +1840,17 @@ export default function Dashboard() {
                 }
               >
 
-                <Avatar
-                  initials={initials}
-                  tone="blue"
-                />
+                <Avatar 
+                initials={initials} 
+                logo={
+                  user?.clinicLogo ||
+                  user?.logo ||
+                  user?.businessLogo ||
+                  ""
+                }
+                alt={clinicName || "Clinic logo"}
+                tone="blue" 
+              />
 
                 <span>
 
