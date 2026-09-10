@@ -60,10 +60,7 @@ export default function CreateAccount() {
       window.location.search
     );
 
-    // ==========================================
-    // PAYMENT SUCCESS
-    // ==========================================
-
+  
     if (params.get("payment") === "success") {
 
       setAccountCreated(true);
@@ -72,10 +69,6 @@ export default function CreateAccount() {
       return;
     }
 
-
-    // ==========================================
-    // EMAIL VERIFIED → CONTINUE SETUP
-    // ==========================================
 
     if (params.get("setup") === "1") {
 
@@ -128,15 +121,10 @@ export default function CreateAccount() {
 
       }
 
-
-      // Create Account form skip
-      // Direct onboarding Step 1
       setAccountCreated(true);
 
       setStep(1);
 
-
-      // Future reload ke liye clean
       localStorage.removeItem(
         "vitalsContinueSetup"
       );
@@ -338,7 +326,6 @@ export default function CreateAccount() {
 
       if (data.emailVerificationRequired) {
 
-        // Verification ke baad onboarding continue karne ke liye
         localStorage.setItem(
           "vitalsSignupData",
           JSON.stringify({
@@ -379,10 +366,6 @@ export default function CreateAccount() {
     }
   };
 
-  // ==========================================
-  // CLINIC DETAILS CONTINUE
-  // ==========================================
-
   const continueClinicDetails = () => {
     if (!clinicDetails.address.trim()) {
       alert("Please enter your clinic address.");
@@ -420,10 +403,6 @@ export default function CreateAccount() {
     });
   };
 
-  // ==========================================
-  // PROCEED TO CART
-  // ==========================================
-
   const proceedToCart = () => {
     if (!selectedPlan) {
       alert("Please select a plan first.");
@@ -457,11 +436,7 @@ export default function CreateAccount() {
 
     window.location.href = `/cart?plan=${selectedPlanId}`;
   };
-
-  // =====================================================
-  // CREATE ACCOUNT SCREEN
-  // =====================================================
-
+  
   if (!accountCreated) {
     return (
       <>

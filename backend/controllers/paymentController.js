@@ -57,6 +57,188 @@ function getNumber(...values) {
     return 0;
 }
 
+exports.getPaymentStatus =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const userId =
+                getUserId(req);
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication required",
+                    payment_completed:
+                        false,
+                    payment_status:
+                        "unauthorized",
+                    status:
+                        "unauthorized",
+                });
+            }
+
+            const user =
+                await User.findById(
+                    userId
+                );
+
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "User not found",
+                    payment_completed:
+                        false,
+                    payment_status:
+                        "not_found",
+                    status:
+                        "not_found",
+                });
+            }
+
+            const paidOrder =
+                await Order.findOne({
+                    userId:
+                        userId,
+
+                    paymentStatus:
+                        "paid",
+                }).sort({
+                    createdAt:
+                        -1,
+                });
+
+            if (paidOrder) {
+                console.log(
+                    "================================="
+                );
+
+                console.log(
+                    "PAYMENT STATUS CHECK"
+                );
+
+                console.log(
+                    "USER ID:",
+                    userId
+                );
+
+                console.log(
+                    "USER EMAIL:",
+                    user.email
+                );
+
+                console.log(
+                    "PAID ORDER:",
+                    paidOrder._id
+                );
+
+                console.log(
+                    "PLAN:",
+                    paidOrder.planName
+                );
+
+                console.log(
+                    "PAYMENT STATUS:",
+                    paidOrder.paymentStatus
+                );
+
+                console.log(
+                    "================================="
+                );
+
+                return res.status(200).json({
+                    success: true,
+
+                    payment_completed:
+                        true,
+
+                    payment_status:
+                        "paid",
+
+                    status:
+                        "paid",
+
+                    orderId:
+                        paidOrder._id,
+
+                    planId:
+                        paidOrder.planId,
+
+                    planName:
+                        paidOrder.planName,
+
+                    invoiceNumber:
+                        paidOrder.invoiceNumber || "",
+                });
+            }
+
+            console.log(
+                "================================="
+            );
+
+            console.log(
+                "PAYMENT STATUS CHECK"
+            );
+
+            console.log(
+                "USER ID:",
+                userId
+            );
+
+            console.log(
+                "USER EMAIL:",
+                user.email
+            );
+
+            console.log(
+                "NO PAID ORDER FOUND"
+            );
+
+            console.log(
+                "================================="
+            );
+
+            return res.status(200).json({
+                success: true,
+
+                payment_completed:
+                    false,
+
+                payment_status:
+                    "pending",
+
+                status:
+                    "pending",
+            });
+
+        } catch (error) {
+
+            console.error(
+                "GET PAYMENT STATUS ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+
+                message:
+                    "Unable to check payment status",
+
+                payment_completed:
+                    false,
+
+                payment_status:
+                    "error",
+
+                status:
+                    "error",
+            });
+        }
+    };
+
 exports.createOrder =
     async (
         req,

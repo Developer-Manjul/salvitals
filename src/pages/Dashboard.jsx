@@ -549,9 +549,9 @@ function ChoosePlan({
   onContinue,
 }) {
 
-  const firstName = user?.name
-    ? user.name.trim().split(/\s+/)[0]
-    : "there";
+  const fullName = user?.name
+  ? user.name.trim()
+  : "there";
 
   const planName =
     selectedPlan?.name ||
@@ -600,7 +600,7 @@ function ChoosePlan({
             </p>
 
             <h1>
-              Welcome, {firstName}.
+              Welcome, {fullName}.
             </h1>
 
             <p className="crm-main-message">

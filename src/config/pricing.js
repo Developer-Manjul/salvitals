@@ -148,14 +148,6 @@ export const formatPlanPrice = (
 
 /* =========================================
    SAVE SELECTED PLAN
-
-   Example:
-
-   saveSelectedPlan({
-     planId: "growth",
-     months: 6,
-     currency: "INR"
-   });
 ========================================= */
 
 export const saveSelectedPlan = ({
@@ -168,6 +160,7 @@ export const saveSelectedPlan = ({
     PLANS[planId];
 
   if (!plan) {
+
     console.error(
       "Invalid plan:",
       planId
@@ -227,8 +220,6 @@ export const saveSelectedPlan = ({
 
 /* =========================================
    GET SELECTED PLAN
-
-   Cart automatically uses this.
 ========================================= */
 
 export const getSelectedPlan = () => {
@@ -270,10 +261,6 @@ export const getSelectedPlan = () => {
         savedPlan
       );
 
-
-    /*
-    Validate plan
-    */
 
     if (
       !selectedPlan.planId ||
@@ -476,6 +463,13 @@ export const formatAmount = (
 export const detectVisitorCountry =
   async () => {
 
+    /*
+    =========================================
+    STEP 1
+    BACKEND LOCATION API
+    =========================================
+    */
+
     try {
 
       const api =
@@ -484,7 +478,11 @@ export const detectVisitorCountry =
 
       const res =
         await fetch(
-          `${api}/api/location`
+          `${api}/api/location`,
+          {
+            cache:
+              "no-store"
+          }
         );
 
 
@@ -502,25 +500,106 @@ export const detectVisitorCountry =
         data.countryCode
       ) {
 
-        return data.countryCode
-          .toUpperCase()
-          .trim();
+        const countryCode =
+          data.countryCode
+            .toUpperCase()
+            .trim();
+
+
+        console.log(
+          "Country detected from backend:",
+          countryCode
+        );
+
+
+        return countryCode;
 
       }
+
+    } catch (
+      error
+    ) {
+
+      console.log(
+        "Backend country detection failed:",
+        error
+      );
+
+    }
+
+
+    /*
+    =========================================
+    STEP 2
+    PUBLIC IP LOCATION
+
+    This is mainly useful for localhost
+    testing with VPN.
+    =========================================
+    */
+
+    try {
+
+      const ipRes =
+        await fetch(
+          "https://ipapi.co/json/",
+          {
+            cache:
+              "no-store"
+          }
+        );
+
+
+      const ipData =
+        await ipRes.json();
+
+
+      console.log(
+        "Public IP location:",
+        ipData
+      );
 
 
       if (
-        window.location.hostname ===
-          "localhost" ||
-
-        window.location.hostname ===
-          "127.0.0.1"
+        ipData.country_code
       ) {
 
-        return "IN";
+        const countryCode =
+          ipData.country_code
+            .toUpperCase()
+            .trim();
+
+
+        console.log(
+          "Country detected from public IP:",
+          countryCode
+        );
+
+
+        return countryCode;
 
       }
 
+    } catch (
+      error
+    ) {
+
+      console.log(
+        "Public IP country detection failed:",
+        error
+      );
+
+    }
+
+
+    /*
+    =========================================
+    STEP 3
+    TIMEZONE FALLBACK
+    =========================================
+    */
+
+    try {
 
       const timeZone =
         Intl.DateTimeFormat()
@@ -535,67 +614,34 @@ export const detectVisitorCountry =
 
 
       if (
-
         timeZone ===
           "Asia/Kolkata" ||
-
         timeZone ===
           "Asia/Calcutta"
-
       ) {
 
         return "IN";
 
       }
-
-
-      return "US";
 
     } catch (
       error
     ) {
 
       console.log(
-        "Country detection error:",
+        "Timezone detection failed:",
         error
       );
 
-
-      const timeZone =
-        Intl.DateTimeFormat()
-          .resolvedOptions()
-          .timeZone;
-
-
-      console.log(
-        "Detected timezone fallback:",
-        timeZone
-      );
-
-
-      if (
-
-        window.location.hostname ===
-          "localhost" ||
-
-        window.location.hostname ===
-          "127.0.0.1" ||
-
-        timeZone ===
-          "Asia/Kolkata" ||
-
-        timeZone ===
-          "Asia/Calcutta"
-
-      ) {
-
-        return "IN";
-
-      }
-
-
-      return "US";
-
     }
+
+
+    /*
+    =========================================
+    FINAL FALLBACK
+    =========================================
+    */
+
+    return "US";
 
   };

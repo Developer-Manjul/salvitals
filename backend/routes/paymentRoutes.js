@@ -1,28 +1,19 @@
-const express = require(
-    "express"
-);
-
+const express = require("express");
 
 console.log(
     "PAYMENT ROUTES FILE LOADED"
 );
 
-
 const {
     createOrder,
     verifyPayment,
+    getPaymentStatus,
 } = require(
     "../controllers/paymentController"
 );
 
-
 const router =
     express.Router();
-
-
-// ================================
-// TEST ROUTE
-// ================================
 
 router.get(
     "/test",
@@ -31,7 +22,6 @@ router.get(
         console.log(
             "PAYMENT TEST ROUTE HIT"
         );
-
 
         return res.status(200).json({
             success: true,
@@ -42,10 +32,22 @@ router.get(
     }
 );
 
+router.get(
+    "/status",
+    (req, res, next) => {
 
-// ================================
-// CREATE ORDER
-// ================================
+        console.log(
+            "PAYMENT STATUS ROUTE HIT"
+        );
+
+        return getPaymentStatus(
+            req,
+            res,
+            next
+        );
+
+    }
+);
 
 router.post(
     "/create-order",
@@ -54,7 +56,6 @@ router.post(
         console.log(
             "CREATE ORDER ROUTE HIT"
         );
-
 
         return createOrder(
             req,
@@ -65,11 +66,6 @@ router.post(
     }
 );
 
-
-// ================================
-// VERIFY PAYMENT
-// ================================
-
 router.post(
     "/verify",
     (req, res, next) => {
@@ -77,7 +73,6 @@ router.post(
         console.log(
             "VERIFY PAYMENT ROUTE HIT"
         );
-
 
         return verifyPayment(
             req,
@@ -87,7 +82,6 @@ router.post(
 
     }
 );
-
 
 module.exports =
     router;
