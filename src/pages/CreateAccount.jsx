@@ -1054,7 +1054,7 @@ export default function CreateAccount() {
 
           <div>
             <h1>
-              Let's set up your clinic CRM
+              Let's set up your Business CRM
             </h1>
 
             <p>
