@@ -77,6 +77,52 @@ export default function CreateAccount() {
           "vitalsSignupData"
         );
 
+      const storedUser = [
+        localStorage.getItem("salevitals_user"),
+        localStorage.getItem("user"),
+        localStorage.getItem("vitalsUser"),
+      ]
+        .map((value) => {
+          try {
+            return value ? JSON.parse(value) : null;
+          } catch {
+            return null;
+          }
+        })
+        .find(Boolean);
+
+      const token =
+        localStorage.getItem("salevitals_token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("vitalsToken") ||
+        sessionStorage.getItem("salevitals_token") ||
+        sessionStorage.getItem("token") ||
+        sessionStorage.getItem("vitalsToken");
+
+      const applyUserData = (user) => {
+        if (!user) return;
+
+        setForm((previous) => ({
+          ...previous,
+          clinicName: user.clinicName || previous.clinicName,
+          name: user.name || previous.name,
+          email: user.email || previous.email,
+          phone: user.phone || previous.phone,
+          speciality: user.speciality || previous.speciality,
+        }));
+
+        setCountryCode(user.phoneCountryCode || "+91");
+        setClinicDetails((previous) => ({
+          ...previous,
+          displayName: user.displayName || previous.displayName,
+          address: user.address || previous.address,
+          gstin: user.gstin || previous.gstin,
+          zipCode: user.zipCode || previous.zipCode,
+          website: user.website || previous.website,
+        }));
+        setLogoPreview(user.clinicLogo || "");
+      };
+
       if (savedData) {
 
         try {
@@ -119,6 +165,23 @@ export default function CreateAccount() {
 
         }
 
+      }
+
+      applyUserData(storedUser);
+
+      if (token) {
+        fetch(`${API_URL}/api/auth/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) applyUserData(data.user);
+          })
+          .catch((error) => {
+            console.error("Unable to load setup profile:", error);
+          });
       }
 
       setAccountCreated(true);
@@ -721,7 +784,7 @@ export default function CreateAccount() {
                 <div className="doctor-section">
 
                   <div className="doctor-label">
-                    Number of doctors <em>*</em>
+                    Number of Team <em>*</em>
                   </div>
 
                   <div className="doctor-options">
@@ -790,7 +853,7 @@ export default function CreateAccount() {
                       className="custom-doctor-input"
                       type="number"
                       min="1"
-                      placeholder="Enter number of doctors"
+                      placeholder="Enter member of team"
                       value={customDoctors}
                       onChange={(e) =>
                         setCustomDoctors(
@@ -1073,7 +1136,7 @@ export default function CreateAccount() {
               <div className="setup-grid">
 
                 <label>
-                  Clinic name
+                  Business name
 
                   <input
                     value={form.clinicName}
@@ -1082,7 +1145,7 @@ export default function CreateAccount() {
                 </label>
 
                 <label>
-                  Display name on invoices
+                  Display name or invoices
 
                   <input
                     value={
@@ -1153,7 +1216,7 @@ export default function CreateAccount() {
                 Website link
 
                 <input
-                  placeholder="https://yourclinic.com"
+                  placeholder="https://website.com"
                   value={clinicDetails.website}
                   onChange={(e) =>
                     updateClinic(
@@ -1169,7 +1232,7 @@ export default function CreateAccount() {
               <div className="logo-upload-section">
 
                 <label>
-                  Clinic logo
+                  Website logo
                 </label>
 
                 <div className="logo-upload-box">
@@ -1192,7 +1255,7 @@ export default function CreateAccount() {
                   <div className="logo-text">
 
                     <b>
-                      Upload clinic logo
+                      Upload  logo
                     </b>
 
                     <span>

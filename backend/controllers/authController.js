@@ -1560,3 +1560,201 @@ exports.completeSetup =
     }
 
   };
+
+  exports.getProfile = async (req, res) => {
+    try {
+        const authorization =
+            req.headers.authorization || "";
+
+        if (!authorization.startsWith("Bearer ")) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        const token =
+            authorization.slice(7);
+
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+        const user =
+            await User.findById(
+                decoded.id
+            ).select(
+                "-password -emailVerificationToken -emailVerificationExpires"
+            );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            user,
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Get profile error:",
+            error
+        );
+
+        return res.status(401).json({
+            success: false,
+            message:
+                "Invalid or expired authentication token",
+        });
+    }
+};
+
+
+exports.updateProfile = async (req, res) => {
+    try {
+        const authorization =
+            req.headers.authorization || "";
+
+        if (!authorization.startsWith("Bearer ")) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        const token =
+            authorization.slice(7);
+
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+        const user =
+            await User.findById(
+                decoded.id
+            );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const {
+            name,
+            clinicName,
+            phone,
+            phoneCountryCode,
+            speciality,
+            numberOfDoctors,
+            displayName,
+            address,
+            gstin,
+            zipCode,
+            website,
+            clinicLogo,
+        } = req.body;
+
+        if (name !== undefined) {
+            user.name =
+                String(name).trim();
+        }
+
+        if (clinicName !== undefined) {
+            user.clinicName =
+                String(clinicName).trim();
+        }
+
+        if (phone !== undefined) {
+            user.phone =
+                String(phone).trim();
+        }
+
+        if (phoneCountryCode !== undefined) {
+            user.phoneCountryCode =
+                String(phoneCountryCode).trim();
+        }
+
+        if (speciality !== undefined) {
+            user.speciality =
+                String(speciality).trim();
+        }
+
+        if (numberOfDoctors !== undefined) {
+            user.numberOfDoctors =
+                String(numberOfDoctors).trim();
+        }
+
+        if (displayName !== undefined) {
+            user.displayName =
+                String(displayName).trim();
+        }
+
+        if (address !== undefined) {
+            user.address =
+                String(address).trim();
+        }
+
+        if (gstin !== undefined) {
+            user.gstin =
+                String(gstin)
+                    .trim()
+                    .toUpperCase();
+        }
+
+        if (zipCode !== undefined) {
+            user.zipCode =
+                String(zipCode).trim();
+        }
+
+        if (website !== undefined) {
+            user.website =
+                String(website).trim();
+        }
+
+        if (clinicLogo !== undefined) {
+            user.clinicLogo =
+                String(clinicLogo).trim();
+        }
+
+        await user.save();
+
+        const updatedUser =
+            await User.findById(
+                user._id
+            ).select(
+                "-password -emailVerificationToken -emailVerificationExpires"
+            );
+
+        return res.status(200).json({
+            success: true,
+            message:
+                "Clinic profile updated successfully",
+            user: updatedUser,
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Update profile error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                error.message ||
+                "Unable to update clinic profile",
+        });
+    }
+};

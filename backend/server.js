@@ -7,11 +7,6 @@ dotenv.config();
 
 const app = express();
 
-
-// ================================
-// MIDDLEWARE
-// ================================
-
 app.use(
     cors({
         origin: [
@@ -34,7 +29,11 @@ app.use(
     })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(
+    express.json({
+        limit: "10mb",
+    })
+);
 
 app.use(
     express.urlencoded({
@@ -42,11 +41,6 @@ app.use(
         limit: "10mb",
     })
 );
-
-
-// ================================
-// ROUTES IMPORT
-// ================================
 
 const authRoutes = require(
     "./routes/authRoutes"
@@ -56,12 +50,21 @@ const paymentRoutes = require(
     "./routes/paymentRoutes"
 );
 
-console.log("AUTH ROUTES LOADED");
-console.log("PAYMENT ROUTES LOADED");
+const serviceRoutes = require(
+    "./routes/serviceRoutes"
+);
 
-// ================================
-// ROUTES REGISTER
-// ================================
+console.log(
+    "AUTH ROUTES LOADED"
+);
+
+console.log(
+    "PAYMENT ROUTES LOADED"
+);
+
+console.log(
+    "SERVICE ROUTES LOADED"
+);
 
 app.use(
     "/api/auth",
@@ -78,14 +81,14 @@ app.use(
     paymentRoutes
 );
 
-// ================================
-// LOCATION / COUNTRY API
-// ================================
+app.use(
+    "/api/services",
+    serviceRoutes
+);
 
 app.get(
     "/api/location",
     (req, res) => {
-
         const forwarded =
             String(
                 req.headers[
@@ -104,100 +107,68 @@ app.get(
                 ""
             ).toUpperCase();
 
-
         const ip =
             forwarded
                 .split(",")[0]
                 .trim() ||
             req.ip;
 
-
         res.json({
             success: true,
             countryCode,
             ip,
         });
-
     }
 );
-
-
-// ================================
-// TEST API
-// ================================
 
 app.get(
     "/api/health",
     (req, res) => {
-
         res.status(200).json({
             success: true,
             message:
                 "Vitals Backend API is running",
         });
-
     }
 );
-
-
-// ================================
-// HOME
-// ================================
 
 app.get(
     "/",
     (req, res) => {
-
         res.json({
             success: true,
             message:
                 "SaleVitals Backend API is running",
         });
-
     }
 );
-
-
-// ================================
-// 404 HANDLER
-// ================================
 
 app.use(
     (req, res) => {
-
         res.status(404).json({
             success: false,
-            message: "API route not found",
+            message:
+                "API route not found",
         });
-
     }
 );
 
-
-// ================================
-// DATABASE + SERVER
-// ================================
-
 const PORT =
     process.env.PORT || 5000;
-
 
 mongoose
     .connect(
         process.env.MONGODB_URI
     )
     .then(() => {
-
         console.log(
             "MongoDB connected successfully"
         );
-
 
         app.listen(
             PORT,
             "0.0.0.0",
             () => {
-
                 console.log(
                     `Backend running on http://localhost:${PORT}`
                 );
@@ -206,21 +177,18 @@ mongoose
                     `Health check: http://localhost:${PORT}/api/health`
                 );
 
+                console.log(
+                    `Services API: http://localhost:${PORT}/api/services`
+                );
             }
         );
-
     })
-    .catch(
-        (error) => {
+    .catch((error) => {
+        console.error(
+            "MongoDB connection failed:"
+        );
 
-            console.error(
-                "MongoDB connection failed:"
-            );
-
-            console.error(
-                error.message
-            );
-
-        }
-);
-    
+        console.error(
+            error.message
+        );
+    });

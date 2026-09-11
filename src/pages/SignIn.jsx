@@ -9,6 +9,16 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [notice] = useState(() => {
+    const message = new URLSearchParams(
+      window.location.search
+    ).get("message");
+
+    return message === "email-verified"
+      ? "Your email was verified successfully. Please sign in to continue."
+      : "";
+  });
+
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -49,6 +59,7 @@ export default function SignIn() {
         setError(
           data.message || "Invalid email or password."
         );
+
         setLoading(false);
         return;
       }
@@ -57,7 +68,10 @@ export default function SignIn() {
       const userData = data.user || {};
 
       if (!token) {
-        setError("Login failed. Authentication token not received.");
+        setError(
+          "Login failed. Authentication token not received."
+        );
+
         setLoading(false);
         return;
       }
@@ -78,7 +92,10 @@ export default function SignIn() {
 
       storage.setItem("token", token);
       storage.setItem("vitalsToken", token);
-      storage.setItem("salevitals_token", token);
+      storage.setItem(
+        "salevitals_token",
+        token
+      );
 
       storage.setItem(
         "user",
@@ -96,22 +113,28 @@ export default function SignIn() {
       );
 
       const redirectAfterLogin =
-        localStorage.getItem("redirectAfterLogin") ||
-        sessionStorage.getItem("redirectAfterLogin");
+        localStorage.getItem(
+          "redirectAfterLogin"
+        ) ||
+        sessionStorage.getItem(
+          "redirectAfterLogin"
+        );
 
       let paymentCompleted = false;
 
       try {
-        const paymentResponse = await fetch(
-          `${api}/api/payment/status`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const paymentResponse =
+          await fetch(
+            `${api}/api/payment/status`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type":
+                  "application/json",
+              },
+            }
+          );
 
         const paymentData =
           await paymentResponse.json();
@@ -119,42 +142,55 @@ export default function SignIn() {
         console.log(
           "================================="
         );
+
         console.log(
           "LOGIN PAYMENT CHECK"
         );
+
         console.log(
           "EMAIL:",
           userData.email
         );
+
         console.log(
           "PAYMENT RESPONSE STATUS:",
           paymentResponse.status
         );
+
         console.log(
           "PAYMENT DATA:",
           paymentData
         );
+
         console.log(
           "================================="
         );
 
         const orderStatus =
-          paymentData?.order?.paymentStatus ||
-          paymentData?.latestOrder?.paymentStatus ||
-          paymentData?.payment?.paymentStatus ||
+          paymentData?.order
+            ?.paymentStatus ||
+          paymentData?.latestOrder
+            ?.paymentStatus ||
+          paymentData?.payment
+            ?.paymentStatus ||
           paymentData?.order?.status ||
-          paymentData?.latestOrder?.status ||
+          paymentData?.latestOrder
+            ?.status ||
           paymentData?.payment?.status;
 
         paymentCompleted =
           paymentResponse.ok &&
           (
-            paymentData?.payment_completed === true ||
-            paymentData?.paymentCompleted === true ||
+            paymentData?.payment_completed ===
+              true ||
+            paymentData?.paymentCompleted ===
+              true ||
             paymentData?.paid === true ||
             paymentData?.isPaid === true ||
-            paymentData?.payment_status === "paid" ||
-            paymentData?.paymentStatus === "paid" ||
+            paymentData?.payment_status ===
+              "paid" ||
+            paymentData?.paymentStatus ===
+              "paid" ||
             paymentData?.status === "paid" ||
             orderStatus === "paid"
           );
@@ -172,13 +208,6 @@ export default function SignIn() {
 
         paymentCompleted = false;
       }
-
-      /*
-      =========================================
-      PAYMENT COMPLETED
-      ALWAYS GO DIRECTLY TO DASHBOARD
-      =========================================
-      */
 
       if (paymentCompleted) {
         localStorage.removeItem(
@@ -213,27 +242,13 @@ export default function SignIn() {
         return;
       }
 
-      /*
-      =========================================
-      PAYMENT NOT COMPLETED
-      NOW CHECK ACCOUNT SETUP
-      =========================================
-      */
-
       const accountSetupCompleted =
-        userData.accountSetupCompleted === true ||
+        userData.accountSetupCompleted ===
+          true ||
         userData.profileCompleted === true ||
         userData.setupCompleted === true;
 
-      /*
-      =========================================
-      SETUP NOT COMPLETE
-      GO TO SETUP
-      =========================================
-      */
-
       if (!accountSetupCompleted) {
-
         if (redirectAfterLogin) {
           storage.setItem(
             "redirectAfterSetup",
@@ -256,14 +271,6 @@ export default function SignIn() {
 
         return;
       }
-
-      /*
-      =========================================
-      SETUP COMPLETE
-      PAYMENT NOT COMPLETE
-      GO TO CART
-      =========================================
-      */
 
       localStorage.removeItem(
         "redirectAfterLogin"
@@ -464,7 +471,7 @@ export default function SignIn() {
             </h1>
 
             <p>
-              Manage your clinic.
+              Manage your business.
               Grow your practice.
             </p>
 
@@ -491,7 +498,10 @@ export default function SignIn() {
                   type="email"
                   value={email}
                   onChange={(e) => {
-                    setEmail(e.target.value);
+                    setEmail(
+                      e.target.value
+                    );
+
                     setError("");
                   }}
                   placeholder="you@clinic.com"
@@ -514,7 +524,9 @@ export default function SignIn() {
                 <button
                   type="button"
                   className="auth-forgot"
-                  onClick={goToForgotPassword}
+                  onClick={
+                    goToForgotPassword
+                  }
                 >
                   Forgot password?
                 </button>
@@ -535,7 +547,10 @@ export default function SignIn() {
                   }
                   value={password}
                   onChange={(e) => {
-                    setPassword(e.target.value);
+                    setPassword(
+                      e.target.value
+                    );
+
                     setError("");
                   }}
                   placeholder="Enter your password"
@@ -591,6 +606,24 @@ export default function SignIn() {
               </div>
             )}
 
+            {notice && (
+              <div className="auth-notice auth-success-notice">
+                <span className="auth-notice-icon">
+                  ✓
+                </span>
+
+                <div className="auth-notice-content">
+                  <strong>
+                    Email verified successfully
+                  </strong>
+
+                  <span>
+                    {notice}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               className="auth-submit"
@@ -639,7 +672,9 @@ export default function SignIn() {
 
             <button
               type="button"
-              onClick={goToCreateAccount}
+              onClick={
+                goToCreateAccount
+              }
             >
               Create account
             </button>

@@ -28,6 +28,8 @@ import CreateAccount from "./pages/CreateAccount";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Cart from "./pages/Cart";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+
 import { initSite } from "./js/site";
 
 function VerifyEmail() {
@@ -99,13 +101,13 @@ function VerifyEmail() {
         );
 
         setMessage(
-          "Email verified successfully. Redirecting to account setup..."
+          "Your email was verified successfully. Please sign in to continue."
         );
 
         setTimeout(() => {
           window.location.href =
-            "/create-account?setup=1";
-        }, 1200);
+            "/signin?message=email-verified";
+        }, 1800);
 
       } catch (error) {
         console.error(
@@ -564,6 +566,18 @@ export default function App() {
     path === "/forgot-password.html"
   ) {
     return <ForgotPassword />;
+  }
+
+
+  /* =========================================
+     PRIVACY POLICY
+  ========================================= */
+
+  if (
+    path === "/privacy-policy" ||
+    path === "/privacy-policy/"
+  ) {
+    return <PrivacyPolicy />;
   }
 
 

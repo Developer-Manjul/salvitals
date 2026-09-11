@@ -465,7 +465,7 @@ const Cart = () => {
                                 );
                             }
 
-                            goTo("/payment-success");
+                            goTo("/dashboard");
                         } catch (verifyError) {
                             console.error(
                                 "Verify payment error:",

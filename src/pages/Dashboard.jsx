@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "../styles/dashboard.scss";
+import Settings from "./Settings";
 
 const navGroups = [
   {
@@ -46,10 +47,6 @@ const navGroups = [
   },
 ];
 
-/* =========================================================
-   KPI DATA
-========================================================= */
-
 const kpis = [
   {
     label: "Leads captured",
@@ -92,7 +89,6 @@ const sources = [
   ["Other", "41", "2.5%", "slate"],
 ];
 
-
 const pipeline = [
   ["New", 19, "slate"],
   ["Contacted", 12, "sky"],
@@ -103,7 +99,6 @@ const pipeline = [
   ["Won", 6, "green"],
   ["Lost", 3, "red"],
 ];
-
 
 const leads = [
   {
@@ -140,7 +135,6 @@ const leads = [
   },
 ];
 
-
 const followUps = [
   [
     "Priya Sharma",
@@ -165,51 +159,38 @@ const followUps = [
   ],
 ];
 
-
 const plans = [
   {
     id: "starter",
     name: "Starter",
-
     description:
       "Single-doctor practices getting their enquiries out of WhatsApp and into one place.",
-
     price: "$59",
     monthly: "/month",
-
     yearly: "$708 billed yearly",
     saving: "",
-
     icon: "patient",
-
     features: [
       "Leads, enquiries and pipeline",
       "Shared WhatsApp inbox",
       "GST invoices and payment links",
       "1 lead capture form",
     ],
-
     contacts: "1,000",
     doctors: "3 / 1",
     whatsapp: "1,000 / mo",
   },
-
   {
     id: "growth",
     name: "Growth",
     popular: true,
-
     description:
       "The plan most clinics run on — campaigns, AI replies and team accountability.",
-
     price: "$79",
     monthly: "/month",
-
     yearly: "$948 billed yearly",
     saving: "",
-
     icon: "trend",
-
     features: [
       "Everything in Starter, plus",
       "WhatsApp campaigns and templates",
@@ -217,27 +198,20 @@ const plans = [
       "Team performance and full reports",
       "Google and Meta lead-ad sync",
     ],
-
     contacts: "5,000",
     doctors: "10 / 5",
     whatsapp: "20,000 / mo",
   },
-
   {
     id: "scale",
     name: "Scale",
-
     description:
       "Multi-branch and multi-speciality groups that need routing, roles and an API.",
-
     price: "$99",
     monthly: "/month",
-
     yearly: "$1,188 billed yearly",
     saving: "",
-
     icon: "integration",
-
     features: [
       "Everything in Growth, plus",
       "Website AI chat widget",
@@ -245,27 +219,20 @@ const plans = [
       "Custom roles and permissions",
       "Tally / Zoho sync, API and webhooks",
     ],
-
     contacts: "25,000",
     doctors: "30 / 20",
     whatsapp: "75,000 / mo",
   },
-
   {
     id: "enterprise",
     name: "Custom",
-
     description:
       "Hospital groups with procurement, compliance and integration requirements.",
-
     price: "Custom",
     monthly: "",
-
     yearly: "Priced on locations and volume",
     saving: "",
-
     icon: "settings",
-
     features: [
       "Everything in Scale, plus",
       "SSO / SAML and audit log",
@@ -273,13 +240,11 @@ const plans = [
       "99.9% uptime SLA",
       "White-label and custom integrations",
     ],
-
     contacts: "Unlimited",
     doctors: "Unlimited",
     whatsapp: "Custom",
   },
 ];
-
 
 function Icon({ name, size = 18 }) {
   const common = {
@@ -480,7 +445,12 @@ function Brand({ mobile = false }) {
   );
 }
 
-function Avatar({ initials, logo, alt = "Clinic logo", tone = "" }) {
+function Avatar({
+  initials,
+  logo,
+  alt = "Clinic logo",
+  tone = "",
+}) {
   if (logo) {
     return (
       <span className={`dash-avatar dash-avatar-logo ${tone}`}>
@@ -511,16 +481,11 @@ function getInitials(name = "") {
   );
 }
 
-/* =========================================================
-   CRM ACTIVATION SCREEN
-========================================================= */
-
 function ChoosePlan({
   user,
   selectedPlan,
   onContinue,
 }) {
-
   const fullName = user?.name
     ? user.name.trim()
     : "there";
@@ -531,39 +496,24 @@ function ChoosePlan({
 
   return (
     <div className="choose-plan-page">
-
       <div className="crm-activation-wrap">
 
-        {/* TOP STATUS */}
-
         <div className="crm-activation-status">
-
           <span className="crm-status-dot" />
 
           <span>
             CRM ACTIVATION IN PROGRESS
           </span>
-
         </div>
-
-
-        {/* MAIN CARD */}
 
         <div className="crm-activation-card">
 
-          {/* ICON */}
-
           <div className="crm-activation-icon">
-
             <Icon
               name="check"
               size={30}
             />
-
           </div>
-
-
-          {/* CONTENT */}
 
           <div className="crm-activation-content">
 
@@ -576,26 +526,17 @@ function ChoosePlan({
             </h1>
 
             <p className="crm-main-message">
-
               Your CRM workspace is currently
               being prepared and activated for you.
-
             </p>
 
             <p className="crm-sub-message">
-
               Our team is setting up your workspace
               so everything is ready for your clinic.
               One of our onboarding specialists will
-              contact you within soon
-
-              to complete the activation and help you
-              get started.
-
+              contact you soon to complete the activation
+              and help you get started.
             </p>
-
-
-            {/* PLAN */}
 
             <div className="crm-selected-plan">
 
@@ -612,17 +553,11 @@ function ChoosePlan({
               </div>
 
               <div className="crm-plan-active">
-
                 <span />
-
                 Activation pending
-
               </div>
 
             </div>
-
-
-            {/* ACTIVATION STEPS */}
 
             <div className="crm-steps">
 
@@ -633,7 +568,6 @@ function ChoosePlan({
                 </div>
 
                 <div>
-
                   <strong>
                     Account created
                   </strong>
@@ -642,11 +576,9 @@ function ChoosePlan({
                     Your Vitals account has been created
                     successfully.
                   </span>
-
                 </div>
 
               </div>
-
 
               <div className="crm-step active">
 
@@ -655,7 +587,6 @@ function ChoosePlan({
                 </div>
 
                 <div>
-
                   <strong>
                     Workspace setup
                   </strong>
@@ -664,11 +595,9 @@ function ChoosePlan({
                     We are preparing your CRM workspace
                     and account configuration.
                   </span>
-
                 </div>
 
               </div>
-
 
               <div className="crm-step">
 
@@ -677,7 +606,6 @@ function ChoosePlan({
                 </div>
 
                 <div>
-
                   <strong>
                     Onboarding & activation
                   </strong>
@@ -686,15 +614,11 @@ function ChoosePlan({
                     Our team will contact you within
                     24 hours to complete your setup.
                   </span>
-
                 </div>
 
               </div>
 
             </div>
-
-
-            {/* INFO BOX */}
 
             <div className="crm-info-box">
 
@@ -706,27 +630,20 @@ function ChoosePlan({
               </div>
 
               <p>
-
                 Please keep an eye on your registered
                 email and phone number. Our team will
                 contact you shortly to help you get
                 your CRM up and running.
-
               </p>
 
             </div>
 
-
-
-
             <p className="crm-support-text">
-
               Need help?
 
               <button type="button">
                 Contact our support team
               </button>
-
             </p>
 
           </div>
@@ -734,26 +651,17 @@ function ChoosePlan({
         </div>
 
       </div>
-
     </div>
   );
 }
 
-/* =========================================================
-   ACTUAL DASHBOARD
-========================================================= */
-
 function ActualDashboardContent({ user }) {
-
   const firstName = user?.name
     ? user.name.trim().split(/\s+/)[0]
     : "there";
 
   return (
     <>
-
-      {/* PAGE HEADER */}
-
       <div className="dash-page-head">
 
         <div>
@@ -805,8 +713,6 @@ function ActualDashboardContent({ user }) {
 
       </div>
 
-      {/* KPIs */}
-
       <div className="dash-kpis">
 
         {kpis.map((kpi) => (
@@ -849,11 +755,7 @@ function ActualDashboardContent({ user }) {
 
       </div>
 
-      {/* PERFORMANCE + SOURCES */}
-
       <div className="dash-grid-two">
-
-        {/* PERFORMANCE */}
 
         <section className="dash-card performance-card">
 
@@ -887,20 +789,17 @@ function ActualDashboardContent({ user }) {
           <div className="dash-chart">
 
             <div className="dash-y-labels">
-
               <span>400</span>
               <span>300</span>
               <span>200</span>
               <span>100</span>
               <span>0</span>
-
             </div>
 
             <div className="dash-chart-area">
 
               {[0, 1, 2, 3, 4].map(
                 (i) => (
-
                   <i
                     className="dash-grid-line"
                     style={{
@@ -908,7 +807,6 @@ function ActualDashboardContent({ user }) {
                     }}
                     key={i}
                   />
-
                 )
               )}
 
@@ -924,7 +822,6 @@ function ActualDashboardContent({ user }) {
                   ["Sun", 294, 198],
                 ].map(
                   ([day, a, b]) => (
-
                     <div
                       className="dash-bar-day"
                       key={day}
@@ -951,7 +848,6 @@ function ActualDashboardContent({ user }) {
                       </small>
 
                     </div>
-
                   )
                 )}
 
@@ -964,26 +860,18 @@ function ActualDashboardContent({ user }) {
           <div className="dash-legend">
 
             <span>
-
               <i className="blue" />
-
               Leads captured
-
             </span>
 
             <span>
-
               <i className="purple" />
-
               Qualified
-
             </span>
 
           </div>
 
         </section>
-
-        {/* SOURCES */}
 
         <section className="dash-card">
 
@@ -1050,8 +938,6 @@ function ActualDashboardContent({ user }) {
         </section>
 
       </div>
-
-      {/* PIPELINE */}
 
       <section className="dash-card dash-pipeline-card">
 
@@ -1131,11 +1017,7 @@ function ActualDashboardContent({ user }) {
 
       </section>
 
-      {/* LOWER SECTION */}
-
       <div className="dash-grid-two lower">
-
-        {/* RECENT LEADS */}
 
         <section className="dash-card">
 
@@ -1281,8 +1163,6 @@ function ActualDashboardContent({ user }) {
 
         </section>
 
-        {/* FOLLOW UPS */}
-
         <section className="dash-card">
 
           <div className="dash-card-head">
@@ -1377,14 +1257,9 @@ function ActualDashboardContent({ user }) {
         </section>
 
       </div>
-
     </>
   );
 }
-
-/* =========================================================
-   MAIN DASHBOARD
-========================================================= */
 
 export default function Dashboard() {
 
@@ -1402,10 +1277,6 @@ export default function Dashboard() {
 
   const [showPlans, setShowPlans] =
     useState(true);
-
-  /* =======================================================
-     LOAD LOGGED IN USER
-  ======================================================= */
 
   useEffect(() => {
 
@@ -1442,28 +1313,15 @@ export default function Dashboard() {
 
   }, []);
 
-  /* =======================================================
-     NAVIGATION
-  ======================================================= */
-
   const selectNav = (name) => {
 
     setActive(name);
     setMobileOpen(false);
+    setProfileOpen(false);
 
   };
 
-  /* =======================================================
-     CHOOSE PLAN
-  ======================================================= */
-
   const handleChoosePlan = (plan) => {
-
-    /*
-      Dollar price ko number ke form mein bhi
-      save kar rahe hain taaki Cart calculation
-      easily kar sake.
-    */
 
     const numericPrice =
       plan.id === "starter"
@@ -1476,11 +1334,8 @@ export default function Dashboard() {
 
     const selectedPlan = {
       ...plan,
-
       currency: "USD",
-
       numericPrice: numericPrice,
-
       billing: "monthly",
     };
 
@@ -1489,16 +1344,8 @@ export default function Dashboard() {
       JSON.stringify(selectedPlan)
     );
 
-    /*
-      Cart par redirect
-    */
-
     window.location.href = "/cart";
   };
-
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
 
   const handleLogout = () => {
 
@@ -1512,10 +1359,6 @@ export default function Dashboard() {
 
   };
 
-  /* =======================================================
-     USER DATA
-  ======================================================= */
-
   const userName =
     user?.name || "User";
 
@@ -1526,26 +1369,23 @@ export default function Dashboard() {
   const initials =
     getInitials(userName);
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  const clinicLogo =
+    user?.clinicLogo ||
+    user?.logo ||
+    user?.businessLogo ||
+    "";
 
   return (
 
     <div className="dashboard-shell">
 
-      {/* ===================================================
-          SIDEBAR
-      =================================================== */}
-
       <aside
-        className={`dash-sidebar ${mobileOpen ? "open" : ""
-          }`}
+        className={`dash-sidebar ${
+          mobileOpen ? "open" : ""
+        }`}
       >
 
         <Brand />
-
-        {/* ADD NEW */}
 
         <button className="dash-add-new">
 
@@ -1563,17 +1403,14 @@ export default function Dashboard() {
 
         </button>
 
-        {/* NAVIGATION */}
-
         <nav className="dash-nav">
 
-          {/* DASHBOARD */}
-
           <button
-            className={`dash-nav-item ${active === "Dashboard"
+            className={`dash-nav-item ${
+              active === "Dashboard"
                 ? "active"
                 : ""
-              }`}
+            }`}
             onClick={() =>
               selectNav("Dashboard")
             }
@@ -1589,8 +1426,6 @@ export default function Dashboard() {
             </span>
 
           </button>
-
-          {/* GROUPS */}
 
           {navGroups.map(
             (group) => (
@@ -1614,10 +1449,11 @@ export default function Dashboard() {
 
                     <button
                       key={name}
-                      className={`dash-nav-item ${active === name
+                      className={`dash-nav-item ${
+                        active === name
                           ? "active"
                           : ""
-                        }`}
+                      }`}
                       onClick={() =>
                         selectNav(name)
                       }
@@ -1656,10 +1492,6 @@ export default function Dashboard() {
           )}
 
         </nav>
-
-        {/* =================================================
-            PLAN BOX
-        ================================================= */}
 
         <div className="dash-plan">
 
@@ -1723,10 +1555,6 @@ export default function Dashboard() {
 
       </aside>
 
-      {/* ===================================================
-          MOBILE OVERLAY
-      =================================================== */}
-
       {mobileOpen && (
 
         <button
@@ -1739,19 +1567,9 @@ export default function Dashboard() {
 
       )}
 
-      {/* ===================================================
-          MAIN
-      =================================================== */}
-
       <main className="dash-main">
 
-        {/* =================================================
-            TOP BAR
-        ================================================= */}
-
         <header className="dash-topbar">
-
-          {/* MOBILE MENU */}
 
           <button
             className="dash-menu-btn"
@@ -1766,8 +1584,6 @@ export default function Dashboard() {
             <span />
 
           </button>
-
-          {/* SEARCH */}
 
           <button className="dash-search">
 
@@ -1786,11 +1602,7 @@ export default function Dashboard() {
 
           </button>
 
-          {/* TOP ACTIONS */}
-
           <div className="dash-top-actions">
-
-            {/* WHATSAPP */}
 
             <div className="dash-wa-live">
 
@@ -1800,8 +1612,6 @@ export default function Dashboard() {
 
             </div>
 
-            {/* HELP */}
-
             <button className="dash-icon-btn">
 
               <Icon
@@ -1810,8 +1620,6 @@ export default function Dashboard() {
               />
 
             </button>
-
-            {/* NOTIFICATION */}
 
             <button className="dash-icon-btn notification">
 
@@ -1826,8 +1634,6 @@ export default function Dashboard() {
 
             </button>
 
-            {/* PROFILE */}
-
             <div className="dash-profile-wrap">
 
               <button
@@ -1840,17 +1646,15 @@ export default function Dashboard() {
                 }
               >
 
-                <Avatar 
-                initials={initials} 
-                logo={
-                  user?.clinicLogo ||
-                  user?.logo ||
-                  user?.businessLogo ||
-                  ""
-                }
-                alt={clinicName || "Clinic logo"}
-                tone="blue" 
-              />
+                <Avatar
+                  initials={initials}
+                  logo={clinicLogo}
+                  alt={
+                    clinicName ||
+                    "Clinic logo"
+                  }
+                  
+                />
 
                 <span>
 
@@ -1870,8 +1674,6 @@ export default function Dashboard() {
                 />
 
               </button>
-
-              {/* PROFILE MENU */}
 
               {profileOpen && (
 
@@ -1913,17 +1715,19 @@ export default function Dashboard() {
 
         </header>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
         <section className="dash-content">
 
-          {showPlans ? (
+          {active === "Settings" ? (
+
+            <Settings
+              user={user}
+            />
+
+          ) : showPlans ? (
 
             <ChoosePlan
               user={user}
-              onChoose={
+              onContinue={
                 handleChoosePlan
               }
             />
@@ -1939,10 +1743,6 @@ export default function Dashboard() {
         </section>
 
       </main>
-
-      {/* ===================================================
-          MOBILE BOTTOM NAV
-      =================================================== */}
 
       <nav className="dash-mobile-nav">
 
@@ -2054,6 +1854,5 @@ export default function Dashboard() {
       </nav>
 
     </div>
-
   );
 }

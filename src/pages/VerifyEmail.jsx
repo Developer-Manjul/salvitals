@@ -123,16 +123,16 @@ export default function VerifyEmail() {
         setStatus("success");
 
         setMessage(
-          "Your email has been verified successfully."
+          "Your email was verified successfully. Please sign in to continue."
         );
 
 
         setTimeout(() => {
 
           window.location.href =
-            "/setup";
+            "/signin?message=email-verified";
 
-        }, 2500);
+        }, 1800);
 
 
       } catch (error) {
