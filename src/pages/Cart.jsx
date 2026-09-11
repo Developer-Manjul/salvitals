@@ -115,7 +115,7 @@ const Cart = () => {
             return Number(setup);
         }
 
-        return currency === "INR" ? 699 : 20;
+        return currency === "INR" ? 699 : 180;
     }, [selectedPlan, currency, isCustomPlan]);
 
     const getDiscountPercentage = (months) => {
@@ -160,7 +160,7 @@ const Cart = () => {
             ? null
             : currency === "INR"
                 ? subtotal * 0.18
-                : 0;
+                : subtotal * 0.02;
 
     const total =
         isCustomPlan
@@ -870,10 +870,9 @@ const Cart = () => {
                                 </strong>
                             </div>
 
-                            {currency === "INR" && (
                                 <div className="summary-row">
                                     <span>
-                                        Tax
+                                        Tax ({currency === "INR" ? "18%" : "2%"})
                                     </span>
 
                                     <strong>
@@ -882,7 +881,6 @@ const Cart = () => {
                                         )}
                                     </strong>
                                 </div>
-                            )}
 
                             <div className="summary-divider" />
 

@@ -462,14 +462,6 @@ export const formatAmount = (
 
 export const detectVisitorCountry =
   async () => {
-
-    /*
-    =========================================
-    STEP 1
-    BACKEND LOCATION API
-    =========================================
-    */
-
     try {
 
       const api =
@@ -527,16 +519,6 @@ export const detectVisitorCountry =
 
     }
 
-
-    /*
-    =========================================
-    STEP 2
-    PUBLIC IP LOCATION
-
-    This is mainly useful for localhost
-    testing with VPN.
-    =========================================
-    */
 
     try {
 

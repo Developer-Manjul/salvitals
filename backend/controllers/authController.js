@@ -107,74 +107,43 @@ const createVerificationToken = () => {
 ===================================================== */
 
 async function sendVerificationEmail(user, token) {
-
   if (
     !process.env.SMTP_HOST ||
     !process.env.SMTP_USER ||
     !process.env.SMTP_PASS
   ) {
-
-    throw new Error(
-      "SMTP configuration is missing"
-    );
-
+    throw new Error("SMTP configuration is missing");
   }
 
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE) === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
 
-  const transporter =
-    nodemailer.createTransport({
-
-      host:
-        process.env.SMTP_HOST,
-
-      port:
-        Number(
-          process.env.SMTP_PORT || 587
-        ),
-
-      secure:
-        String(
-          process.env.SMTP_SECURE
-        ) === "true",
-
-      auth: {
-
-        user:
-          process.env.SMTP_USER,
-
-        pass:
-          process.env.SMTP_PASS,
-
-      },
-
-    });
-
-
-  const base =
-    (
-      process.env.FRONTEND_URL ||
-      "http://localhost:5173"
-    )
-      .replace(/\/$/, "");
-
+  const base = (
+    process.env.FRONTEND_URL ||
+    "https://salevitals.com"
+  ).replace(/\/$/, "");
 
   const verificationUrl =
-    `${base}/verify-email?token=${encodeURIComponent(
-      token
-    )}`;
+    `${base}/verify-email?token=${encodeURIComponent(token)}`;
 
+  const logoUrl =
+    "https://salevitals.com/logo.png";
 
   await transporter.sendMail({
-
     from:
       `"SaleVitals" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
 
-    to:
-      user.email,
+    to: user.email,
 
     subject:
       "Verify your SaleVitals email",
-
 
     html: `
 <!DOCTYPE html>
@@ -190,8 +159,9 @@ async function sendVerificationEmail(user, token) {
     content="width=device-width, initial-scale=1.0"
   >
 
-</head>
+  <title>Verify your SaleVitals email</title>
 
+</head>
 
 <body
   style="
@@ -202,483 +172,383 @@ async function sendVerificationEmail(user, token) {
   "
 >
 
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    background:#f4f7fb;
+    padding:40px 15px;
+  "
+>
 
-  <table
-    width="100%"
-    cellpadding="0"
-    cellspacing="0"
-    border="0"
+<tr>
+
+<td align="center">
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    max-width:620px;
+    background:#ffffff;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,0.08);
+  "
+>
+
+<tr>
+
+<td
+  style="
+    background:#ffffff;
+    padding:28px 35px 20px;
+    text-align:center;
+    border-bottom:1px solid #e5e7eb;
+  "
+>
+
+<a
+  href="${base}"
+  target="_blank"
+  style="
+    text-decoration:none;
+    display:block;
+  "
+>
+
+<img
+  src="${logoUrl}"
+  alt="SaleVitals"
+  width="150"
+  style="
+    display:block;
+    width:150px;
+    max-width:150px;
+    height:auto;
+    margin:0 auto 10px;
+    border:0;
+    outline:none;
+    text-decoration:none;
+  "
+>
+
+</a>
+
+<div
+  style="
+    margin-top:2px;
+    color:#173766;
+    font-size:22px;
+    line-height:28px;
+    font-weight:700;
+  "
+>
+  SaleVitals
+</div>
+
+<div
+  style="
+    margin-top:4px;
+    color:#6b7280;
+    font-size:11px;
+    line-height:16px;
+  "
+>
+  SECURE CLINIC GROWTH CRM
+</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+  style="
+    padding:32px 60px 35px;
+  "
+>
+
+<div
+  style="
+    width:52px;
+    height:52px;
+    margin:0 auto 18px;
+    border-radius:50%;
+    background:#eef4ff;
+    text-align:center;
+    line-height:52px;
+    font-size:24px;
+  "
+>
+  ✉
+</div>
+
+<h1
+  style="
+    margin:0 0 12px;
+    text-align:center;
+    color:#1f2937;
+    font-size:23px;
+    line-height:1.35;
+    font-weight:700;
+  "
+>
+  Verify your email address
+</h1>
+
+<p
+  style="
+    margin:0 0 18px;
+    color:#4b5563;
+    font-size:15px;
+    line-height:1.7;
+  "
+>
+  Hi ${user.name || "there"},
+</p>
+
+<p
+  style="
+    margin:0 0 24px;
+    color:#4b5563;
+    font-size:15px;
+    line-height:1.7;
+  "
+>
+  Thanks for creating your SaleVitals account!
+  You're one step away from getting started.
+  Please verify your email address to activate
+  your account and continue setting up your
+  CRM workspace.
+</p>
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+>
+
+<tr>
+
+<td align="center">
+
+<a
+  href="${verificationUrl}"
+  target="_blank"
+  style="
+    display:inline-block;
+    background:#1769d1;
+    color:#ffffff;
+    text-decoration:none;
+    padding:14px 34px;
+    border-radius:5px;
+    font-size:15px;
+    line-height:20px;
+    font-weight:700;
+  "
+>
+  Verify My Email&nbsp; →
+</a>
+
+</td>
+
+</tr>
+
+</table>
+
+<div
+  style="
+    margin-top:28px;
+    padding:16px 18px;
+    background:#eefaf4;
+    border:1px solid #cceedd;
+    border-radius:9px;
+    color:#176b45;
+    font-size:13px;
+    line-height:1.6;
+  "
+>
+
+<span
+  style="
+    font-size:17px;
+    margin-right:5px;
+  "
+>
+  ✓
+</span>
+
+<strong>
+  This link is secure.
+</strong>
+
+Your verification link will expire in
+<strong>
+  1 hour.
+</strong>
+
+</div>
+
+<p
+  style="
+    margin:25px 0 0;
+    color:#6b7280;
+    font-size:12px;
+    line-height:1.7;
+  "
+>
+  If you did not create a SaleVitals account,
+  you can safely ignore this email.
+</p>
+
+<p
+  style="
+    margin:22px 0 0;
+    color:#6b7280;
+    font-size:11px;
+    line-height:1.6;
+  "
+>
+
+If the button doesn't work, copy and paste
+the link below into your browser:
+
+</p>
+
+<a
+  href="${verificationUrl}"
+  target="_blank"
+  style="
+    display:block;
+    margin-top:8px;
+    padding:11px 12px;
+    background:#f1f6ff;
+    border-radius:6px;
+    color:#1769d1;
+    text-decoration:none;
+    font-size:10px;
+    line-height:1.5;
+    word-break:break-all;
+  "
+>
+  ${verificationUrl}
+</a>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+  style="
+    background:#f8fafc;
+    padding:24px 35px;
+    text-align:center;
+    border-top:1px solid #e5e7eb;
+  "
+>
+
+<p
+  style="
+    margin:0 0 9px;
+    color:#374151;
+    font-size:12px;
+    line-height:1.6;
+    font-weight:600;
+  "
+>
+  Need help? Reply to this email or contact our
+  <a
+    href="mailto:support@salevitals.com"
     style="
-      background:#f4f7fb;
-      padding:40px 15px;
+      color:#1769d1;
+      text-decoration:none;
     "
   >
-
-    <tr>
-
-      <td align="center">
-
-
-        <table
-          width="100%"
-          cellpadding="0"
-          cellspacing="0"
-          border="0"
-          style="
-            max-width:620px;
-            background:#ffffff;
-            border-radius:16px;
-            overflow:hidden;
-            box-shadow:
-              0 10px 40px
-              rgba(0,0,0,0.08);
-          "
-        >
-
-
-          <!-- =========================
-               HEADER
-          ========================== -->
-
-          <tr>
-
-            <td
-              style="
-                background:
-                  linear-gradient(
-                    135deg,
-                    #315b9d,
-                    #23467d
-                  );
-
-                padding:
-                  32px 40px;
-
-                text-align:center;
-              "
-            >
-
-              <div
-                style="
-                  display:inline-block;
-
-                  width:52px;
-                  height:52px;
-
-                  line-height:52px;
-
-                  border-radius:14px;
-
-                  background:#ffffff;
-
-                  color:#315b9d;
-
-                  font-size:24px;
-
-                  font-weight:700;
-
-                  margin-bottom:12px;
-                "
-              >
-                S
-              </div>
-
-
-              <div
-                style="
-                  color:#ffffff;
-
-                  font-size:26px;
-
-                  font-weight:700;
-
-                  letter-spacing:0.3px;
-                "
-              >
-                SaleVitals
-              </div>
-
-
-              <div
-                style="
-                  color:
-                    rgba(255,255,255,0.75);
-
-                  font-size:13px;
-
-                  margin-top:7px;
-                "
-              >
-                Grow smarter. Sell better.
-              </div>
-
-
-            </td>
-
-          </tr>
-
-
-
-          <!-- =========================
-               CONTENT
-          ========================== -->
-
-          <tr>
-
-            <td
-              style="
-                padding:
-                  48px 45px
-                  40px;
-              "
-            >
-
-
-              <!-- ICON -->
-
-              <div
-                style="
-                  width:70px;
-                  height:70px;
-
-                  margin:
-                    0 auto
-                    25px;
-
-                  border-radius:50%;
-
-                  background:#eef4ff;
-
-                  text-align:center;
-
-                  line-height:70px;
-
-                  font-size:32px;
-                "
-              >
-                👋
-              </div>
-
-
-
-              <!-- HEADING -->
-
-              <h1
-                style="
-                  margin:
-                    0 0
-                    20px;
-
-                  text-align:center;
-
-                  color:#1f2937;
-
-                  font-size:28px;
-
-                  line-height:1.3;
-
-                  font-weight:700;
-                "
-              >
-                Welcome to SaleVitals
-              </h1>
-
-
-
-              <!-- TEXT -->
-
-              <p
-                style="
-                  margin:
-                    0 0
-                    18px;
-
-                  color:#4b5563;
-
-                  font-size:16px;
-
-                  line-height:1.7;
-                "
-              >
-                Thanks for creating your
-                SaleVitals account.
-              </p>
-
-
-
-              <p
-                style="
-                  margin:
-                    0 0
-                    30px;
-
-                  color:#4b5563;
-
-                  font-size:16px;
-
-                  line-height:1.7;
-                "
-              >
-                You're one step away from
-                getting started.
-
-                Please verify your email
-                address to activate your
-                account and continue
-                setting up your CRM workspace.
-              </p>
-
-
-
-              <!-- BUTTON -->
-
-              <table
-                width="100%"
-                cellpadding="0"
-                cellspacing="0"
-                border="0"
-              >
-
-                <tr>
-
-                  <td align="center">
-
-                    <a
-                      href="${verificationUrl}"
-
-                      style="
-                        display:inline-block;
-
-                        background:
-                          linear-gradient(
-                            135deg,
-                            #315b9d,
-                            #23467d
-                          );
-
-                        color:#ffffff;
-
-                        text-decoration:none;
-
-                        padding:
-                          16px
-                          34px;
-
-                        border-radius:8px;
-
-                        font-size:16px;
-
-                        font-weight:700;
-
-                        box-shadow:
-                          0 8px 20px
-                          rgba(
-                            49,
-                            91,
-                            157,
-                            0.25
-                          );
-                      "
-                    >
-                      ✓ Verify My Email
-                    </a>
-
-                  </td>
-
-                </tr>
-
-              </table>
-
-
-
-              <!-- EXPIRY BOX -->
-
-              <div
-                style="
-                  margin-top:35px;
-
-                  padding:18px 20px;
-
-                  background:#fff8e8;
-
-                  border:
-                    1px solid
-                    #f6dfa4;
-
-                  border-radius:10px;
-
-                  color:#7a5b12;
-
-                  font-size:14px;
-
-                  line-height:1.6;
-                "
-              >
-                ⏰
-
-                <strong>
-                  Important:
-                </strong>
-
-                This verification link will
-                expire in
-                <strong>
-                  1 hour.
-                </strong>
-
-              </div>
-
-
-
-              <!-- SECURITY MESSAGE -->
-
-              <p
-                style="
-                  margin-top:30px;
-
-                  color:#6b7280;
-
-                  font-size:13px;
-
-                  line-height:1.7;
-                "
-              >
-                If you did not create a
-                SaleVitals account, you can
-                safely ignore this email.
-              </p>
-
-
-
-              <!-- LINK FALLBACK -->
-
-              <p
-                style="
-                  margin-top:25px;
-
-                  color:#9ca3af;
-
-                  font-size:12px;
-
-                  line-height:1.6;
-                  word-break:break-all;
-                "
-              >
-                If the button doesn't work,
-                copy and paste this link into
-                your browser:
-                <br>
-
-                <a
-                  href="${verificationUrl}"
-                  style="
-                    color:#315b9d;
-                    text-decoration:none;
-                  "
-                >
-                  ${verificationUrl}
-                </a>
-
-              </p>
-
-
-            </td>
-
-          </tr>
-
-
-
-          <!-- =========================
-               FOOTER
-          ========================== -->
-
-          <tr>
-
-            <td
-              style="
-                background:#f8fafc;
-
-                padding:
-                  25px
-                  40px;
-
-                text-align:center;
-
-                border-top:
-                  1px solid
-                  #e5e7eb;
-              "
-            >
-
-              <p
-                style="
-                  margin:0 0 8px;
-
-                  color:#374151;
-
-                  font-size:14px;
-
-                  font-weight:600;
-                "
-              >
-                SaleVitals Team
-              </p>
-
-
-              <p
-                style="
-                  margin:0;
-
-                  color:#9ca3af;
-
-                  font-size:12px;
-                "
-              >
-                Secure CRM for smarter
-                sales management
-              </p>
-
-
-            </td>
-
-          </tr>
-
-
-        </table>
-
-
-        <p
-          style="
-            margin-top:22px;
-
-            color:#9ca3af;
-
-            font-size:12px;
-          "
-        >
-          © ${new Date().getFullYear()}
-          SaleVitals.
-          All rights reserved.
-        </p>
-
-
-      </td>
-
-    </tr>
-
-  </table>
-
+    support team
+  </a>.
+</p>
+
+<p
+  style="
+    margin:0;
+    color:#9ca3af;
+    font-size:10px;
+    line-height:1.5;
+  "
+>
+  SaleVitals · Secure CRM for smarter sales management
+</p>
+
+<div
+  style="
+    margin-top:14px;
+    color:#9ca3af;
+    font-size:10px;
+  "
+>
+  <a
+    href="${base}"
+    style="
+      color:#55708f;
+      text-decoration:none;
+    "
+  >
+    Visit SaleVitals
+  </a>
+
+  &nbsp; · &nbsp;
+
+  <a
+    href="${base}/privacy-policy"
+    style="
+      color:#55708f;
+      text-decoration:none;
+    "
+  >
+    Privacy
+  </a>
+</div>
+
+</td>
+
+</tr>
+
+</table>
+
+<p
+  style="
+    margin:20px 0 0;
+    color:#9ca3af;
+    font-size:10px;
+    text-align:center;
+  "
+>
+  © ${new Date().getFullYear()} SaleVitals.
+  All rights reserved.
+</p>
+
+</td>
+
+</tr>
+
+</table>
 
 </body>
 
 </html>
-    `,
-
+  `,
   });
 
-
   return true;
-
 }
 
 

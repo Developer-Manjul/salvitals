@@ -124,10 +124,10 @@ export default function Footer() {
         <div className="foot-bot">
           <div>© 2026 Vitals Technologies Pvt. Ltd. · GSTIN 07GPZPS9826G1ZP</div>
           <div className="row" style={{ "gap": "18px", "flexWrap": "wrap" }}>
-            <a href="#" onClick={(e) => { toast('Privacy policy', 'Prototype link'); e.preventDefault(); }} style={{ "padding": "0" }}>Privacy</a>
-            <a href="#" onClick={(e) => { toast('Terms', 'Prototype link'); e.preventDefault(); }} style={{ "padding": "0" }}>Terms</a>
-            <a href="#" onClick={(e) => { toast('DPA', 'Prototype link'); e.preventDefault(); }} style={{ "padding": "0" }}>DPA</a>
-            <a href="#" onClick={(e) => { toast('Security', 'Prototype link'); e.preventDefault(); }} style={{ "padding": "0" }}>Security</a>
+            <a href="/privacy-policy" style={{ "padding": "0" }}>Privacy</a>
+            <a href="/terms-of-service" style={{ "padding": "0" }}>Terms</a>
+            <a href="/data-processing-addendum" style={{ "padding": "0" }}>DPA</a>
+            <a href="/security-overview" style={{ "padding": "0" }}>Security</a>
           </div>
         </div>
         <p style={{ "marginTop": "22px", "fontSize": "12.5px", "color": "#475569", "lineHeight": "1.6" }}>

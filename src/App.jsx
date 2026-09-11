@@ -29,6 +29,9 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Cart from "./pages/Cart";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DataProcessingAddendum from "./pages/DataProcessingAddendum";
+import TermsOfService from "./pages/TermsOfService";
+import SecurityOverview from "./pages/SecurityOverview";
 
 import { initSite } from "./js/site";
 
@@ -578,6 +581,30 @@ export default function App() {
     path === "/privacy-policy/"
   ) {
     return <PrivacyPolicy />;
+  }
+
+  if (
+    path === "/data-processing-addendum" ||
+    path === "/data-processing-addendum/" ||
+    path === "/dpa"
+  ) {
+    return <DataProcessingAddendum />;
+  }
+
+  if (
+    path === "/terms-of-service" ||
+    path === "/terms-of-service/" ||
+    path === "/terms"
+  ) {
+    return <TermsOfService />;
+  }
+
+  if (
+    path === "/security-overview" ||
+    path === "/security-overview/" ||
+    path === "/security"
+  ) {
+    return <SecurityOverview />;
   }
 
 
