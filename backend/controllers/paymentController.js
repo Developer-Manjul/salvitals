@@ -57,6 +57,93 @@ function getNumber(...values) {
     return 0;
 }
 
+async function sendInvoiceIfNeeded(order) {
+    if (order.invoiceEmailSentAt) {
+        return false;
+    }
+
+    const user = await User.findById(order.userId);
+
+    if (!user || !user.email) {
+        return false;
+    }
+
+    try {
+        await sendInvoiceEmail({
+            user,
+            order,
+            paymentId: order.razorpayPaymentId,
+        });
+
+        order.invoiceEmailSentAt = new Date();
+        order.invoiceEmailError = "";
+        await order.save();
+
+        console.log(
+            "Invoice email sent successfully to:",
+            user.email
+        );
+
+        return true;
+    } catch (emailError) {
+        order.invoiceEmailError =
+            emailError.message || "Unable to send invoice email";
+        await order.save();
+
+        console.error(
+            "INVOICE EMAIL ERROR:",
+            emailError
+        );
+
+        return false;
+    }
+}
+
+async function recoverPaidOrder(userId) {
+    const pendingOrder = await Order.findOne({
+        userId,
+        paymentStatus: "pending",
+        razorpayOrderId: { $ne: "" },
+    }).sort({ createdAt: -1 });
+
+    if (!pendingOrder) {
+        return null;
+    }
+
+    const payments =
+        await razorpay.orders.fetchPayments(
+            pendingOrder.razorpayOrderId
+        );
+
+    const capturedPayment = payments.items?.find(
+        (payment) => payment.status === "captured"
+    );
+
+    if (!capturedPayment) {
+        return null;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const paidOrdersCount = await Order.countDocuments({
+        paymentStatus: "paid",
+        invoiceNumber: {
+            $regex: `^SV_${currentYear}_`,
+        },
+    });
+
+    pendingOrder.invoiceNumber =
+        pendingOrder.invoiceNumber ||
+        `SV_${currentYear}_${String(
+            paidOrdersCount + 1
+        ).padStart(3, "0")}`;
+    pendingOrder.paymentStatus = "paid";
+    pendingOrder.razorpayPaymentId = capturedPayment.id;
+    await pendingOrder.save();
+    await sendInvoiceIfNeeded(pendingOrder);
+
+    return pendingOrder;
+}
+
 exports.getPaymentStatus =
     async (
         req,
@@ -99,7 +186,7 @@ exports.getPaymentStatus =
                 });
             }
 
-            const paidOrder =
+            let paidOrder =
                 await Order.findOne({
                     userId:
                         userId,
@@ -111,7 +198,20 @@ exports.getPaymentStatus =
                         -1,
                 });
 
+            if (!paidOrder) {
+                try {
+                    paidOrder = await recoverPaidOrder(userId);
+                } catch (recoveryError) {
+                    console.error(
+                        "PAYMENT RECOVERY ERROR:",
+                        recoveryError
+                    );
+                }
+            }
+
             if (paidOrder) {
+                await sendInvoiceIfNeeded(paidOrder);
+
                 console.log(
                     "================================="
                 );
@@ -172,6 +272,14 @@ exports.getPaymentStatus =
 
                     invoiceNumber:
                         paidOrder.invoiceNumber || "",
+
+                    order: {
+                        _id: paidOrder._id,
+                        paymentStatus:
+                            paidOrder.paymentStatus,
+                        planId: paidOrder.planId,
+                        planName: paidOrder.planName,
+                    },
                 });
             }
 
@@ -699,31 +807,7 @@ exports.verifyPayment =
                 "================================="
             );
 
-            if (
-                user &&
-                user.email
-            ) {
-                try {
-                    await sendInvoiceEmail({
-                        user,
-                        order,
-                        paymentId:
-                            razorpay_payment_id,
-                    });
-
-                    console.log(
-                        "Invoice email sent successfully to:",
-                        user.email
-                    );
-
-                } catch (emailError) {
-
-                    console.error(
-                        "INVOICE EMAIL ERROR:",
-                        emailError
-                    );
-                }
-            }
+            await sendInvoiceIfNeeded(order);
 
             return res.status(200).json({
                 success: true,

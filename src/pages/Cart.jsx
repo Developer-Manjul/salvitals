@@ -160,7 +160,7 @@ const Cart = () => {
             ? null
             : currency === "INR"
                 ? subtotal * 0.18
-                : subtotal * 0.02;
+                : 0;
 
     const total =
         isCustomPlan
@@ -872,7 +872,7 @@ const Cart = () => {
 
                                 <div className="summary-row">
                                     <span>
-                                        Tax ({currency === "INR" ? "18%" : "2%"})
+                                        Tax ({currency === "INR" ? "18%" : "0%"})
                                     </span>
 
                                     <strong>

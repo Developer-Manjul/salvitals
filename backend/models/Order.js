@@ -84,6 +84,16 @@ const orderSchema = new mongoose.Schema(
             default: "",
         },
 
+        invoiceEmailSentAt: {
+            type: Date,
+            default: null,
+        },
+
+        invoiceEmailError: {
+            type: String,
+            default: "",
+        },
+
         country: {
             type: String,
             default: "",
