@@ -71,7 +71,7 @@ export default function ClinicProfile() {
       if (!response.ok || !data.success) {
         setError(
           data.message ||
-            "Unable to load clinic profile."
+            "Unable to load profile."
         );
         setLoading(false);
         return;
@@ -106,7 +106,7 @@ export default function ClinicProfile() {
       setLoading(false);
     } catch (err) {
       console.error(
-        "Load clinic profile error:",
+        "Load profile error:",
         err
       );
 
@@ -247,7 +247,7 @@ export default function ClinicProfile() {
       if (!response.ok || !data.success) {
         setError(
           data.message ||
-            "Unable to save clinic profile."
+            "Unable to save your profile."
         );
         setSaving(false);
         return;
@@ -381,13 +381,13 @@ export default function ClinicProfile() {
       }
 
       setMessage(
-        "Clinic profile saved successfully."
+        "Your profile saved successfully."
       );
 
       setSaving(false);
     } catch (err) {
       console.error(
-        "Save clinic profile error:",
+        "Save profile error:",
         err
       );
 
@@ -403,7 +403,7 @@ export default function ClinicProfile() {
     return (
       <div className="clinic-profile-page">
         <div className="clinic-profile-loading">
-          Loading clinic profile...
+          Loading  profile...
         </div>
       </div>
     );
@@ -415,7 +415,7 @@ export default function ClinicProfile() {
       <div className="clinic-profile-header">
         <div>
           <h2>
-            Clinic profile
+            Profile
           </h2>
 
           <p>
@@ -462,7 +462,7 @@ export default function ClinicProfile() {
           <div className="clinic-logo-content">
 
             <strong>
-              Clinic logo
+              Business logo
             </strong>
 
             <span>
@@ -551,7 +551,7 @@ export default function ClinicProfile() {
           <div className="clinic-field">
 
             <label>
-              Contact Person
+               Person Name
             </label>
 
             <input
@@ -589,7 +589,7 @@ export default function ClinicProfile() {
           <div className="clinic-field">
 
             <label>
-              Phone number
+              Phone Number
             </label>
 
             <div className="clinic-phone-row">
@@ -655,7 +655,7 @@ export default function ClinicProfile() {
           <div className="clinic-field">
 
             <label>
-              Number of doctors
+              Number of Team
             </label>
 
             <select
@@ -671,7 +671,7 @@ export default function ClinicProfile() {
             >
 
               <option value="">
-                Select number of doctors
+                Select number of team
               </option>
 
               <option value="1">

@@ -6,8 +6,8 @@ export default function Results() {
       <div className="wrap">
         <div className="sec-head rv">
           <span className="eyebrow" style={{ "color": "#93C5FD" }}>Results</span>
-          <h2 className="h2 mt-s">What changes in the first ninety days</h2>
-          <p className="lead">Numbers from clinics who moved off spreadsheets and personal WhatsApp. Averages, not best cases.
+          <h2 className="h2 mt-s">See what better customer management can change</h2>
+          <p className="lead">From faster follow-ups to better pipeline visibility, SaleVitals helps teams turn more opportunities into measurable business growth. 
           </p>
         </div>
         <div className="grid g3 rv">

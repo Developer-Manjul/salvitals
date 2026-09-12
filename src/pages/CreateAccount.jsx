@@ -575,6 +575,12 @@ export default function CreateAccount() {
 
             <div className="auth-left-inner">
 
+              <img
+                src="/logo-white.png"
+                alt="SaleVitals"
+                className="create-account-logo"
+              />
+
               <div className="auth-eyebrow">
                 YOUR BUSINESS. ONE CONNECTED CRM.
               </div>
@@ -1733,16 +1739,21 @@ textarea {
   position: relative;
   z-index: 2;
 
-  height: 100%;
+  // height: 100%;
 
-  padding:
-    0 58px;
 
   display: flex;
   flex-direction: column;
   justify-content: center;
 
   color: #ffffff;
+}
+
+.create-account-logo {
+  width: 112px;
+  height: auto;
+  margin-bottom: 10px;
+  object-fit: contain;
 }
 
 .auth-eyebrow {
@@ -1753,7 +1764,7 @@ textarea {
   color:
     rgba(255,255,255,.72);
 
-  margin-bottom: 26px;
+  margin-bottom: 10px;
 }
 
 .auth-left h2 {

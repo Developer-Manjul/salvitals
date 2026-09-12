@@ -4,9 +4,9 @@ import Services from "./Services";
 
 const settingsGroups = [
   {
-    label: "CLINIC",
+    label: "Profile",
     items: [
-      "Clinic Profile",
+      "Profile",
       "Doctors",
       "Team Members",
       "Roles & Permissions",
@@ -113,10 +113,10 @@ export default function Settings({ user }) {
           />
         );
 
-     case "Services":
-    return (
-        <Services />
-    );
+      case "Services":
+        return (
+          <Services />
+        );
       case "Form Settings":
         return (
           <PlaceholderContent
@@ -198,23 +198,16 @@ export default function Settings({ user }) {
 
   return (
     <div className="settings-page">
-
       <div className="settings-page-header">
-
         <h1>
           Settings
         </h1>
-
         <p>
-          Configure your clinic, team, pipeline, billing and integrations.
+          Configure your profile, team, pipeline, billing and integrations.
         </p>
-
       </div>
-
       <div className="settings-layout">
-
         <aside className="settings-sidebar">
-
           {settingsGroups.map((group) => (
             <div
               className="settings-group"
@@ -269,13 +262,9 @@ export default function Settings({ user }) {
         </aside>
 
         <main className="settings-content">
-
           {renderContent()}
-
         </main>
-
       </div>
-
     </div>
   );
 }

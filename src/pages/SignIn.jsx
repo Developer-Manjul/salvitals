@@ -331,17 +331,11 @@ export default function SignIn() {
 
       <div className="auth-brand-mobile">
 
-        <span className="auth-mark">
-          <span>∿</span>
-        </span>
-
-        <div>
-          <b>Vitals</b>
-
-          <small>
-            CLINIC GROWTH CRM
-          </small>
-        </div>
+        <img
+          src="/logo-white.png"
+          alt="Vitals"
+          className="auth-brand-logo"
+        />
 
       </div>
 
@@ -351,39 +345,54 @@ export default function SignIn() {
 
           <div className="auth-brand">
 
-            <span className="auth-mark">
-              <span>∿</span>
-            </span>
-
-            <div>
-              <b>Vitals</b>
-
-              <small>
-                CLINIC GROWTH CRM
-              </small>
-            </div>
-
+            <img
+              src="/logo-white.png"
+              alt="Vitals"
+              className="auth-brand-logo"
+            />
           </div>
 
           <div className="auth-eyebrow">
-            BUILT FOR INDIAN CLINICS
+           CRM FOR GROWING BUSINESSES 
           </div>
 
           <h2>
-            Every enquiry answered.
-            <br />
-            Every patient followed up.
+           Every lead organized 
           </h2>
 
           <p>
-            One workspace for enquiries,
-            WhatsApp, consultations,
-            follow-ups and GST billing —
-            built for clinics, not for
-            hospitals' back offices.
+            One workspace for leads, conversations, follow-ups, sales pipelines, and customer relationships so your team can focus on growing the business. 
           </p>
 
-          <div className="auth-stats">
+          <div className="auth-feature-list">
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">✓</span>
+              <div>
+                <strong>Capture</strong>
+                <p>Bring leads together from your website, WhatsApp, ads, and more.</p>
+              </div>
+            </div>
+
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">✓</span>
+              <div>
+                <strong>Engage</strong>
+                <p>Keep conversations, activities, and follow-ups connected.</p>
+              </div>
+            </div>
+
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">✓</span>
+              <div>
+                <strong>Convert</strong>
+                <p>Move opportunities through your pipeline and close more business.</p>
+              </div>
+            </div>
+          </div>
+
+          
+
+          {/* <div className="auth-stats">
 
             <div className="auth-stat">
 
@@ -421,9 +430,9 @@ export default function SignIn() {
 
             </div>
 
-          </div>
+          </div> */}
 
-          <div className="auth-testimonial">
+          {/* <div className="auth-testimonial">
 
             <div className="auth-testimonial-head">
 
@@ -454,10 +463,8 @@ export default function SignIn() {
               Consultations are up a third.”
             </p>
 
-          </div>
-
+          </div> */}
         </div>
-
       </div>
 
       <div className="auth-right">
@@ -471,8 +478,7 @@ export default function SignIn() {
             </h1>
 
             <p>
-              Manage your business.
-              Grow your practice.
+              Manage your business. Keep growing. 
             </p>
 
           </div>

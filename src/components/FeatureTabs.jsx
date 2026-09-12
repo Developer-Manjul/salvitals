@@ -1,11 +1,10 @@
-import { openDemo, waChat, tab } from "../js/site";
+import { tab } from "../js/site";
 
 export default function FeatureTabs() {
   return (
     <section className="sec" id="features">
       <div className="wrap">
 
-        {/* Section Heading */}
         <div className="sec-head rv">
           <span className="eyebrow">The platform</span>
 
@@ -19,12 +18,13 @@ export default function FeatureTabs() {
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="tabs rv" role="tablist">
 
           <button
             className="on"
-            onClick={() => { tab(0); }}
+            onClick={() => {
+              tab(0);
+            }}
             id="tb0"
           >
             <svg className="i i-16">
@@ -34,7 +34,9 @@ export default function FeatureTabs() {
           </button>
 
           <button
-            onClick={() => { tab(1); }}
+            onClick={() => {
+              tab(1);
+            }}
             id="tb1"
           >
             <svg className="i i-16">
@@ -44,7 +46,9 @@ export default function FeatureTabs() {
           </button>
 
           <button
-            onClick={() => { tab(2); }}
+            onClick={() => {
+              tab(2);
+            }}
             id="tb2"
           >
             <svg className="i i-16">
@@ -54,7 +58,9 @@ export default function FeatureTabs() {
           </button>
 
           <button
-            onClick={() => { tab(3); }}
+            onClick={() => {
+              tab(3);
+            }}
             id="tb3"
           >
             <svg className="i i-16">
@@ -65,10 +71,6 @@ export default function FeatureTabs() {
 
         </div>
 
-
-        {/* ==================================================
-        TAB 1 — CAPTURE
-    ================================================== */}
         <div
           className="tabpanel on mt-l"
           id="tp0"
@@ -154,21 +156,8 @@ export default function FeatureTabs() {
 
             </div>
 
-            {/* <button
-              className="btn mt-m"
-              onClick={() => { openDemo(); }}
-            >
-              See lead capture
-
-              <svg className="i i-16">
-                <use href="#i-arrow" />
-              </svg>
-            </button> */}
-
           </div>
 
-
-          {/* Capture Visual */}
           <div
             className="card"
             style={{
@@ -197,7 +186,6 @@ export default function FeatureTabs() {
               </span>
             </div>
 
-
             <div
               style={{
                 display: "flex",
@@ -206,7 +194,6 @@ export default function FeatureTabs() {
               }}
             >
 
-              {/* Lead 1 */}
               <div
                 className="card"
                 style={{
@@ -217,7 +204,6 @@ export default function FeatureTabs() {
                   gap: "11px"
                 }}
               >
-
                 <span
                   style={{
                     width: "32px",
@@ -231,34 +217,31 @@ export default function FeatureTabs() {
                     fontWeight: "800"
                   }}
                 >
-                  AB
+                  SW
                 </span>
 
                 <div className="grow">
                   <div className="sm fw7">
-                    Alisha Bose
+                    Sarah Wilson
                   </div>
 
                   <div className="xs muted">
-                    Laser hair removal
+                    Service enquiry
                   </div>
                 </div>
 
                 <span
                   className="tag"
                   style={{
-                    background: "#FDF2F8",
-                    borderColor: "#FBCFE8",
-                    color: "#BE185D"
+                    background: "#EFF6FF",
+                    borderColor: "#BFDBFE",
+                    color: "#1D4ED8"
                   }}
                 >
-                  Instagram
+                  Website
                 </span>
-
               </div>
 
-
-              {/* Lead 2 */}
               <div
                 className="card"
                 style={{
@@ -269,13 +252,12 @@ export default function FeatureTabs() {
                   gap: "11px"
                 }}
               >
-
                 <span
                   style={{
                     width: "32px",
                     height: "32px",
                     borderRadius: "99px",
-                    background: "#2563EB",
+                    background: "#7C3AED",
                     color: "#fff",
                     display: "grid",
                     placeItems: "center",
@@ -283,34 +265,31 @@ export default function FeatureTabs() {
                     fontWeight: "800"
                   }}
                 >
-                  NA
+                  MC
                 </span>
 
                 <div className="grow">
                   <div className="sm fw7">
-                    Nitin Ahuja
+                    Michael Carter
                   </div>
 
                   <div className="xs muted">
-                    Full body health check
+                    Product enquiry
                   </div>
                 </div>
 
                 <span
                   className="tag"
                   style={{
-                    background: "var(--light-blue)",
-                    borderColor: "#DBEAFE",
-                    color: "var(--blue-700)"
+                    background: "#F8FAFC",
+                    borderColor: "#E2E8F0",
+                    color: "#475569"
                   }}
                 >
-                  Website
+                  Google Ads
                 </span>
-
               </div>
 
-
-              {/* Lead 3 */}
               <div
                 className="card"
                 style={{
@@ -321,7 +300,6 @@ export default function FeatureTabs() {
                   gap: "11px"
                 }}
               >
-
                 <span
                   style={{
                     width: "32px",
@@ -335,16 +313,16 @@ export default function FeatureTabs() {
                     fontWeight: "800"
                   }}
                 >
-                  FQ
+                  EJ
                 </span>
 
                 <div className="grow">
                   <div className="sm fw7">
-                    Fatima Qureshi
+                    Emily Johnson
                   </div>
 
                   <div className="xs muted">
-                    IVF consultation
+                    Demo request
                   </div>
                 </div>
 
@@ -358,11 +336,8 @@ export default function FeatureTabs() {
                 >
                   WhatsApp
                 </span>
-
               </div>
 
-
-              {/* Lead 4 */}
               <div
                 className="card"
                 style={{
@@ -370,11 +345,9 @@ export default function FeatureTabs() {
                   boxShadow: "none",
                   display: "flex",
                   alignItems: "center",
-                  gap: "11px",
-                  opacity: ".55"
+                  gap: "11px"
                 }}
               >
-
                 <span
                   style={{
                     width: "32px",
@@ -388,27 +361,32 @@ export default function FeatureTabs() {
                     fontWeight: "800"
                   }}
                 >
-                  SD
+                  DM
                 </span>
 
                 <div className="grow">
                   <div className="sm fw7">
-                    Sameer Deshmukh
+                    David Miller
                   </div>
 
                   <div className="xs muted">
-                    Physiotherapy
+                    Pricing enquiry
                   </div>
                 </div>
 
-                <span className="tag">
-                  Referral
+                <span
+                  className="tag"
+                  style={{
+                    background: "#FDF2F8",
+                    borderColor: "#FBCFE8",
+                    color: "#BE185D"
+                  }}
+                >
+                  Instagram
                 </span>
-
               </div>
 
             </div>
-
 
             <div
               className="card"
@@ -442,10 +420,6 @@ export default function FeatureTabs() {
 
         </div>
 
-
-        {/* ==================================================
-        TAB 2 — ENGAGE
-    ================================================== */}
         <div
           className="tabpanel mt-l"
           id="tp1"
@@ -533,21 +507,8 @@ export default function FeatureTabs() {
 
             </div>
 
-            {/* <button
-              className="btn mt-m btn-wa"
-              onClick={() => { waChat(); }}
-            >
-              <svg className="i i-16">
-                <use href="#i-wa" />
-              </svg>
-
-              See conversations
-            </button> */}
-
           </div>
 
-
-          {/* Engage Visual */}
           <div
             className="card"
             style={{
@@ -571,7 +532,7 @@ export default function FeatureTabs() {
                   width: "34px",
                   height: "34px",
                   borderRadius: "99px",
-                  background: "#0EA5E9",
+                  background: "#DB2777",
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
@@ -579,12 +540,12 @@ export default function FeatureTabs() {
                   fontWeight: "800"
                 }}
               >
-                PV
+                SW
               </span>
 
               <div className="grow">
                 <div className="sm fw7">
-                  Priya Venkatesh
+                  Sarah Williams
                 </div>
 
                 <div className="xs muted">
@@ -597,7 +558,6 @@ export default function FeatureTabs() {
               </span>
 
             </div>
-
 
             <div
               style={{
@@ -623,19 +583,8 @@ export default function FeatureTabs() {
                 className="bub out"
                 style={{ maxWidth: "82%" }}
               >
-                Absolutely. Our team can help you with that. I'll make sure
-                your enquiry reaches the right person.
-
-                <div
-                  style={{
-                    fontSize: "9.5px",
-                    color: "#667781",
-                    textAlign: "right",
-                    marginTop: "3px"
-                  }}
-                >
-                  Team · 11:06 ✓✓
-                </div>
+                Absolutely. Our team can help with that. I'll make sure your
+                enquiry reaches the right person.
               </div>
 
               <div
@@ -661,7 +610,6 @@ export default function FeatureTabs() {
 
             </div>
 
-
             <div
               style={{
                 display: "flex",
@@ -683,7 +631,7 @@ export default function FeatureTabs() {
                   borderRadius: "19px"
                 }}
               >
-                Type a message…
+                Type a message...
               </div>
 
               <span
@@ -709,10 +657,6 @@ export default function FeatureTabs() {
 
         </div>
 
-
-        {/* ==================================================
-        TAB 3 — CONVERT
-    ================================================== */}
         <div
           className="tabpanel mt-l"
           id="tp2"
@@ -804,21 +748,8 @@ export default function FeatureTabs() {
 
             </div>
 
-            {/* <button
-              className="btn mt-m"
-              onClick={() => { openDemo(); }}
-            >
-              See the pipeline
-
-              <svg className="i i-16">
-                <use href="#i-arrow" />
-              </svg>
-            </button> */}
-
           </div>
 
-
-          {/* Convert Visual */}
           <div
             className="card"
             style={{
@@ -835,7 +766,6 @@ export default function FeatureTabs() {
               }}
             >
 
-              {/* Pipeline Column 1 */}
               <div
                 style={{
                   background: "#fff",
@@ -921,8 +851,6 @@ export default function FeatureTabs() {
 
               </div>
 
-
-              {/* Pipeline Column 2 */}
               <div
                 style={{
                   background: "#fff",
@@ -942,7 +870,6 @@ export default function FeatureTabs() {
                     marginBottom: "8px"
                   }}
                 >
-
                   <span
                     className="dot"
                     style={{ background: "#2563EB" }}
@@ -958,7 +885,6 @@ export default function FeatureTabs() {
                   >
                     9
                   </span>
-
                 </div>
 
                 <div
@@ -972,7 +898,6 @@ export default function FeatureTabs() {
                     transform: "rotate(-1.2deg)"
                   }}
                 >
-
                   <div className="xs fw7">
                     Priya Venkatesh
                   </div>
@@ -990,7 +915,6 @@ export default function FeatureTabs() {
                   >
                     ₹1,45,000
                   </div>
-
                 </div>
 
                 <div
@@ -1001,7 +925,6 @@ export default function FeatureTabs() {
                     padding: "8px"
                   }}
                 >
-
                   <div className="xs fw7">
                     Aisha Sethi
                   </div>
@@ -1016,13 +939,10 @@ export default function FeatureTabs() {
                   >
                     Follow-up in 2 days
                   </div>
-
                 </div>
 
               </div>
 
-
-              {/* Pipeline Column 3 */}
               <div
                 style={{
                   background: "#fff",
@@ -1040,7 +960,6 @@ export default function FeatureTabs() {
                     marginBottom: "8px"
                   }}
                 >
-
                   <span
                     className="dot"
                     style={{ background: "#7C3AED" }}
@@ -1056,7 +975,6 @@ export default function FeatureTabs() {
                   >
                     6
                   </span>
-
                 </div>
 
                 <div
@@ -1068,7 +986,6 @@ export default function FeatureTabs() {
                     marginBottom: "6px"
                   }}
                 >
-
                   <div className="xs fw7">
                     Aditya Menon
                   </div>
@@ -1086,7 +1003,6 @@ export default function FeatureTabs() {
                   >
                     Converted
                   </div>
-
                 </div>
 
                 <div
@@ -1102,8 +1018,6 @@ export default function FeatureTabs() {
 
             </div>
 
-
-            {/* Pipeline Insight */}
             <div
               className="card"
               style={{
@@ -1159,9 +1073,6 @@ export default function FeatureTabs() {
 
         </div>
 
-        {/* ==================================================
-    TAB 4 — GROW
-================================================== */}
         <div
           className="tabpanel mt-l"
           id="tp3"
@@ -1171,6 +1082,7 @@ export default function FeatureTabs() {
             alignItems: "center"
           }}
         >
+
           <div>
 
             <span
@@ -1204,6 +1116,7 @@ export default function FeatureTabs() {
                     <use href="#i-check" />
                   </svg>
                 </i>
+
                 <span>
                   <b>Customer profiles</b> — Keep important customer information
                   accessible to your team.
@@ -1216,6 +1129,7 @@ export default function FeatureTabs() {
                     <use href="#i-check" />
                   </svg>
                 </i>
+
                 <span>
                   <b>Automated workflows</b> — Trigger actions based on customer
                   activity.
@@ -1228,6 +1142,7 @@ export default function FeatureTabs() {
                     <use href="#i-check" />
                   </svg>
                 </i>
+
                 <span>
                   <b>Customer service</b> — Manage requests and support interactions
                   efficiently.
@@ -1240,6 +1155,7 @@ export default function FeatureTabs() {
                     <use href="#i-check" />
                   </svg>
                 </i>
+
                 <span>
                   <b>Reports &amp; insights</b> — Understand customer activity and
                   business performance.
@@ -1248,19 +1164,8 @@ export default function FeatureTabs() {
 
             </div>
 
-            {/* <button
-              className="btn mt-m"
-              onClick={() => { openDemo(); }}
-            >
-              See how it works
-              <svg className="i i-16">
-                <use href="#i-arrow" />
-              </svg>
-            </button> */}
-
           </div>
 
-          {/* Grow Visual */}
           <div
             className="card"
             style={{
@@ -1295,6 +1200,7 @@ export default function FeatureTabs() {
               }}
             >
               <div className="between">
+
                 <div>
                   <div className="xs muted">
                     Customer profile
@@ -1322,6 +1228,7 @@ export default function FeatureTabs() {
                     <use href="#i-userplus" />
                   </svg>
                 </span>
+
               </div>
             </div>
 
@@ -1416,6 +1323,7 @@ export default function FeatureTabs() {
             </div>
 
           </div>
+
         </div>
 
       </div>

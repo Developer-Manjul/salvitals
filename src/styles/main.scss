@@ -2512,7 +2512,7 @@ textarea.inp {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: .22;
+  // opacity: .22;
   background-image: radial-gradient(rgba(255, 255, 255, .35) 1px, transparent 1px);
   background-size: 24px 24px
 }
@@ -2522,21 +2522,21 @@ textarea.inp {
   position: absolute;
   width: 620px;
   height: 320px;
-  right: -160px;
-  top: 50px;
+  // right: -160px;
+  // top: 50px;
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 50%;
   box-shadow: 0 0 0 45px rgba(255, 255, 255, .025), 0 0 0 90px rgba(255, 255, 255, .018)
 }
 
 .auth-left-inner {
-  position: relative;
-  z-index: 2;
-  min-height: 100vh;
-  padding: 54px clamp(28px, 5vw, 76px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center
+    position: relative;
+    z-index: 2;
+    min-height: 90vh;
+    padding: 0px clamp(0px, 2vw, 60px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .auth-brand,
@@ -2547,8 +2547,17 @@ textarea.inp {
   gap: 11px
 }
 
-.auth-brand {
-  margin-bottom: 42px
+// .auth-brand {
+//   margin-bottom: 42px
+// }
+
+.auth-brand-logo {
+    width: 100px;
+    height: 100px;
+    display: block;
+    object-fit: contain;
+    flex: none;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
 }
 
 .auth-mark {
@@ -2606,7 +2615,7 @@ textarea.inp {
   font-weight: 800;
   letter-spacing: .14em;
   color: #bfdbfe;
-  margin-bottom: 14px
+  // margin-bottom: 14px
 }
 
 .auth-left h2 {
@@ -3967,7 +3976,7 @@ textarea.inp {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 48px;
+  // margin-bottom: 48px;
 }
 
 .auth-mark {
@@ -4010,7 +4019,7 @@ textarea.inp {
 ========================================================= */
 
 .auth-eyebrow {
-  margin-bottom: 24px;
+  // margin-bottom: 24px;
 
   color: #b9dcff;
 
@@ -4040,6 +4049,49 @@ textarea.inp {
 
   font-size: 18px;
   line-height: 1.55;
+}
+
+.auth-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.auth-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.auth-feature-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: 2px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .12);
+  color: #65f0bf;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.auth-feature-item strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.auth-feature-item p {
+  margin: 0;
+  color: rgba(255, 255, 255, .78);
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 

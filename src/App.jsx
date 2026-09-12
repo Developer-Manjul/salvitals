@@ -12,7 +12,7 @@ import FeatureGrid from "./components/FeatureGrid";
 import Specialities from "./components/Specialities";
 import HowItWorks from "./components/HowItWorks";
 import Integrations from "./components/Integrations";
-import ProductTour from "./components/ProductTour";
+// import ProductTour from "./components/ProductTour";
 import Results from "./components/Results";
 import Testimonials from "./components/Testimonials";
 import Pricing from "./components/Pricing";
@@ -479,7 +479,7 @@ function Home() {
       <Specialities />
       <HowItWorks />
       <Integrations />
-      <ProductTour />
+      {/* <ProductTour /> */}
       <Results />
       <Testimonials />
       <Pricing />

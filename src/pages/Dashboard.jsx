@@ -1387,21 +1387,6 @@ export default function Dashboard() {
 
         <Brand />
 
-        <button className="dash-add-new">
-
-          <Icon
-            name="plus"
-            size={18}
-          />
-
-          Add New
-
-          <Icon
-            name="chevron"
-            size={15}
-          />
-
-        </button>
 
         <nav className="dash-nav">
 
