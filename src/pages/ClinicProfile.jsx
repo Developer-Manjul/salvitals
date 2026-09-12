@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { getApiBaseUrl } from "../config/api";
 
-export default function ClinicProfile() {
+export default function ClinicProfile({ user, isHealthcare = false }) {
   const [profile, setProfile] = useState({
-    name: "",
-    email: "",
-    clinicName: "",
-    phone: "",
+    name: user?.name || "",
+    email: user?.email || "",
+    clinicName: user?.clinicName || "",
+    phone: user?.phone || "",
     phoneCountryCode: "+91",
-    speciality: "",
-    numberOfDoctors: "",
-    displayName: "",
+    speciality: user?.speciality || "",
+    numberOfDoctors: user?.numberOfDoctors || "",
+    displayName: user?.displayName || user?.clinicName || "",
     address: "",
     gstin: "",
     zipCode: "",
@@ -77,30 +77,30 @@ export default function ClinicProfile() {
         return;
       }
 
-      const user = data.user || {};
+      const profileUser = data.user || {};
 
       setProfile({
-        name: user.name || "",
-        email: user.email || "",
-        clinicName: user.clinicName || "",
-        phone: user.phone || "",
+        name: profileUser.name || user?.name || "",
+        email: profileUser.email || user?.email || "",
+        clinicName: profileUser.clinicName || user?.clinicName || "",
+        phone: profileUser.phone || user?.phone || "",
         phoneCountryCode:
-          user.phoneCountryCode || "+91",
-        speciality: user.speciality || "",
+          profileUser.phoneCountryCode || "+91",
+        speciality: profileUser.speciality || user?.speciality || "",
         numberOfDoctors:
-          user.numberOfDoctors || "",
+          profileUser.numberOfDoctors || user?.numberOfDoctors || "",
         displayName:
-          user.clinicName || "",
+          profileUser.displayName || profileUser.clinicName || user?.clinicName || "",
         address:
-          user.address || "",
+          profileUser.address || "",
         gstin:
-          user.gstin || "",
+          profileUser.gstin || "",
         zipCode:
-          user.zipCode || "",
+          profileUser.zipCode || "",
         website:
-          user.website || "",
+          profileUser.website || "",
         clinicLogo:
-          user.clinicLogo || "",
+          profileUser.clinicLogo || "",
       });
 
       setLoading(false);
@@ -415,7 +415,7 @@ export default function ClinicProfile() {
       <div className="clinic-profile-header">
         <div>
           <h2>
-            Profile
+            {isHealthcare ? "Profile" : "Business Profile"}
           </h2>
 
           <p>
@@ -449,7 +449,7 @@ export default function ClinicProfile() {
             {profile.clinicLogo ? (
               <img
                 src={profile.clinicLogo}
-                alt="Clinic logo"
+                alt="your logo"
               />
             ) : (
               <div className="clinic-logo-placeholder">
@@ -462,7 +462,7 @@ export default function ClinicProfile() {
           <div className="clinic-logo-content">
 
             <strong>
-              Business logo
+              {isHealthcare ? "Website logo" : "Business logo"}
             </strong>
 
             <span>
@@ -511,7 +511,7 @@ export default function ClinicProfile() {
           <div className="clinic-field">
 
             <label>
-              Business Name
+              {isHealthcare ? "Business Name" : "Business Name"}
             </label>
 
             <input
@@ -523,7 +523,11 @@ export default function ClinicProfile() {
                   e.target.value
                 )
               }
-              placeholder="Enter business name"
+              placeholder={
+                isHealthcare
+                  ? "Enter business name"
+                  : "Enter business name"
+              }
             />
 
           </div>
@@ -551,7 +555,7 @@ export default function ClinicProfile() {
           <div className="clinic-field">
 
             <label>
-               Person Name
+              {isHealthcare ? "Person Name" : "Contact Person"}
             </label>
 
             <input
@@ -563,7 +567,11 @@ export default function ClinicProfile() {
                   e.target.value
                 )
               }
-              placeholder="Enter person name"
+              placeholder={
+                isHealthcare
+                  ? "Enter person name"
+                  : "Enter contact person"
+              }
             />
 
           </div>

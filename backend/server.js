@@ -54,6 +54,10 @@ const serviceRoutes = require(
     "./routes/serviceRoutes"
 );
 
+const teamMemberRoutes = require(
+    "./routes/teamMemberRoutes"
+);
+
 console.log(
     "AUTH ROUTES LOADED"
 );
@@ -84,6 +88,11 @@ app.use(
 app.use(
     "/api/services",
     serviceRoutes
+);
+
+app.use(
+    "/api/team-members",
+    teamMemberRoutes
 );
 
 app.get(
