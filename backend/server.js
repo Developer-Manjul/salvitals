@@ -24,6 +24,7 @@ app.use(
         allowedHeaders: [
             "Content-Type",
             "Authorization",
+            "x-api-key",
         ],
         credentials: true,
     })
@@ -58,6 +59,14 @@ const teamMemberRoutes = require(
     "./routes/teamMemberRoutes"
 );
 
+const leadRoutes = require(
+    "./routes/leadRoutes"
+);
+
+const leadIntegrationRoutes = require(
+    "./routes/leadIntegrationRoutes"
+);
+
 console.log(
     "AUTH ROUTES LOADED"
 );
@@ -68,6 +77,14 @@ console.log(
 
 console.log(
     "SERVICE ROUTES LOADED"
+);
+
+console.log(
+    "LEAD ROUTES LOADED"
+);
+
+console.log(
+    "LEAD INTEGRATION ROUTES LOADED"
 );
 
 app.use(
@@ -93,6 +110,16 @@ app.use(
 app.use(
     "/api/team-members",
     teamMemberRoutes
+);
+
+app.use(
+    "/api/leads",
+    leadRoutes
+);
+
+app.use(
+    "/api/integrations",
+    leadIntegrationRoutes
 );
 
 app.get(
@@ -188,6 +215,14 @@ mongoose
 
                 console.log(
                     `Services API: http://localhost:${PORT}/api/services`
+                );
+
+                console.log(
+                    `Leads API: http://localhost:${PORT}/api/leads`
+                );
+
+                console.log(
+                    `Website Lead API: http://localhost:${PORT}/api/integrations/website/lead`
                 );
             }
         );

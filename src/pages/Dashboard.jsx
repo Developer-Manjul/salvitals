@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "../styles/dashboard.scss";
 import Settings from "./Settings";
+import Leads from "./Leads";
 
 const navGroups = [
   {
@@ -1347,6 +1348,22 @@ export default function Dashboard() {
     window.location.href = "/cart";
   };
 
+  const renderDashboardSection = () => {
+    if (active === "Settings") {
+      return <Settings user={user} />;
+    }
+
+    if (active === "Leads") {
+      return <Leads user={user} />;
+    }
+
+    if (showPlans) {
+      return <ChoosePlan user={user} onContinue={handleChoosePlan} />;
+    }
+
+    return <ActualDashboardContent user={user} />;
+  };
+
   const handleLogout = () => {
 
     localStorage.removeItem("token");
@@ -1702,28 +1719,7 @@ export default function Dashboard() {
 
         <section className="dash-content">
 
-          {active === "Settings" ? (
-
-            <Settings
-              user={user}
-            />
-
-          ) : showPlans ? (
-
-            <ChoosePlan
-              user={user}
-              onContinue={
-                handleChoosePlan
-              }
-            />
-
-          ) : (
-
-            <ActualDashboardContent
-              user={user}
-            />
-
-          )}
+          {renderDashboardSection()}
 
         </section>
 
