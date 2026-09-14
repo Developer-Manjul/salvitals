@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ClinicProfile from "./ClinicProfile";
 import Services from "./Services";
+import MetaIntegrationPanel from "./MetaIntegrationPanel";
 import { getApiBaseUrl } from "../config/api";
 
 const baseSettingsGroups = [
@@ -470,6 +471,15 @@ export default function Settings({ user }) {
     setActiveTab(
       isHealthcare ? "Clinic Profile" : "Business Profile"
     );
+
+    const params = new URLSearchParams(window.location.search);
+
+    if (
+      params.get("metaSelectPage") === "true" ||
+      params.get("metaError")
+    ) {
+      setActiveTab("Integrations");
+    }
   }, [isHealthcare]);
 
   const handleTabChange = (tab) => {
@@ -545,9 +555,7 @@ export default function Settings({ user }) {
 
       case "Integrations":
         return (
-          <PlaceholderContent
-            title="Integrations"
-          />
+          <MetaIntegrationPanel />
         );
 
       case "Notification Settings":

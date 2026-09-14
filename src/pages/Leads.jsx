@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-
-const API_BASE_URL = "https://salevitals.com";
+import { buildApiUrl } from "../config/api";
 
 const LEAD_SOURCES = [
   "Google",
@@ -17,6 +16,7 @@ const LEAD_SOURCES = [
 
 const LEAD_STAGES = [
   "New",
+  "Pending follow-up",
   "Contacted",
   "Qualified",
   "Proposal",
@@ -88,6 +88,8 @@ function getStageTone(stage) {
   switch (stage) {
     case "New":
       return "stage-new";
+    case "Pending follow-up":
+      return "stage-proposal";
     case "Contacted":
       return "stage-contacted";
     case "Qualified":
@@ -119,14 +121,9 @@ function formatDate(value) {
   }).format(date);
 }
 
-function getLeadOwner(lead, isHealthcare) {
+function getLeadOwner(lead, isHealthcare, user) {
   if (!lead) return "—";
-
-  if (isHealthcare) {
-    return lead.preferredDoctor || lead.owner || "—";
-  }
-
-  return lead.owner || "Unassigned";
+  return lead.owner || user?.name || "Unassigned";
 }
 
 function defaultLeadForm(user, isHealthcare) {
@@ -139,7 +136,7 @@ function defaultLeadForm(user, isHealthcare) {
     phone: "",
     source: "Website",
     service: "",
-    owner: DEFAULT_OWNERS[0],
+    owner: user?.name || "",
     stage: "New",
     firstNote: "",
     preferredDoctor: isHealthcare ? doctorName : "",
@@ -154,7 +151,7 @@ function defaultLeadForm(user, isHealthcare) {
   };
 }
 
-export default function Leads({ user }) {
+export default function Leads({ user, onOpenLeadDetails }) {
   const isHealthcare =
     String(user?.speciality || "").trim().toLowerCase() === "healthcare";
 
@@ -195,7 +192,7 @@ export default function Leads({ user }) {
     setLoadingLeads(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/leads`, {
+      const response = await fetch(buildApiUrl("/api/leads"), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -227,7 +224,7 @@ export default function Leads({ user }) {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/services`, {
+      const response = await fetch(buildApiUrl("/api/services"), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -285,7 +282,7 @@ export default function Leads({ user }) {
         ...defaultLeadForm(user, isHealthcare),
         ...previous,
         service: previous.service || availableServices[0] || "",
-        owner: previous.owner || DEFAULT_OWNERS[0],
+        owner: previous.owner || user?.name || "",
       }));
     }
   }, [
@@ -364,7 +361,7 @@ export default function Leads({ user }) {
     setFormData({
       ...defaultLeadForm(user, isHealthcare),
       service: availableServices[0] || "",
-      owner: DEFAULT_OWNERS[0],
+      owner: user?.name || "",
     });
 
     setShowAddModal(true);
@@ -470,8 +467,8 @@ export default function Leads({ user }) {
 
       const response = await fetch(
         isEditing
-          ? `${API_BASE_URL}/api/leads/${editingLeadId}`
-          : `${API_BASE_URL}/api/leads`,
+          ? buildApiUrl(`/api/leads/${editingLeadId}`)
+          : buildApiUrl("/api/leads"),
         {
           method: isEditing ? "PUT" : "POST",
           headers: {
@@ -547,7 +544,7 @@ export default function Leads({ user }) {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/leads/${leadId}`,
+        buildApiUrl(`/api/leads/${leadId}`),
         {
           method: "DELETE",
           headers: {
@@ -590,6 +587,61 @@ export default function Leads({ user }) {
     }
   };
 
+  const handleStageChange = async (lead, stage) => {
+    const token = getToken();
+
+    if (!token || !stage || stage === lead.stage) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/leads/${lead._id}`),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: lead.name,
+            email: lead.email || "",
+            phone: lead.phone,
+            source: lead.source || "Manual",
+            service: lead.service || "",
+            owner: lead.owner || user?.name || "",
+            stage,
+            preferredDoctor: lead.preferredDoctor || "",
+            landingPage: lead.landingPage || "",
+            pageUrl: lead.pageUrl || "",
+            utmSource: lead.utmSource || "",
+            utmMedium: lead.utmMedium || "",
+            utmCampaign: lead.utmCampaign || "",
+            utmTerm: lead.utmTerm || "",
+            utmContent: lead.utmContent || "",
+            ipAddress: lead.ipAddress || "",
+            firstNote: lead.firstNote || "",
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to update stage");
+      }
+
+      setLeads((previous) =>
+        previous.map((item) =>
+          item._id === lead._id ? data.lead : item
+        )
+      );
+    } catch (error) {
+      console.error("UPDATE LEAD STAGE ERROR:", error);
+      alert(error.message || "Unable to update stage");
+    }
+  };
+
   const resetFilters = () => {
     setSearch("");
     setSourceFilter("All sources");
@@ -599,6 +651,11 @@ export default function Leads({ user }) {
   };
 
   const openLeadDetails = (lead) => {
+    if (onOpenLeadDetails) {
+      onOpenLeadDetails(lead._id);
+      return;
+    }
+
     setSelectedLead(lead);
     setShowDetailsModal(true);
     setActionMenuLeadId(null);
@@ -875,9 +932,16 @@ export default function Leads({ user }) {
                 </tr>
               ) : (
                 filteredLeads.map((lead) => (
-                  <tr key={lead._id}>
+                  <tr
+                    key={lead._id}
+                    className="lead-clickable-row"
+                    onClick={() => openLeadDetails(lead)}
+                  >
                     <td>
-                      <div className="lead-name-cell">
+                      <div
+                        className="lead-name-cell"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <span className="lead-avatar">
                           {getInitials(
                             lead.name
@@ -919,18 +983,28 @@ export default function Leads({ user }) {
                     <td>
                       {getLeadOwner(
                         lead,
-                        isHealthcare
+                        isHealthcare,
+                        user
                       )}
                     </td>
 
                     <td>
-                      <span
-                        className={`lead-stage-pill ${getStageTone(
+                      <select
+                        className={`lead-stage-select ${getStageTone(
                           lead.stage
                         )}`}
+                        value={lead.stage || "New"}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) =>
+                          handleStageChange(lead, event.target.value)
+                        }
                       >
-                        {lead.stage || "New"}
-                      </span>
+                        <option value="New">New</option>
+                        <option value="Pending follow-up">
+                          Pending follow-up
+                        </option>
+                        <option value="Lost">Mark as lost</option>
+                      </select>
                     </td>
 
                     <td>
@@ -940,7 +1014,10 @@ export default function Leads({ user }) {
                     </td>
 
                     <td>
-                      <div className="lead-action-wrap">
+                      <div
+                        className="lead-action-wrap"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <button
                           type="button"
                           className="lead-action-btn"
@@ -980,25 +1057,6 @@ export default function Leads({ user }) {
                               }
                             >
                               Edit lead
-                            </button>
-
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() =>
-                                handleDeleteLead(
-                                  lead._id
-                                )
-                              }
-                              disabled={
-                                deletingLeadId ===
-                                lead._id
-                              }
-                            >
-                              {deletingLeadId ===
-                              lead._id
-                                ? "Deleting..."
-                                : "Delete lead"}
                             </button>
                           </div>
                         )}
@@ -1065,7 +1123,8 @@ export default function Leads({ user }) {
                       <small>
                         {getLeadOwner(
                           lead,
-                          isHealthcare
+                          isHealthcare,
+                          user
                         )}
                       </small>
 
@@ -1131,7 +1190,8 @@ export default function Leads({ user }) {
                   <span>
                     {getLeadOwner(
                       lead,
-                      isHealthcare
+                      isHealthcare,
+                      user
                     )}
                   </span>
                 </div>
@@ -1514,7 +1574,8 @@ export default function Leads({ user }) {
                   <strong>
                     {getLeadOwner(
                       selectedLead,
-                      isHealthcare
+                      isHealthcare,
+                      user
                     )}
                   </strong>
                 </div>

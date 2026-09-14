@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "../styles/dashboard.scss";
 import Settings from "./Settings";
 import Leads from "./Leads";
+import LeadDetails from "./LeadDetails";
 
 const navGroups = [
   {
@@ -1279,7 +1280,20 @@ export default function Dashboard() {
   const [showPlans, setShowPlans] =
     useState(true);
 
+  const [selectedLeadId, setSelectedLeadId] =
+    useState(null);
+
   useEffect(() => {
+
+    const dashboardParams =
+      new URLSearchParams(window.location.search);
+
+    if (
+      dashboardParams.get("metaSelectPage") === "true" ||
+      dashboardParams.get("metaError")
+    ) {
+      setActive("Settings");
+    }
 
     const savedUser =
       localStorage.getItem("user") ||
@@ -1354,7 +1368,25 @@ export default function Dashboard() {
     }
 
     if (active === "Leads") {
-      return <Leads user={user} />;
+      return (
+        <Leads
+          user={user}
+          onOpenLeadDetails={(leadId) => {
+            setSelectedLeadId(leadId);
+            setActive("LeadDetails");
+          }}
+        />
+      );
+    }
+
+    if (active === "LeadDetails" && selectedLeadId) {
+      return (
+        <LeadDetails
+          leadId={selectedLeadId}
+          user={user}
+          onBack={() => setActive("Leads")}
+        />
+      );
     }
 
     if (showPlans) {
