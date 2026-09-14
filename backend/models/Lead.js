@@ -111,10 +111,40 @@ const leadSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+
+        metaLeadId: { type: String, default: "" },
+        metaPageId: { type: String, default: "" },
+        metaFormId: { type: String, default: "" },
+        metaAdId: { type: String, default: "" },
+        metaCampaignId: { type: String, default: "" },
+
+        notes: {
+            type: [{
+                text: { type: String, trim: true },
+                userName: { type: String, trim: true, default: "" },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
+
+        followUps: {
+            type: [{
+                date: { type: Date, required: true },
+                note: { type: String, trim: true, default: "" },
+                status: { type: String, trim: true, default: "Scheduled" },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
     },
     {
         timestamps: true,
     }
+);
+
+leadSchema.index(
+    { userId: 1, metaLeadId: 1 },
+    { unique: true, partialFilterExpression: { metaLeadId: { $type: "string", $ne: "" } } }
 );
 
 module.exports = mongoose.model("Lead", leadSchema);

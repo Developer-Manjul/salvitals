@@ -2,9 +2,12 @@ const express = require("express");
 
 const {
     getLeads,
+    getLead,
     createLead,
     updateLead,
     deleteLead,
+    addLeadNote,
+    addLeadFollowUp,
 } = require("../controllers/leadController");
 
 const router =
@@ -13,6 +16,21 @@ const router =
 router.get(
     "/",
     getLeads
+);
+
+router.get(
+    "/:id",
+    getLead
+);
+
+router.post(
+    "/:id/notes",
+    addLeadNote
+);
+
+router.post(
+    "/:id/follow-ups",
+    addLeadFollowUp
 );
 
 router.post(

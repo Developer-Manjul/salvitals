@@ -344,3 +344,108 @@ exports.deleteLead = async (
         });
     }
 };
+
+exports.getLead = async (
+    req,
+    res
+) => {
+    try {
+        const userId = getUserId(req);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        const lead = await Lead.findOne({
+            _id: req.params.id,
+            userId,
+        });
+
+        if (!lead) {
+            return res.status(404).json({
+                success: false,
+                message: "Lead not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            lead,
+        });
+    } catch (error) {
+        console.error("GET LEAD ERROR:", error);
+        return res.status(404).json({
+            success: false,
+            message: "Lead not found",
+        });
+    }
+};
+
+exports.addLeadNote = async (
+    req,
+    res
+) => {
+    try {
+        const userId = getUserId(req);
+        const text = String(req.body?.text || "").trim();
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+
+        if (!text) {
+            return res.status(400).json({ success: false, message: "Note is required" });
+        }
+
+        const lead = await Lead.findOneAndUpdate(
+            { _id: req.params.id, userId },
+            { $push: { notes: { text, userName: req.body?.userName || "" } } },
+            { new: true, runValidators: true }
+        );
+
+        if (!lead) {
+            return res.status(404).json({ success: false, message: "Lead not found" });
+        }
+
+        return res.status(201).json({ success: true, lead });
+    } catch (error) {
+        console.error("ADD LEAD NOTE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to add note" });
+    }
+};
+
+exports.addLeadFollowUp = async (
+    req,
+    res
+) => {
+    try {
+        const userId = getUserId(req);
+        const date = new Date(req.body?.date);
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+
+        if (Number.isNaN(date.getTime())) {
+            return res.status(400).json({ success: false, message: "Follow-up date is required" });
+        }
+
+        const lead = await Lead.findOneAndUpdate(
+            { _id: req.params.id, userId },
+            { $push: { followUps: { date, note: String(req.body?.note || "").trim() } } },
+            { new: true, runValidators: true }
+        );
+
+        if (!lead) {
+            return res.status(404).json({ success: false, message: "Lead not found" });
+        }
+
+        return res.status(201).json({ success: true, lead });
+    } catch (error) {
+        console.error("ADD LEAD FOLLOW-UP ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to schedule follow-up" });
+    }
+};

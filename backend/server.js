@@ -67,6 +67,10 @@ const leadIntegrationRoutes = require(
     "./routes/leadIntegrationRoutes"
 );
 
+const metaIntegrationRoutes = require(
+    "./routes/metaIntegrationRoutes"
+);
+
 console.log(
     "AUTH ROUTES LOADED"
 );
@@ -120,6 +124,11 @@ app.use(
 app.use(
     "/api/integrations",
     leadIntegrationRoutes
+);
+
+app.use(
+    "/api/integrations/meta",
+    metaIntegrationRoutes
 );
 
 app.get(
