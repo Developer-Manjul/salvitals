@@ -30,7 +30,12 @@ exports.getAuthorizationUrl = (state) => {
   url.searchParams.set("redirect_uri", process.env.META_REDIRECT_URI || "");
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", ["pages_show_list", "pages_read_engagement", "leads_retrieval", "business_management", "instagram_basic"].join(","));
+  url.searchParams.set("scope", [
+  "pages_show_list",
+  "pages_read_engagement",
+  "pages_manage_metadata",
+  "leads_retrieval",
+].join(","));
   return url.toString();
 };
 
