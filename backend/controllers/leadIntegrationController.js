@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const LeadApiKey = require("../models/LeadApiKey");
+const { processNewLead } = require("../services/leadProcessingService");
 const Lead = require("../models/Lead");
 
 function getUserId(req) {
@@ -392,6 +393,8 @@ exports.createWebsiteLead = async (
                 firstNote:
                     String(firstNote || "").trim(),
             });
+
+            await processNewLead(lead);
 
         return res.status(201).json({
             success: true,

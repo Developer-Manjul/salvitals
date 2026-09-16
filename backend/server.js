@@ -71,6 +71,14 @@ const metaIntegrationRoutes = require(
     "./routes/metaIntegrationRoutes"
 );
 
+const notificationRoutes = require(
+    "./routes/notificationRoutes"
+);
+
+const contactRoutes = require(
+    "./routes/contactRoutes"
+);
+
 console.log(
     "AUTH ROUTES LOADED"
 );
@@ -129,6 +137,16 @@ app.use(
 app.use(
     "/api/integrations/meta",
     metaIntegrationRoutes
+);
+
+app.use(
+    "/api/notifications",
+    notificationRoutes
+);
+
+app.use(
+    "/api/contacts",
+    contactRoutes
 );
 
 app.get(

@@ -7,6 +7,8 @@ const metaIntegrationSchema = new mongoose.Schema(
     pageName: { type: String, default: "" },
     instagramAccountId: { type: String, default: "" },
     instagramUsername: { type: String, default: "" },
+    instagramName: { type: String, default: "" },
+    instagramProfilePicture: { type: String, default: "" },
     businessId: { type: String, default: "" },
     businessName: { type: String, default: "" },
     accessTokenEncrypted: { type: String, required: true },

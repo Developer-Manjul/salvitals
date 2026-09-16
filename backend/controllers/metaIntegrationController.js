@@ -5,6 +5,7 @@ const MetaOAuthState = require("../models/MetaOAuthState");
 const Lead = require("../models/Lead");
 const { encrypt, decrypt } = require("../utils/encryption");
 const meta = require("../services/metaService");
+const { processNewLead } = require("../services/leadProcessingService");
 
 function getUserId(req) {
   const authorization = req.headers.authorization || "";
@@ -54,12 +55,36 @@ function publicIntegration(integration) {
     pageName: integration.pageName,
     instagramAccountId: integration.instagramAccountId,
     instagramUsername: integration.instagramUsername,
+    instagramName: integration.instagramName,
+    instagramProfilePicture: integration.instagramProfilePicture,
+    facebook: {
+      connected: Boolean(integration.isActive),
+      pageId: integration.pageId,
+      pageName: integration.pageName,
+    },
+    instagram: {
+      connected: Boolean(integration.instagramAccountId),
+      accountId: integration.instagramAccountId,
+      username: integration.instagramUsername,
+      name: integration.instagramName,
+      profilePicture: integration.instagramProfilePicture,
+    },
     businessId: integration.businessId,
     businessName: integration.businessName,
     isActive: integration.isActive,
     connectedAt: integration.connectedAt,
     updatedAt: integration.updatedAt,
   };
+}
+
+function applyInstagramDetails(integration, details) {
+  const instagram = details?.instagram_business_account;
+
+  integration.instagramAccountId = instagram?.id || "";
+  integration.instagramUsername = instagram?.username || "";
+  integration.instagramName = instagram?.name || "";
+  integration.instagramProfilePicture =
+    instagram?.profile_picture_url || "";
 }
 
 exports.connect = async (req, res) => {
@@ -189,6 +214,12 @@ exports.callback = async (req, res) => {
       instagramUsername:
         page.instagram_business_account
           ?.username || "",
+      instagramName:
+        page.instagram_business_account
+          ?.name || "",
+      instagramProfilePicture:
+        page.instagram_business_account
+          ?.profile_picture_url || "",
       businessId:
         page.business?.id || "",
       businessName:
@@ -230,6 +261,25 @@ exports.status = async (req, res) => {
     }).sort({
       updatedAt: -1,
     });
+
+  if (
+    integration &&
+    !integration.instagramAccountId
+  ) {
+    try {
+      const details = await meta.getPageDetails(
+        integration.pageId,
+        decrypt(integration.accessTokenEncrypted)
+      );
+      applyInstagramDetails(integration, details);
+      await integration.save();
+    } catch (error) {
+      console.error(
+        "META INSTAGRAM DETECTION ERROR:",
+        error.message
+      );
+    }
+  }
 
   return res.json({
     configured:
@@ -314,6 +364,10 @@ exports.selectPage = async (req, res) => {
             page.instagramAccountId,
           instagramUsername:
             page.instagramUsername,
+          instagramName:
+            page.instagramName,
+          instagramProfilePicture:
+            page.instagramProfilePicture,
           businessId: page.businessId,
           businessName: page.businessName,
           accessTokenEncrypted:
@@ -329,6 +383,20 @@ exports.selectPage = async (req, res) => {
           setDefaultsOnInsert: true,
         }
       );
+
+    try {
+      const pageDetails = await meta.getPageDetails(
+        page.id,
+        decrypt(page.accessToken)
+      );
+      applyInstagramDetails(integration, pageDetails);
+      await integration.save();
+    } catch (instagramError) {
+      console.error(
+        "META INSTAGRAM DETECTION ERROR:",
+        instagramError.message
+      );
+    }
 
     try {
       const subscription =
@@ -441,6 +509,14 @@ exports.refresh = async (req, res) => {
     integration.instagramUsername =
       details.instagram_business_account
         ?.username || "";
+
+    integration.instagramName =
+      details.instagram_business_account
+        ?.name || "";
+
+    integration.instagramProfilePicture =
+      details.instagram_business_account
+        ?.profile_picture_url || "";
 
     await integration.save();
 
@@ -563,6 +639,7 @@ exports.receiveWebhook = async (
             "META WEBHOOK DUPLICATE LEAD:",
             leadId
           );
+          await processNewLead(existing);
           continue;
         }
 
@@ -581,7 +658,7 @@ exports.receiveWebhook = async (
             .filter(Boolean)
             .join(" ");
 
-        await Lead.create({
+        const lead = await Lead.create({
           userId: integration.userId,
           metaLeadId: String(leadId),
           metaPageId: pageId,
@@ -622,6 +699,8 @@ exports.receiveWebhook = async (
           firstNote:
             `Lead received from ${source} Lead Ads`,
         });
+
+        await processNewLead(lead);
 
         console.log(
           "META WEBHOOK LEAD SAVED:",

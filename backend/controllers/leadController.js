@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const Lead = require("../models/Lead");
+const { processNewLead } = require("../services/leadProcessingService");
 
 function getUserId(req) {
     const authorization =
@@ -154,6 +155,8 @@ exports.createLead = async (
                 firstNote:
                     firstNote?.trim() || "",
             });
+
+            await processNewLead(lead);
 
         return res.status(201).json({
             success: true,

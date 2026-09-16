@@ -67,6 +67,7 @@ exports.getAuthorizationUrl = (state) => {
       "pages_read_engagement",
       "pages_manage_metadata",
       "leads_retrieval",
+      "instagram_basic",
     ].join(",")
   );
 
@@ -96,7 +97,7 @@ exports.getPageDetails = (pageId, accessToken) =>
   graphRequest(`/${encodeURIComponent(pageId)}`, {
     params: {
       fields:
-        "id,name,instagram_business_account{id,username},business{id,name}",
+        "id,name,instagram_business_account{id,username,name,profile_picture_url},business{id,name}",
       access_token: accessToken,
     },
   });
