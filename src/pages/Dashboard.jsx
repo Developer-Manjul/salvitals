@@ -8,10 +8,10 @@ const navGroups = [
   {
     label: "Acquire",
     items: [
-      ["Leads", "users", "55"],
-      ["Enquiries", "message", "6", "hot"],
+      ["Leads", "users",],
+      ["Enquiries", "message"],
       ["Pipeline", "pipeline"],
-      ["Follow-ups", "calendar", "12", "hot"],
+      ["Follow-ups", "calendar"],
     ],
   },
   {
@@ -25,7 +25,7 @@ const navGroups = [
   {
     label: "Engage",
     items: [
-      ["WhatsApp", "whatsapp", "6"],
+      ["WhatsApp", "whatsapp"],
       ["Campaigns", "campaign"],
       ["AI Assistant", "spark"],
       ["Forms", "form"],
