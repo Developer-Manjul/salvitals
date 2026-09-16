@@ -108,6 +108,12 @@ export default function MetaIntegrationPanel() {
   };
 
   const integration = status?.integration;
+  const instagram = integration?.instagram || {
+    connected: Boolean(integration?.instagramAccountId),
+    username: integration?.instagramUsername || "",
+    name: integration?.instagramName || "",
+    profilePicture: integration?.instagramProfilePicture || "",
+  };
 
   return (
     <div className="meta-settings-panel">
@@ -117,7 +123,7 @@ export default function MetaIntegrationPanel() {
       <div className="meta-source-grid">
         <div className="meta-source-card"><div><strong>Website</strong><span>Connected</span></div><small>Existing website lead integration</small></div>
         <div className="meta-source-card"><div><strong>Facebook</strong><span className={integration ? "connected" : ""}>{integration ? "Connected" : "Not connected"}</span></div><small>{integration ? `Page: ${integration.pageName || integration.pageId}` : "Facebook Lead Ads"}</small><div className="meta-source-actions">{integration ? <><button type="button" className="lead-secondary-btn" onClick={disconnect} disabled={busy}>Disconnect</button></> : <button type="button" className="dash-btn primary" onClick={connect} disabled={busy || !status?.configured}>{busy ? "Connecting..." : "Connect Facebook"}</button>}</div></div>
-        <div className="meta-source-card"><div><strong>Instagram</strong><span className={integration?.instagramUsername ? "connected" : ""}>{integration?.instagramUsername ? "Connected" : "Not connected"}</span></div><small>{integration?.instagramUsername ? `@${integration.instagramUsername}` : "Requires a connected Instagram professional account"}</small></div>
+        <div className="meta-source-card"><div><strong>Instagram</strong><span className={instagram.connected ? "connected" : ""}>{instagram.connected ? "Connected" : "Not connected"}</span></div><small>{instagram.connected ? `@${instagram.username || instagram.name || instagram.accountId}` : "Requires a connected Instagram professional account"}</small></div>
         <div className="meta-source-card muted"><div><strong>Google Ads</strong><span>Coming soon</span></div></div>
         <div className="meta-source-card muted"><div><strong>WhatsApp</strong><span>Coming soon</span></div></div>
       </div>

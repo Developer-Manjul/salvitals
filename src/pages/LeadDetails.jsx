@@ -177,7 +177,7 @@ export default function LeadDetails({ leadId, user, onBack }) {
         <div className="lead-detail-summary-bar">
           <div><strong>{lead.stage || "—"}</strong><span>Status</span></div>
           <div><strong>—</strong><span>Estimated value</span></div>
-          <div><strong>{formatDate(lead.createdAt)}</strong><span>Created date</span></div>
+          <div><strong>{formatDate(lead.createdAt, true)}</strong><span>Created date</span></div>
           <div><strong>—</strong><span>Last contact</span></div>
           <div><strong>{nextFollowUp ? formatDate(nextFollowUp.date, true) : "—"}</strong><span>Next follow-up</span></div>
           <div><strong>—</strong><span>First response</span></div>
@@ -194,7 +194,7 @@ export default function LeadDetails({ leadId, user, onBack }) {
           <section className="lead-activity-card"><header><h2>Activity timeline</h2><div>{[["all", "All"], ["notes", "Notes"], ["calls", "Calls"], ["whatsapp", "WhatsApp"]].map(([value, label]) => <button type="button" className={activeTab === value ? "active" : ""} key={value} onClick={() => setActiveTab(value)}>{label}</button>)}</div></header><div className="lead-activity-list">{visibleActivities.length ? visibleActivities.map((activity, index) => <article key={`${activity.title}-${activity.date}-${index}`}><span className="lead-activity-icon">{activity.icon}</span><div><strong>{activity.title}</strong><p>{activity.detail}</p><small>{activity.user || getOwner(lead, user)} · {formatDate(activity.date, true)}</small></div></article>) : <p className="lead-detail-empty">No activity recorded yet.</p>}</div></section>
         </main>
         <aside>
-          <section className="lead-information-card"><header><h2>Lead information</h2></header>{[["Source", lead.source], ["Service", lead.service], ["Doctor / Preferred doctor", lead.preferredDoctor], ["Assigned staff / Owner", getOwner(lead, user)], ["Priority", lead.priority], ["Next follow-up", nextFollowUp && formatDate(nextFollowUp.date, true)], ["Estimated value", lead.estimatedValue], ["Lead ID", lead._id], ["Created date", formatDate(lead.createdAt)]].map(([label, value]) => <div className="lead-information-row" key={label}><span>{label}</span><strong>{value || "—"}</strong></div>)}</section>
+          <section className="lead-information-card"><header><h2>Lead information</h2></header>{[["Source", lead.source], ["Service", lead.service], ["Doctor / Preferred doctor", lead.preferredDoctor], ["Assigned staff / Owner", getOwner(lead, user)], ["Priority", lead.priority], ["Next follow-up", nextFollowUp && formatDate(nextFollowUp.date, true)], ["Estimated value", lead.estimatedValue], ["Lead ID", lead._id], ["Created date", formatDate(lead.createdAt, true)]].map(([label, value]) => <div className="lead-information-row" key={label}><span>{label}</span><strong>{value || "—"}</strong></div>)}</section>
           {lead.firstNote && <section className="lead-information-card"><header><h2>First note</h2></header><p className="lead-first-note">{lead.firstNote}</p></section>}
         </aside>
       </div>

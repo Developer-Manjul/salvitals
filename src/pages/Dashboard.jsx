@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import "../styles/dashboard.scss";
+import { buildApiUrl } from "../config/api";
 import Settings from "./Settings";
 import Leads from "./Leads";
 import LeadDetails from "./LeadDetails";
+import Contacts from "./Contacts";
 
 const navGroups = [
   {
     label: "Acquire",
     items: [
       ["Leads", "users",],
-      ["Enquiries", "message"],
-      ["Pipeline", "pipeline"],
       ["Follow-ups", "calendar"],
     ],
   },
@@ -102,41 +102,6 @@ const pipeline = [
   ["Lost", 3, "red"],
 ];
 
-const leads = [
-  {
-    name: "Priya Sharma",
-    type: "Hair transplant",
-    source: "Google",
-    status: "Qualified",
-    owner: "AS",
-    time: "8 min ago",
-  },
-  {
-    name: "Rohan Kapoor",
-    type: "Knee consultation",
-    source: "WhatsApp",
-    status: "New",
-    owner: "RM",
-    time: "21 min ago",
-  },
-  {
-    name: "Neha Verma",
-    type: "IVF consultation",
-    source: "Instagram",
-    status: "Consultation",
-    owner: "AK",
-    time: "42 min ago",
-  },
-  {
-    name: "Amit Malhotra",
-    type: "Dental implants",
-    source: "Website",
-    status: "Follow-up",
-    owner: "PS",
-    time: "1 hr ago",
-  },
-];
-
 const followUps = [
   [
     "Priya Sharma",
@@ -160,6 +125,26 @@ const followUps = [
     "low",
   ],
 ];
+
+function getRelativeTime(value) {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "—";
+
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(timestamp));
+}
 
 const plans = [
   {
@@ -657,7 +642,7 @@ function ChoosePlan({
   );
 }
 
-function ActualDashboardContent({ user }) {
+function ActualDashboardContent({ user, dashboardLeads }) {
   const firstName = user?.name
     ? user.name.trim().split(/\s+/)[0]
     : "there";
@@ -1088,11 +1073,11 @@ function ActualDashboardContent({ user }) {
 
               <tbody>
 
-                {leads.map(
+                {dashboardLeads.map(
                   (lead) => (
 
                     <tr
-                      key={lead.name}
+                      key={lead._id}
                     >
 
                       <td>
@@ -1101,7 +1086,7 @@ function ActualDashboardContent({ user }) {
 
                           <Avatar
                             initials={
-                              lead.owner
+                              lead.owner || user?.name || "U"
                             }
                           />
 
@@ -1112,7 +1097,7 @@ function ActualDashboardContent({ user }) {
                             </strong>
 
                             <small>
-                              {lead.time}
+                              {getRelativeTime(lead.createdAt)}
                             </small>
 
                           </span>
@@ -1122,7 +1107,7 @@ function ActualDashboardContent({ user }) {
                       </td>
 
                       <td>
-                        {lead.type}
+                        {lead.service || "—"}
                       </td>
 
                       <td>
@@ -1132,24 +1117,24 @@ function ActualDashboardContent({ user }) {
                       <td>
 
                         <span
-                          className={`dash-status ${lead.status
+                          className={`dash-status ${(lead.stage || "New")
                             .toLowerCase()
                             .replace(
                               " ",
                               "-"
                             )}`}
                         >
-                          {lead.status}
+                          {lead.stage || "New"}
                         </span>
 
                       </td>
 
                       <td>
-                        {lead.owner}
+                        {lead.owner || "Unassigned"}
                       </td>
 
                       <td className="muted">
-                        {lead.time}
+                        {getRelativeTime(lead.createdAt)}
                       </td>
 
                     </tr>
@@ -1283,6 +1268,18 @@ export default function Dashboard() {
   const [selectedLeadId, setSelectedLeadId] =
     useState(null);
 
+  const [notifications, setNotifications] =
+    useState([]);
+
+  const [unreadNotificationCount, setUnreadNotificationCount] =
+    useState(0);
+
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false);
+
+  const [dashboardLeads, setDashboardLeads] =
+    useState([]);
+
   useEffect(() => {
 
     const dashboardParams =
@@ -1327,6 +1324,127 @@ export default function Dashboard() {
     setShowPlans(!planPurchased);
 
   }, []);
+
+  const getAuthToken = () =>
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    sessionStorage.getItem("vitalsToken") ||
+    "";
+
+  const loadNotifications = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      const [notificationsResponse, countResponse] = await Promise.all([
+        fetch(buildApiUrl("/api/notifications?limit=20"), {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(buildApiUrl("/api/notifications/unread-count"), {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const notificationsData = await notificationsResponse.json();
+      const countData = await countResponse.json();
+
+      if (notificationsResponse.ok) {
+        setNotifications(
+          Array.isArray(notificationsData.notifications)
+            ? notificationsData.notifications
+            : []
+        );
+      }
+      if (countResponse.ok) {
+        setUnreadNotificationCount(Number(countData.count) || 0);
+      }
+    } catch (error) {
+      console.error("LOAD NOTIFICATIONS ERROR:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const intervalId = window.setInterval(loadNotifications, 30000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const loadDashboardLeads = async () => {
+      const token = getAuthToken();
+      if (!token) return;
+
+      try {
+        const response = await fetch(buildApiUrl("/api/leads"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (response.ok) {
+          setDashboardLeads(
+            Array.isArray(data.leads) ? data.leads.slice(0, 4) : []
+          );
+        }
+      } catch (error) {
+        console.error("LOAD DASHBOARD LEADS ERROR:", error);
+      }
+    };
+
+    loadDashboardLeads();
+  }, []);
+
+  const markNotificationAsRead = async (notificationId) => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      await fetch(buildApiUrl(`/api/notifications/${notificationId}/read`), {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error("MARK NOTIFICATION READ ERROR:", error);
+    }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification.isRead) {
+      await markNotificationAsRead(notification._id);
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item._id === notification._id ? { ...item, isRead: true } : item
+        )
+      );
+      setUnreadNotificationCount((count) => Math.max(0, count - 1));
+    }
+
+    setNotificationsOpen(false);
+    if (notification.leadId) {
+      setSelectedLeadId(notification.leadId);
+      setActive("LeadDetails");
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      const response = await fetch(buildApiUrl("/api/notifications/read-all"), {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        setNotifications((previous) =>
+          previous.map((item) => ({ ...item, isRead: true }))
+        );
+        setUnreadNotificationCount(0);
+      }
+    } catch (error) {
+      console.error("MARK ALL NOTIFICATIONS READ ERROR:", error);
+    }
+  };
 
   const selectNav = (name) => {
 
@@ -1379,6 +1497,10 @@ export default function Dashboard() {
       );
     }
 
+    if (active === "Contacts") {
+      return <Contacts user={user} />;
+    }
+
     if (active === "LeadDetails" && selectedLeadId) {
       return (
         <LeadDetails
@@ -1393,7 +1515,12 @@ export default function Dashboard() {
       return <ChoosePlan user={user} onContinue={handleChoosePlan} />;
     }
 
-    return <ActualDashboardContent user={user} />;
+    return (
+      <ActualDashboardContent
+        user={user}
+        dashboardLeads={dashboardLeads}
+      />
+    );
   };
 
   const handleLogout = () => {
@@ -1655,18 +1782,55 @@ export default function Dashboard() {
 
             </button>
 
-            <button className="dash-icon-btn notification">
+            <div className="dash-notification-wrap">
+              <button
+                className="dash-icon-btn notification"
+                onClick={() => setNotificationsOpen((value) => !value)}
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+              >
+                <Icon name="bell" size={18} />
+                {unreadNotificationCount > 0 && (
+                  <b>
+                    {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                  </b>
+                )}
+              </button>
 
-              <Icon
-                name="bell"
-                size={18}
-              />
+              {notificationsOpen && (
+                <div className="dash-notification-panel">
+                  <div className="dash-notification-head">
+                    <strong>Notifications</strong>
+                    {unreadNotificationCount > 0 && (
+                      <button type="button" onClick={markAllNotificationsAsRead}>
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
 
-              <b>
-                4
-              </b>
-
-            </button>
+                  <div className="dash-notification-list">
+                    {notifications.length === 0 ? (
+                      <p className="dash-notification-empty">No new notifications</p>
+                    ) : (
+                      notifications.map((notification) => (
+                        <button
+                          type="button"
+                          className={`dash-notification-item ${notification.isRead ? "read" : "unread"}`}
+                          key={notification._id}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <span>
+                            <strong>{notification.title}</strong>
+                            <b>{notification.message}</b>
+                            <small>{notification.source || "Other"} · {getRelativeTime(notification.createdAt)}</small>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="dash-profile-wrap">
 

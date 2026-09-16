@@ -164,6 +164,7 @@ export default function Leads({ user, onOpenLeadDetails }) {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("All sources");
   const [stageFilter, setStageFilter] = useState("All stages");
+  const [enquiryFilter, setEnquiryFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("All owners");
   const [serviceFilter, setServiceFilter] = useState("All services");
 
@@ -329,6 +330,13 @@ export default function Leads({ user, onOpenLeadDetails }) {
         stageFilter === "All stages" ||
         lead.stage === stageFilter;
 
+      const matchesEnquiry =
+        enquiryFilter === "all" ||
+        (enquiryFilter === "pending" && lead.stage === "Pending follow-up") ||
+        (enquiryFilter === "in-progress" && ["Contacted", "Qualified", "Proposal"].includes(lead.stage)) ||
+        (enquiryFilter === "converted" && lead.stage === "Converted") ||
+        (enquiryFilter === "lost" && lead.stage === "Lost");
+
       const matchesOwner =
         ownerFilter === "All owners" ||
         lead.owner === ownerFilter ||
@@ -342,6 +350,7 @@ export default function Leads({ user, onOpenLeadDetails }) {
         matchesSearch &&
         matchesSource &&
         matchesStage &&
+        matchesEnquiry &&
         matchesOwner &&
         matchesService
       );
@@ -351,6 +360,7 @@ export default function Leads({ user, onOpenLeadDetails }) {
     search,
     sourceFilter,
     stageFilter,
+    enquiryFilter,
     ownerFilter,
     serviceFilter,
   ]);
@@ -646,6 +656,7 @@ export default function Leads({ user, onOpenLeadDetails }) {
     setSearch("");
     setSourceFilter("All sources");
     setStageFilter("All stages");
+    setEnquiryFilter("all");
     setOwnerFilter("All owners");
     setServiceFilter("All services");
   };
@@ -659,6 +670,26 @@ export default function Leads({ user, onOpenLeadDetails }) {
     setSelectedLead(lead);
     setShowDetailsModal(true);
     setActionMenuLeadId(null);
+  };
+
+  const convertToContact = async (lead) => {
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/contacts/from-lead/${lead._id}`),
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to convert lead to contact");
+      }
+      setActionMenuLeadId(null);
+      alert("Lead converted to contact successfully.");
+    } catch (error) {
+      alert(error.message || "Unable to convert lead to contact");
+    }
   };
 
   const summaryCards = [
@@ -682,6 +713,14 @@ export default function Leads({ user, onOpenLeadDetails }) {
       label: "Converted",
       value: summary.converted,
     },
+  ];
+
+  const enquiryTabs = [
+    ["all", "All Enquiries", leads.length],
+    ["pending", "Pending", leads.filter((lead) => lead.stage === "Pending follow-up").length],
+    ["in-progress", "In Progress", leads.filter((lead) => ["Contacted", "Qualified", "Proposal"].includes(lead.stage)).length],
+    ["converted", "Converted", leads.filter((lead) => lead.stage === "Converted").length],
+    ["lost", "Lost", leads.filter((lead) => lead.stage === "Lost").length],
   ];
 
   return (
@@ -723,6 +762,22 @@ export default function Leads({ user, onOpenLeadDetails }) {
           </button>
         </div>
       </header>
+
+      <div className="lead-enquiry-tabs" role="tablist" aria-label="Enquiry status">
+        {enquiryTabs.map(([value, label, count]) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={enquiryFilter === value}
+            className={enquiryFilter === value ? "active" : ""}
+            key={value}
+            onClick={() => setEnquiryFilter(value)}
+          >
+            {label}
+            <span>{count}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="leads-summary">
         {summaryCards.map((item) => (
@@ -1057,6 +1112,13 @@ export default function Leads({ user, onOpenLeadDetails }) {
                               }
                             >
                               Edit lead
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => convertToContact(lead)}
+                            >
+                              Convert to contact
                             </button>
                           </div>
                         )}
