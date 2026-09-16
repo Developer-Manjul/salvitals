@@ -66,8 +66,8 @@ exports.getAuthorizationUrl = (state) => {
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_metadata",
+      "business_management",
       "leads_retrieval",
-      "instagram_basic",
     ].join(",")
   );
 
