@@ -680,13 +680,36 @@ function fieldMap(
 }
 
 function detectMetaLeadSource(
-  value,
-  req
+  value = {},
+  req,
+  metaLead = {}
 ) {
+  const platform = String(
+    metaLead?.platform ||
+    value?.platform ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    platform === "ig" ||
+    platform === "instagram"
+  ) {
+    return "Instagram";
+  }
+
+  if (
+    platform === "fb" ||
+    platform === "facebook"
+  ) {
+    return "Facebook";
+  }
+
+  // Keep these as fallback checks.
   if (
     value?.instagram_account_id ||
     value?.instagram_account?.id ||
-    value?.platform === "instagram" ||
     value?.source === "instagram" ||
     req.body?.object === "instagram"
   ) {
@@ -786,10 +809,11 @@ exports.receiveWebhook = async (
         }
 
         const source =
-          detectMetaLeadSource(
-            value,
-            req
-          );
+  detectMetaLeadSource(
+    value,
+    req,
+    metaLead
+  );
 
         const name =
           fields.full_name ||

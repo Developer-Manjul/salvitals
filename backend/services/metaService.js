@@ -167,7 +167,7 @@ exports.getLeadDetails = (leadId, accessToken) =>
   graphRequest(`/${encodeURIComponent(leadId)}`, {
     params: {
       fields:
-        "id,created_time,field_data,form_id,ad_id,campaign_id",
+        "id,created_time,field_data,form_id,ad_id,campaign_id,platform",
       access_token: accessToken,
     },
   });
