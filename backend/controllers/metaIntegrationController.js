@@ -5,15 +5,16 @@ const MetaOAuthState = require("../models/MetaOAuthState");
 const Lead = require("../models/Lead");
 const {
   encrypt,
-  decrypt
+  decrypt,
 } = require("../utils/encryption");
 const meta = require("../services/metaService");
 const {
-  processNewLead
+  processNewLead,
 } = require("../services/leadProcessingService");
 
 function getUserId(req) {
-  const authorization = req.headers.authorization || "";
+  const authorization =
+    req.headers.authorization || "";
 
   if (!authorization.startsWith("Bearer ")) {
     return null;
@@ -44,6 +45,8 @@ function requireUser(req, res) {
       success: false,
       message: "Authentication required",
     });
+
+    return null;
   }
 
   return userId;
@@ -58,40 +61,66 @@ function publicIntegration(integration) {
     id: integration._id,
     pageId: integration.pageId,
     pageName: integration.pageName,
-    instagramAccountId: integration.instagramAccountId,
-    instagramUsername: integration.instagramUsername,
-    instagramName: integration.instagramName,
-    instagramProfilePicture: integration.instagramProfilePicture,
+    instagramAccountId:
+      integration.instagramAccountId,
+    instagramUsername:
+      integration.instagramUsername,
+    instagramName:
+      integration.instagramName,
+    instagramProfilePicture:
+      integration.instagramProfilePicture,
     facebook: {
-      connected: Boolean(integration.isActive),
+      connected: Boolean(
+        integration.isActive
+      ),
       pageId: integration.pageId,
       pageName: integration.pageName,
     },
     instagram: {
-      connected: Boolean(integration.instagramAccountId),
-      accountId: integration.instagramAccountId,
-      username: integration.instagramUsername,
-      name: integration.instagramName,
-      profilePicture: integration.instagramProfilePicture,
+      connected: Boolean(
+        integration.instagramAccountId
+      ),
+      accountId:
+        integration.instagramAccountId,
+      username:
+        integration.instagramUsername,
+      name:
+        integration.instagramName,
+      profilePicture:
+        integration.instagramProfilePicture,
     },
-    businessId: integration.businessId,
-    businessName: integration.businessName,
-    isActive: integration.isActive,
-    connectedAt: integration.connectedAt,
-    updatedAt: integration.updatedAt,
+    businessId:
+      integration.businessId,
+    businessName:
+      integration.businessName,
+    isActive:
+      integration.isActive,
+    connectedAt:
+      integration.connectedAt,
+    updatedAt:
+      integration.updatedAt,
   };
 }
 
-function applyInstagramDetails(integration, details) {
+function applyInstagramDetails(
+  integration,
+  details
+) {
   const instagram =
-    details ? .instagram_business_account ||
-    details ? .instagramBusinessAccount;
+    details?.instagram_business_account ||
+    details?.instagramBusinessAccount;
 
-  integration.instagramAccountId = instagram ? .id || "";
-  integration.instagramUsername = instagram ? .username || "";
-  integration.instagramName = instagram ? .name || "";
+  integration.instagramAccountId =
+    instagram?.id || "";
+
+  integration.instagramUsername =
+    instagram?.username || "";
+
+  integration.instagramName =
+    instagram?.name || "";
+
   integration.instagramProfilePicture =
-    instagram ? .profile_picture_url || "";
+    instagram?.profile_picture_url || "";
 }
 
 exports.connect = async (req, res) => {
@@ -108,7 +137,8 @@ exports.connect = async (req, res) => {
     return res.status(503).json({
       success: false,
       configured: false,
-      message: "Meta integration is not configured yet.",
+      message:
+        "Meta integration is not configured yet.",
     });
   }
 
@@ -129,9 +159,9 @@ exports.connect = async (req, res) => {
       meta.getAuthorizationUrl(state);
 
     if (
-      String(req.headers.accept || "").includes(
-        "application/json"
-      )
+      String(
+        req.headers.accept || ""
+      ).includes("application/json")
     ) {
       return res.json({
         success: true,
@@ -139,7 +169,9 @@ exports.connect = async (req, res) => {
       });
     }
 
-    return res.redirect(authorizationUrl);
+    return res.redirect(
+      authorizationUrl
+    );
   } catch (error) {
     console.error(
       "META CONNECT ERROR:",
@@ -148,7 +180,8 @@ exports.connect = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to start Meta connection",
+      message:
+        "Unable to start Meta connection",
     });
   }
 };
@@ -183,6 +216,16 @@ exports.callback = async (req, res) => {
     );
   }
 
+  if (!req.query.code) {
+    await MetaOAuthState.deleteOne({
+      _id: stateRecord._id,
+    });
+
+    return res.redirect(
+      `${frontend}/dashboard?metaError=Meta%20authorization%20code%20missing`
+    );
+  }
+
   try {
     const tokenData =
       await meta.exchangeCodeForToken(
@@ -194,16 +237,20 @@ exports.callback = async (req, res) => {
     );
 
     stateRecord.accessTokenEncrypted =
-      encrypt(tokenData.access_token);
+      encrypt(
+        tokenData.access_token
+      );
 
     stateRecord.tokenExpiresAt =
-      tokenData.expires_in ?
-      new Date(
-        Date.now() +
-        Number(tokenData.expires_in) *
-        1000
-      ) :
-      null;
+      tokenData.expires_in
+        ? new Date(
+            Date.now() +
+              Number(
+                tokenData.expires_in
+              ) *
+                1000
+          )
+        : null;
 
     stateRecord.pages = (
       pages.data || []
@@ -212,18 +259,24 @@ exports.callback = async (req, res) => {
       name: page.name || "",
       accessToken: encrypt(
         page.access_token ||
-        tokenData.access_token
+          tokenData.access_token
       ),
-      instagramAccountId: page.instagram_business_account ? .id ||
-        "",
-      instagramUsername: page.instagram_business_account ?
-        .username || "",
-      instagramName: page.instagram_business_account ?
-        .name || "",
-      instagramProfilePicture: page.instagram_business_account ?
-        .profile_picture_url || "",
-      businessId: page.business ? .id || "",
-      businessName: page.business ? .name || "",
+      instagramAccountId:
+        page.instagram_business_account
+          ?.id || "",
+      instagramUsername:
+        page.instagram_business_account
+          ?.username || "",
+      instagramName:
+        page.instagram_business_account
+          ?.name || "",
+      instagramProfilePicture:
+        page.instagram_business_account
+          ?.profile_picture_url || "",
+      businessId:
+        page.business?.id || "",
+      businessName:
+        page.business?.name || "",
     }));
 
     await stateRecord.save();
@@ -267,11 +320,19 @@ exports.status = async (req, res) => {
     !integration.instagramAccountId
   ) {
     try {
-      const details = await meta.getPageDetails(
-        integration.pageId,
-        decrypt(integration.accessTokenEncrypted)
+      const details =
+        await meta.getPageDetails(
+          integration.pageId,
+          decrypt(
+            integration.accessTokenEncrypted
+          )
+        );
+
+      applyInstagramDetails(
+        integration,
+        details
       );
-      applyInstagramDetails(integration, details);
+
       await integration.save();
     } catch (error) {
       console.error(
@@ -282,12 +343,18 @@ exports.status = async (req, res) => {
   }
 
   return res.json({
-    configured: meta.isConfigured() &&
+    configured:
+      meta.isConfigured() &&
       Boolean(
-        process.env.META_TOKEN_ENCRYPTION_KEY
+        process.env
+          .META_TOKEN_ENCRYPTION_KEY
       ),
-    connected: Boolean(integration),
-    integration: publicIntegration(integration),
+    connected:
+      Boolean(integration),
+    integration:
+      publicIntegration(
+        integration
+      ),
   });
 };
 
@@ -310,7 +377,9 @@ exports.pages = async (req, res) => {
 
   return res.json({
     success: true,
-    pages: (state ? .pages || []).map(
+    pages: (
+      state?.pages || []
+    ).map(
       ({
         accessToken,
         ...page
@@ -319,7 +388,10 @@ exports.pages = async (req, res) => {
   });
 };
 
-exports.selectPage = async (req, res) => {
+exports.selectPage = async (
+  req,
+  res
+) => {
   const userId = requireUser(req, res);
 
   if (!userId) {
@@ -337,25 +409,33 @@ exports.selectPage = async (req, res) => {
         createdAt: -1,
       });
 
-    const page = state ? .pages ? .find(
-      (item) =>
-      item.id ===
-      String(req.body ? .pageId || "")
-    );
+    const page =
+      state?.pages?.find(
+        (item) =>
+          item.id ===
+          String(
+            req.body?.pageId || ""
+          )
+      );
 
     if (!state || !page) {
       return res.status(404).json({
         success: false,
-        message: "Meta Page selection expired or unavailable",
+        message:
+          "Meta Page selection expired or unavailable",
       });
     }
 
     let pageDetails = null;
+
     try {
-      pageDetails = await meta.getPageDetails(
-        page.id,
-        decrypt(page.accessToken)
-      );
+      pageDetails =
+        await meta.getPageDetails(
+          page.id,
+          decrypt(
+            page.accessToken
+          )
+        );
     } catch (instagramError) {
       console.error(
         "META INSTAGRAM DETECTION ERROR:",
@@ -364,31 +444,47 @@ exports.selectPage = async (req, res) => {
     }
 
     const integration =
-      await MetaIntegration.findOneAndUpdate({
-        userId,
-        pageId: page.id,
-      }, {
-        userId,
-        pageId: page.id,
-        pageName: page.name,
-        instagramAccountId: page.instagramAccountId,
-        instagramUsername: page.instagramUsername,
-        instagramName: page.instagramName,
-        instagramProfilePicture: page.instagramProfilePicture,
-        businessId: page.businessId,
-        businessName: page.businessName,
-        accessTokenEncrypted: page.accessToken,
-        tokenExpiresAt: state.tokenExpiresAt,
-        isActive: true,
-        connectedAt: new Date(),
-      }, {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-      });
+      await MetaIntegration.findOneAndUpdate(
+        {
+          userId,
+          pageId: page.id,
+        },
+        {
+          userId,
+          pageId: page.id,
+          pageName: page.name,
+          instagramAccountId:
+            page.instagramAccountId,
+          instagramUsername:
+            page.instagramUsername,
+          instagramName:
+            page.instagramName,
+          instagramProfilePicture:
+            page.instagramProfilePicture,
+          businessId:
+            page.businessId,
+          businessName:
+            page.businessName,
+          accessTokenEncrypted:
+            page.accessToken,
+          tokenExpiresAt:
+            state.tokenExpiresAt,
+          isActive: true,
+          connectedAt: new Date(),
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        }
+      );
 
     if (pageDetails) {
-      applyInstagramDetails(integration, pageDetails);
+      applyInstagramDetails(
+        integration,
+        pageDetails
+      );
+
       await integration.save();
     }
 
@@ -396,7 +492,9 @@ exports.selectPage = async (req, res) => {
       const subscription =
         await meta.subscribePageToLeadgen(
           page.id,
-          decrypt(page.accessToken)
+          decrypt(
+            page.accessToken
+          )
         );
 
       console.log(
@@ -404,7 +502,9 @@ exports.selectPage = async (req, res) => {
         page.id,
         subscription
       );
-    } catch (subscriptionError) {
+    } catch (
+      subscriptionError
+    ) {
       console.error(
         "META LEADGEN SUBSCRIPTION ERROR:",
         subscriptionError.message
@@ -412,8 +512,10 @@ exports.selectPage = async (req, res) => {
 
       return res.status(409).json({
         success: false,
-        message: "Meta Page connected, but Lead Ads webhook subscription failed.",
-        details: subscriptionError.message,
+        message:
+          "Meta Page connected, but Lead Ads webhook subscription failed.",
+        details:
+          subscriptionError.message,
       });
     }
 
@@ -423,7 +525,10 @@ exports.selectPage = async (req, res) => {
 
     return res.json({
       success: true,
-      integration: publicIntegration(integration),
+      integration:
+        publicIntegration(
+          integration
+        ),
     });
   } catch (error) {
     console.error(
@@ -433,33 +538,44 @@ exports.selectPage = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to connect Meta Page",
+      message:
+        "Unable to connect Meta Page",
     });
   }
 };
 
-exports.disconnect = async (req, res) => {
+exports.disconnect = async (
+  req,
+  res
+) => {
   const userId = requireUser(req, res);
 
   if (!userId) {
     return;
   }
 
-  await MetaIntegration.updateMany({
-    userId
-  }, {
-    $set: {
-      isActive: false,
+  await MetaIntegration.updateMany(
+    {
+      userId,
     },
-  });
+    {
+      $set: {
+        isActive: false,
+      },
+    }
+  );
 
   return res.json({
     success: true,
-    message: "Meta connection disconnected",
+    message:
+      "Meta connection disconnected",
   });
 };
 
-exports.refresh = async (req, res) => {
+exports.refresh = async (
+  req,
+  res
+) => {
   const userId = requireUser(req, res);
 
   if (!userId) {
@@ -476,7 +592,8 @@ exports.refresh = async (req, res) => {
     if (!integration) {
       return res.status(404).json({
         success: false,
-        message: "Meta connection not found",
+        message:
+          "Meta connection not found",
       });
     }
 
@@ -492,13 +609,19 @@ exports.refresh = async (req, res) => {
       details.name ||
       integration.pageName;
 
-    applyInstagramDetails(integration, details);
+    applyInstagramDetails(
+      integration,
+      details
+    );
 
     await integration.save();
 
     return res.json({
       success: true,
-      integration: publicIntegration(integration),
+      integration:
+        publicIntegration(
+          integration
+        ),
     });
   } catch (error) {
     console.error(
@@ -508,39 +631,69 @@ exports.refresh = async (req, res) => {
 
     return res.status(409).json({
       success: false,
-      message: "Meta connection needs to be reconnected.",
+      message:
+        "Meta connection needs to be reconnected.",
     });
   }
 };
 
-exports.verifyWebhook = (req, res) => {
+exports.verifyWebhook = (
+  req,
+  res
+) => {
   if (
     req.query["hub.verify_token"] !==
-    process.env.META_WEBHOOK_VERIFY_TOKEN
+    process.env
+      .META_WEBHOOK_VERIFY_TOKEN
   ) {
     return res.sendStatus(403);
   }
 
   return res
     .status(200)
-    .send(req.query["hub.challenge"]);
+    .send(
+      req.query["hub.challenge"]
+    );
 };
 
-function fieldMap(fieldData = []) {
+function fieldMap(
+  fieldData = []
+) {
   return fieldData.reduce(
     (result, field) => {
       const key = String(
-          field ? .name || ""
-        )
+        field?.name || ""
+      )
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, "_");
+        .replace(
+          /[^a-z0-9]/g,
+          "_"
+        );
 
       result[key] =
-        field ? .values ? . [0] || "";
+        field?.values?.[0] || "";
 
       return result;
-    }, {}
+    },
+    {}
   );
+}
+
+function detectMetaLeadSource(
+  value,
+  req
+) {
+  if (
+    value?.instagram_account_id ||
+    value?.instagram_account?.id ||
+    value?.platform === "instagram" ||
+    value?.source === "instagram" ||
+    req.body?.object === "instagram"
+  ) {
+    return "Instagram";
+  }
+
+  return "Facebook";
 }
 
 exports.receiveWebhook = async (
@@ -550,7 +703,10 @@ exports.receiveWebhook = async (
   res.sendStatus(200);
 
   try {
-    for (const entry of req.body ? .entry || []) {
+    for (
+      const entry of
+      req.body?.entry || []
+    ) {
       const pageId = String(
         entry.id || ""
       );
@@ -566,11 +722,16 @@ exports.receiveWebhook = async (
           "META WEBHOOK PAGE NOT CONNECTED:",
           pageId
         );
+
         continue;
       }
 
-      for (const change of entry.changes || []) {
-        const value = change.value || {};
+      for (
+        const change of
+        entry.changes || []
+      ) {
+        const value =
+          change.value || {};
 
         const leadId =
           value.leadgen_id ||
@@ -587,9 +748,10 @@ exports.receiveWebhook = async (
           pageId
         );
 
-        const token = decrypt(
-          integration.accessTokenEncrypted
-        );
+        const token =
+          decrypt(
+            integration.accessTokenEncrypted
+          );
 
         const metaLead =
           await meta.getLeadDetails(
@@ -597,14 +759,17 @@ exports.receiveWebhook = async (
             token
           );
 
-        const fields = fieldMap(
-          metaLead.field_data
-        );
+        const fields =
+          fieldMap(
+            metaLead.field_data
+          );
 
         const existing =
           await Lead.findOne({
-            userId: integration.userId,
-            metaLeadId: String(leadId),
+            userId:
+              integration.userId,
+            metaLeadId:
+              String(leadId),
           });
 
         if (existing) {
@@ -612,59 +777,104 @@ exports.receiveWebhook = async (
             "META WEBHOOK DUPLICATE LEAD:",
             leadId
           );
-          await processNewLead(existing);
+
+          await processNewLead(
+            existing
+          );
+
           continue;
         }
 
-        const isInstagramLead =
-          Boolean(value.instagram_account_id) ||
-          req.body.object === "instagram";
-
-        const source = isInstagramLead ?
-          "Instagram" :
-          "Facebook";
+        const source =
+          detectMetaLeadSource(
+            value,
+            req
+          );
 
         const name =
-          fields.full_name || [
+          fields.full_name ||
+          [
             fields.first_name,
             fields.last_name,
           ]
-          .filter(Boolean)
-          .join(" ");
+            .filter(Boolean)
+            .join(" ");
+
+        const phone =
+          fields.phone_number ||
+          fields.phone ||
+          "";
+
+        const email =
+          fields.email || "";
+
+        const service =
+          fields.service ||
+          fields.treatment ||
+          "";
+
+        const landingPage =
+          fields.form_name ||
+          integration.pageName ||
+          "";
 
         const lead = await Lead.create({
-          userId: integration.userId,
-          metaLeadId: String(leadId),
-          metaPageId: pageId,
-          metaFormId: metaLead.form_id ||
+          userId:
+            integration.userId,
+
+          metaLeadId:
+            String(leadId),
+
+          metaPageId:
+            pageId,
+
+          metaFormId:
+            metaLead.form_id ||
             value.form_id ||
             "",
-          metaAdId: metaLead.ad_id ||
+
+          metaAdId:
+            metaLead.ad_id ||
             value.ad_id ||
             "",
-          metaCampaignId: metaLead.campaign_id ||
+
+          metaCampaignId:
+            metaLead.campaign_id ||
             value.campaign_id ||
             "",
+
           name,
-          email: fields.email || "",
-          phone: fields.phone_number ||
-            fields.phone ||
-            "",
+
+          email,
+
+          phone,
+
           source,
+
           stage: "New",
-          service: fields.service ||
-            fields.treatment ||
+
+          service,
+
+          landingPage,
+
+          pageUrl:
+            fields.page_url ||
+            fields.website ||
             "",
-          landingPage: fields.form_name ||
-            integration.pageName ||
-            "",
-          pageUrl: `https://www.${source.toLowerCase()}.com/`,
-          utmSource: source.toLowerCase(),
-          utmMedium: "paid_social",
-          firstNote: `Lead received from ${source} Lead Ads`,
+
+          utmSource:
+            source.toLowerCase(),
+
+          utmMedium:
+            "paid_social",
+
+          firstNote:
+            `Lead received from ${source} Lead Ads`,
         });
 
-        await processNewLead(lead);
+        await processNewLead(
+          lead
+        );
 
         console.log(
           "META WEBHOOK LEAD SAVED:",
