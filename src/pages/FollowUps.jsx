@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "../config/api";
-import "../styles/follow-ups.scss";
 
 function getToken() {
   return (
@@ -13,14 +12,14 @@ function getToken() {
 }
 
 function getUser() {
+  const saved =
+    localStorage.getItem("user") ||
+    sessionStorage.getItem("user");
+
+  if (!saved) return null;
+
   try {
-    return JSON.parse(
-      localStorage.getItem("user") ||
-        sessionStorage.getItem("user") ||
-        localStorage.getItem("vitalsUser") ||
-        sessionStorage.getItem("vitalsUser") ||
-        "null"
-    );
+    return JSON.parse(saved);
   } catch {
     return null;
   }
@@ -33,12 +32,31 @@ function isHealthcare(user) {
   );
 }
 
-function formatDate(value) {
-  if (!value) return "—";
+function getInitials(name = "") {
+  const value = String(name || "").trim();
 
-  const date = new Date(value);
+  if (!value) return "U";
 
-  if (Number.isNaN(date.getTime())) return "—";
+  return (
+    value
+      .split(/\s+/)
+      .map((item) => item.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U"
+  );
+}
+
+function normalizePhone(phone = "") {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function formatDate(dateValue) {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
@@ -47,12 +65,12 @@ function formatDate(value) {
   }).format(date);
 }
 
-function formatTime(value) {
-  if (!value) return "—";
+function formatTime(dateValue) {
+  const date = new Date(dateValue);
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return new Intl.DateTimeFormat("en-IN", {
     hour: "2-digit",
@@ -61,108 +79,183 @@ function formatTime(value) {
   }).format(date);
 }
 
-function normalizeFollowUp(item) {
+function formatCalendarTime(dateValue) {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+function dateKey(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeFollowUp(lead, followUp, index) {
   return {
-    ...item,
-    leadName:
-      item.leadName ||
-      item.name ||
-      item.lead?.name ||
-      "Unknown lead",
-    phone:
-      item.phone ||
-      item.lead?.phone ||
-      "",
-    service:
-      item.service ||
-      item.lead?.service ||
-      "",
-    doctor:
-      item.doctor ||
-      item.preferredDoctor ||
-      item.lead?.preferredDoctor ||
-      "",
-    assignedTo:
-      item.assignedTo ||
-      item.owner ||
-      item.assignedStaff ||
-      "",
+    ...followUp,
+    _id:
+      followUp?._id ||
+      `${lead._id}-followup-${index}`,
+    leadId: lead._id,
+    lead,
+    name: lead.name || "Unnamed lead",
+    phone: lead.phone || "",
+    email: lead.email || "",
+    service: lead.service || "",
+    owner:
+      followUp?.assignedTo ||
+      lead.owner ||
+      "Unassigned",
+    date: followUp?.date,
+    note: followUp?.note || "",
     purpose:
-      item.purpose ||
-      item.note ||
-      "",
-    note:
-      item.note ||
-      "",
-    priority:
-      item.priority ||
-      "Medium",
+      followUp?.purpose ||
+      followUp?.note ||
+      "Follow-up",
     channel:
-      item.channel ||
+      followUp?.channel ||
       "Call",
-    date:
-      item.date ||
-      item.followUpDate ||
-      item.scheduledAt ||
-      item.createdAt,
+    priority:
+      followUp?.priority ||
+      "Medium",
     status:
-      String(
-        item.status || "pending"
-      ).toLowerCase(),
+      followUp?.status ||
+      "Scheduled",
   };
 }
 
+function isCompleted(item) {
+  const status = String(
+    item?.status || ""
+  ).toLowerCase();
+
+  return (
+    status === "completed" ||
+    status === "complete" ||
+    status === "done"
+  );
+}
+
 function getFollowUpStatus(item) {
-  if (
-    item.status === "completed" ||
-    item.status === "complete" ||
-    item.status === "done"
-  ) {
+  if (isCompleted(item)) {
     return "completed";
   }
 
-  if (!item.date) {
+  const time = new Date(item.date).getTime();
+
+  if (!Number.isFinite(time)) {
     return "upcoming";
   }
 
-  const date = new Date(item.date);
-  const now = new Date();
-
-  if (date < now) {
+  if (time < Date.now()) {
     return "overdue";
   }
 
   const today = new Date();
+  const target = new Date(item.date);
 
-  return (
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-  )
-    ? "today"
-    : "upcoming";
+  if (
+    target.getFullYear() === today.getFullYear() &&
+    target.getMonth() === today.getMonth() &&
+    target.getDate() === today.getDate()
+  ) {
+    return "today";
+  }
+
+  return "upcoming";
 }
 
-function getInitials(name = "") {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .map((word) => word[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "L"
+function getMonthStart(date) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    1
   );
 }
 
-function normalizePhone(phone) {
-  return String(phone || "").replace(
-    /[^\d]/g,
-    ""
+function getMonthEnd(date) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    0
   );
 }
 
-function Icon({ name, size = 18 }) {
+function buildCalendarDays(monthDate) {
+  const start = getMonthStart(monthDate);
+  const end = getMonthEnd(monthDate);
+
+  const firstDay = start.getDay();
+  const totalDays = end.getDate();
+
+  const previousMonthEnd = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth(),
+    0
+  );
+
+  const days = [];
+
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const date = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth() - 1,
+      previousMonthEnd.getDate() - i
+    );
+
+    days.push({
+      date,
+      currentMonth: false,
+    });
+  }
+
+  for (let day = 1; day <= totalDays; day++) {
+    days.push({
+      date: new Date(
+        monthDate.getFullYear(),
+        monthDate.getMonth(),
+        day
+      ),
+      currentMonth: true,
+    });
+  }
+
+  let nextDay = 1;
+
+  while (days.length < 42) {
+    days.push({
+      date: new Date(
+        monthDate.getFullYear(),
+        monthDate.getMonth() + 1,
+        nextDay
+      ),
+      currentMonth: false,
+    });
+
+    nextDay++;
+  }
+
+  return days;
+}
+
+function Icon({ name, size = 17 }) {
   const common = {
     width: size,
     height: size,
@@ -175,18 +268,7 @@ function Icon({ name, size = 18 }) {
     "aria-hidden": true,
   };
 
-  const icons = {
-    list: (
-      <>
-        <path d="M8 6h13" />
-        <path d="M8 12h13" />
-        <path d="M8 18h13" />
-        <path d="M3 6h.01" />
-        <path d="M3 12h.01" />
-        <path d="M3 18h.01" />
-      </>
-    ),
-
+  const paths = {
     calendar: (
       <>
         <rect
@@ -196,23 +278,14 @@ function Icon({ name, size = 18 }) {
           height="17"
           rx="2"
         />
-        <path d="M16 2v4" />
-        <path d="M8 2v4" />
-        <path d="M3 10h18" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
       </>
     ),
 
-    automation: (
+    list: (
       <>
-        <path d="M12 2v4" />
-        <path d="M12 18v4" />
-        <path d="m4.93 4.93 2.83 2.83" />
-        <path d="m16.24 16.24 2.83 2.83" />
-        <path d="M2 12h4" />
-        <path d="M18 12h4" />
-        <path d="m4.93 19.07 2.83-2.83" />
-        <path d="m16.24 7.76 2.83-2.83" />
-        <circle cx="12" cy="12" r="4" />
+        <path d="M8 6h13M8 12h13M8 18h13" />
+        <path d="M3 6h.01M3 12h.01M3 18h.01" />
       </>
     ),
 
@@ -223,8 +296,16 @@ function Icon({ name, size = 18 }) {
       </>
     ),
 
+    chevronLeft: (
+      <path d="m15 18-6-6 6-6" />
+    ),
+
+    chevronRight: (
+      <path d="m9 18 6-6-6-6" />
+    ),
+
     phone: (
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92Z" />
+      <path d="M6.6 3.8 9 3l2 4.5-2 1.5a15.5 15.5 0 0 0 6 6l1.5-2 4.5 2-.8 2.4a2.4 2.4 0 0 1-2.7 1.5C10.6 18.2 5.8 13.4 3.1 6.5A2.4 2.4 0 0 1 4.6 3.8Z" />
     ),
 
     whatsapp: (
@@ -236,98 +317,35 @@ function Icon({ name, size = 18 }) {
 
     more: (
       <>
-        <circle
-          cx="12"
-          cy="5"
-          r="1"
-          fill="currentColor"
-        />
-        <circle
-          cx="12"
-          cy="12"
-          r="1"
-          fill="currentColor"
-        />
-        <circle
-          cx="12"
-          cy="19"
-          r="1"
-          fill="currentColor"
-        />
+        <circle cx="5" cy="12" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
       </>
     ),
 
-    repeat: (
-      <>
-        <path d="M17 1l4 4-4 4" />
-        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-        <path d="m7 23-4-4 4-4" />
-        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-      </>
-    ),
-
-    user: (
-      <>
-        <circle cx="12" cy="7" r="4" />
-        <path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
-      </>
-    ),
-
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-
-    flag: (
-      <>
-        <path d="M5 21V4" />
-        <path d="M5 4c4-3 7 3 14 0v9c-7 3-10-3-14 0" />
-      </>
-    ),
-
-    note: (
-      <>
-        <rect
-          x="4"
-          y="3"
-          width="16"
-          height="18"
-          rx="2"
-        />
-        <path d="M8 8h8" />
-        <path d="M8 12h8" />
-        <path d="M8 16h5" />
-      </>
-    ),
-
-    x: (
-      <>
-        <path d="m6 6 12 12" />
-        <path d="m18 6-12 12" />
-      </>
-    ),
-
-    check: (
-      <>
-        <path d="m5 12 4 4L19 6" />
-      </>
+    refresh: (
+      <path d="M20 11a8 8 0 0 0-14.8-4L3 10m0-5v5h5M4 13a8 8 0 0 0 14.8 4L21 14m0 5v-5h-5" />
     ),
   };
 
   return (
     <svg {...common}>
-      {icons[name] || icons.user}
+      {paths[name] || paths.calendar}
     </svg>
   );
 }
 
-export default function FollowUps() {
-  const [user] = useState(() => getUser());
+export default function FollowUps({
+  user: passedUser,
+  initialLead = null,
+  onOpenLeadDetails,
+}) {
+  const user =
+    passedUser ||
+    getUser();
 
-  const [followUps, setFollowUps] =
-    useState([]);
+  const healthcare =
+    isHealthcare(user);
 
   const [leads, setLeads] =
     useState([]);
@@ -335,72 +353,65 @@ export default function FollowUps() {
   const [loading, setLoading] =
     useState(true);
 
-  const [error, setError] =
-    useState("");
-
   const [activeTab, setActiveTab] =
     useState("today");
+
+  const [view, setView] =
+    useState("list");
 
   const [search, setSearch] =
     useState("");
 
-  const [showSchedule, setShowSchedule] =
+  const [assignedFilter, setAssignedFilter] =
+    useState("");
+
+  const [priorityFilter, setPriorityFilter] =
+    useState("");
+
+  const [channelFilter, setChannelFilter] =
+    useState("");
+
+  const [calendarMonth, setCalendarMonth] =
+    useState(new Date());
+
+  const [showModal, setShowModal] =
     useState(false);
 
   const [selectedLeadId, setSelectedLeadId] =
-    useState("");
+    useState(
+      initialLead?._id || ""
+    );
 
-  const [followUpDate, setFollowUpDate] =
-    useState("");
-
-  const [followUpTime, setFollowUpTime] =
-    useState("");
-
-  const [purpose, setPurpose] =
-    useState("");
-
-  const [channel, setChannel] =
-    useState("Call");
-
-  const [assignedTo, setAssignedTo] =
-    useState("");
-
-  const [priority, setPriority] =
-    useState("Medium");
-
-  const [note, setNote] =
-    useState("");
-
-  const [reminder, setReminder] =
-    useState(true);
-
-  const [repeatWeekly, setRepeatWeekly] =
-    useState(false);
+  const [form, setForm] =
+    useState({
+      date: "",
+      time: "",
+      purpose: "",
+      channel: "Call",
+      assignedTo: "",
+      priority: "Medium",
+      note: "",
+      reminder: true,
+      repeatWeekly: false,
+    });
 
   const [saving, setSaving] =
     useState(false);
 
-  const [notice, setNotice] =
+  const [error, setError] =
     useState("");
 
-  const healthcare =
-    isHealthcare(user);
-
-  const loadData = async () => {
+  const loadFollowUps = async () => {
     const token = getToken();
 
     if (!token) {
-      setError(
-        "Authentication required. Please sign in again."
-      );
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError("");
-
     try {
+      setLoading(true);
+
       const response = await fetch(
         buildApiUrl("/api/leads"),
         {
@@ -415,49 +426,24 @@ export default function FollowUps() {
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            "Unable to load leads"
+          data?.message ||
+          "Unable to load follow-ups."
         );
       }
 
-      const loadedLeads =
+      setLeads(
         Array.isArray(data.leads)
           ? data.leads
-          : [];
-
-      const allFollowUps = [];
-
-      loadedLeads.forEach((lead) => {
-        (lead.followUps || []).forEach(
-          (followUp) => {
-            allFollowUps.push(
-              normalizeFollowUp({
-                ...followUp,
-                leadId: lead._id,
-                lead,
-                leadName: lead.name,
-                phone: lead.phone,
-                service: lead.service,
-                doctor:
-                  lead.preferredDoctor,
-                assignedTo:
-                  followUp.assignedTo ||
-                  lead.owner ||
-                  lead.preferredDoctor ||
-                  user?.name ||
-                  "",
-              })
-            );
-          }
-        );
-      });
-
-      setLeads(loadedLeads);
-      setFollowUps(allFollowUps);
-    } catch (loadError) {
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "LOAD FOLLOW UPS ERROR:",
+        err
+      );
       setError(
-        loadError.message ||
-          "Unable to load follow-ups"
+        err.message ||
+        "Unable to load follow-ups."
       );
     } finally {
       setLoading(false);
@@ -465,148 +451,221 @@ export default function FollowUps() {
   };
 
   useEffect(() => {
-    loadData();
+    loadFollowUps();
   }, []);
 
+  const allFollowUps = useMemo(() => {
+    const items = [];
+
+    leads.forEach((lead) => {
+      if (!Array.isArray(lead.followUps)) {
+        return;
+      }
+
+      lead.followUps.forEach(
+        (followUp, index) => {
+          items.push(
+            normalizeFollowUp(
+              lead,
+              followUp,
+              index
+            )
+          );
+        }
+      );
+    });
+
+    return items.sort(
+      (a, b) =>
+        new Date(a.date).getTime() -
+        new Date(b.date).getTime()
+    );
+  }, [leads]);
+
   const stats = useMemo(() => {
+    let today = 0;
+    let overdue = 0;
+    let upcoming = 0;
+    let completed = 0;
+
+    allFollowUps.forEach((item) => {
+      const status =
+        getFollowUpStatus(item);
+
+      if (status === "today") {
+        today++;
+      }
+
+      if (status === "overdue") {
+        overdue++;
+      }
+
+      if (status === "upcoming") {
+        upcoming++;
+      }
+
+      if (status === "completed") {
+        completed++;
+      }
+    });
+
     return {
-      today: followUps.filter(
-        (item) =>
-          getFollowUpStatus(item) ===
-          "today"
-      ).length,
-
-      overdue: followUps.filter(
-        (item) =>
-          getFollowUpStatus(item) ===
-          "overdue"
-      ).length,
-
-      upcoming: followUps.filter(
-        (item) =>
-          getFollowUpStatus(item) ===
-          "upcoming"
-      ).length,
-
-      completed: followUps.filter(
-        (item) =>
-          getFollowUpStatus(item) ===
-          "completed"
-      ).length,
+      today,
+      overdue,
+      upcoming,
+      completed,
     };
-  }, [followUps]);
+  }, [allFollowUps]);
 
   const filteredFollowUps =
     useMemo(() => {
       const query =
         search.trim().toLowerCase();
 
-      return followUps.filter((item) => {
-        const status =
-          getFollowUpStatus(item);
+      return allFollowUps.filter(
+        (item) => {
+          const status =
+            getFollowUpStatus(item);
 
-        if (
-          activeTab !== "all" &&
-          status !== activeTab
-        ) {
-          return false;
-        }
+          const matchesTab =
+            activeTab === "all" ||
+            status === activeTab;
 
-        if (!query) {
-          return true;
-        }
-
-        return [
-          item.leadName,
-          item.phone,
-          item.service,
-          item.doctor,
-          item.assignedTo,
-          item.purpose,
-          item.note,
-          item.channel,
-        ]
-          .filter(Boolean)
-          .some((value) =>
-            String(value)
+          const matchesSearch =
+            !query ||
+            String(
+              item.name || ""
+            )
               .toLowerCase()
-              .includes(query)
+              .includes(query) ||
+            String(
+              item.phone || ""
+            )
+              .toLowerCase()
+              .includes(query) ||
+            String(
+              item.purpose || ""
+            )
+              .toLowerCase()
+              .includes(query) ||
+            String(
+              item.service || ""
+            )
+              .toLowerCase()
+              .includes(query);
+
+          const matchesAssigned =
+            !assignedFilter ||
+            item.owner ===
+            assignedFilter;
+
+          const matchesPriority =
+            !priorityFilter ||
+            item.priority ===
+            priorityFilter;
+
+          const matchesChannel =
+            !channelFilter ||
+            item.channel ===
+            channelFilter;
+
+          return (
+            matchesTab &&
+            matchesSearch &&
+            matchesAssigned &&
+            matchesPriority &&
+            matchesChannel
           );
-      });
+        }
+      );
     }, [
-      followUps,
+      allFollowUps,
       activeTab,
       search,
+      assignedFilter,
+      priorityFilter,
+      channelFilter,
     ]);
 
-  const teamOptions =
+  const calendarDays =
+    useMemo(
+      () =>
+        buildCalendarDays(
+          calendarMonth
+        ),
+      [calendarMonth]
+    );
+
+  const calendarFollowUps =
     useMemo(() => {
-      const names = [];
+      const map = {};
 
-      leads.forEach((lead) => {
-        if (lead.owner) {
-          names.push(lead.owner);
+      allFollowUps.forEach((item) => {
+        const key = dateKey(item.date);
+
+        if (!key) return;
+
+        if (!map[key]) {
+          map[key] = [];
         }
 
-        if (lead.preferredDoctor) {
-          names.push(
-            lead.preferredDoctor
-          );
-        }
+        map[key].push(item);
       });
 
-      if (user?.name) {
-        names.push(user.name);
-      }
+      return map;
+    }, [allFollowUps]);
 
+  const assignees =
+    useMemo(() => {
       return [
         ...new Set(
-          names.filter(Boolean)
+          allFollowUps
+            .map((item) => item.owner)
+            .filter(Boolean)
         ),
       ];
-    }, [leads, user]);
+    }, [allFollowUps]);
 
-  const openScheduleModal = () => {
-    setNotice("");
-    setSelectedLeadId("");
-    setFollowUpDate("");
-    setFollowUpTime("");
-    setPurpose("");
-    setChannel("Call");
-    setAssignedTo("");
-    setPriority("Medium");
-    setNote("");
-    setReminder(true);
-    setRepeatWeekly(false);
-    setShowSchedule(true);
-  };
-
-  const openScheduleForLead = (
-    lead
-  ) => {
-    setNotice("");
+  const openSchedule = (lead = null) => {
+    const targetLead =
+      lead ||
+      initialLead ||
+      leads[0] ||
+      null;
 
     setSelectedLeadId(
-      lead?._id || ""
+      targetLead?._id || ""
     );
 
-    setFollowUpDate("");
-    setFollowUpTime("");
-    setPurpose("");
-    setChannel("Call");
+    setForm({
+      date: "",
+      time: "",
+      purpose: "",
+      channel: "Call",
+      assignedTo:
+        targetLead?.owner || "",
+      priority: "Medium",
+      note: "",
+      reminder: true,
+      repeatWeekly: false,
+    });
 
-    setAssignedTo(
-      lead?.owner ||
-        lead?.preferredDoctor ||
-        user?.name ||
-        ""
-    );
+    setError("");
+    setShowModal(true);
+  };
 
-    setPriority("Medium");
-    setNote("");
-    setReminder(true);
-    setRepeatWeekly(false);
-    setShowSchedule(true);
+  const closeModal = () => {
+    if (saving) return;
+
+    setShowModal(false);
+    setError("");
+  };
+
+  const updateForm = (field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
   };
 
   const saveFollowUp = async (
@@ -615,75 +674,95 @@ export default function FollowUps() {
     event.preventDefault();
 
     if (!selectedLeadId) {
-      setNotice(
+      setError(
         "Please select a lead."
       );
       return;
     }
 
-    if (
-      !followUpDate ||
-      !followUpTime
-    ) {
-      setNotice(
-        "Please select date and time."
+    if (!form.date) {
+      setError(
+        "Please select a date."
       );
       return;
     }
 
-    setSaving(true);
-    setNotice("");
+    if (!form.time) {
+      setError(
+        "Please select a time."
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setError(
+        "Your session has expired."
+      );
+      return;
+    }
 
     try {
-      const date =
-        `${followUpDate}T${followUpTime}`;
+      setSaving(true);
+      setError("");
 
-      const response =
-        await fetch(
-          buildApiUrl(
-            `/api/leads/${selectedLeadId}/follow-ups`
-          ),
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-              Authorization: `Bearer ${getToken()}`,
-            },
-            body: JSON.stringify({
-              date,
-              note: note.trim(),
-              purpose:
-                purpose.trim(),
-              channel,
-              assignedTo,
-              priority,
-              reminder,
-              repeatWeekly,
-            }),
-          }
-        );
+      const dateTime = new Date(
+        `${form.date}T${form.time}`
+      );
+
+      const response = await fetch(
+        buildApiUrl(
+          `/api/leads/${selectedLeadId}/follow-ups`
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            date:
+              dateTime.toISOString(),
+            note: form.note,
+            purpose:
+              form.purpose,
+            channel:
+              form.channel,
+            assignedTo:
+              form.assignedTo,
+            priority:
+              form.priority,
+            reminder:
+              form.reminder,
+            repeatWeekly:
+              form.repeatWeekly,
+          }),
+        }
+      );
 
       const data =
         await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            "Unable to schedule follow-up"
+          data?.message ||
+          "Unable to schedule follow-up."
         );
       }
 
-      setShowSchedule(false);
-      setNotice(
-        "Follow-up scheduled successfully."
+      setShowModal(false);
+      await loadFollowUps();
+    } catch (err) {
+      console.error(
+        "SAVE FOLLOW UP ERROR:",
+        err
       );
 
-      await loadData();
-    } catch (saveError) {
-      setNotice(
-        saveError.message ||
-          "Unable to schedule follow-up"
+      setError(
+        err.message ||
+        "Unable to schedule follow-up."
       );
     } finally {
       setSaving(false);
@@ -697,561 +776,812 @@ export default function FollowUps() {
       `tel:${phone}`;
   };
 
-  const whatsappLead = (
-    phone
-  ) => {
+  const whatsappLead = (phone) => {
     const normalized =
       normalizePhone(phone);
 
     if (!normalized) return;
 
+    const number =
+      normalized.length === 10
+        ? `91${normalized}`
+        : normalized;
+
     window.open(
-      `https://wa.me/${normalized}`,
+      `https://wa.me/${number}`,
       "_blank",
       "noopener,noreferrer"
     );
   };
 
-  const purposeOptions =
-    healthcare
-      ? [
-          "Confirm consultation slot",
-          "Share treatment estimate",
-          "Post-consult follow-up",
-          "Payment reminder",
-          "Reschedule appointment",
-          "Answer pricing query",
-          "Send pre-procedure instructions",
-          "Feedback call after treatment",
-        ]
-      : [
-          "Confirm meeting",
-          "Share quotation",
-          "Follow up on proposal",
-          "Payment reminder",
-          "Reschedule meeting",
-          "Answer pricing query",
-          "Product or service follow-up",
-          "Customer feedback",
-        ];
+  const openLead = (leadId) => {
+    if (
+      typeof onOpenLeadDetails ===
+      "function"
+    ) {
+      onOpenLeadDetails(leadId);
+    }
+  };
 
-  const tabItems = [
-    [
-      "today",
-      "Today",
-      stats.today,
-    ],
-    [
-      "upcoming",
-      "Upcoming",
-      stats.upcoming,
-    ],
-    [
-      "overdue",
-      "Overdue",
-      stats.overdue,
-    ],
-    [
-      "completed",
-      "Completed",
-      stats.completed,
-    ],
-  ];
+  const previousMonth = () => {
+    setCalendarMonth(
+      new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() - 1,
+        1
+      )
+    );
+  };
+
+  const nextMonth = () => {
+    setCalendarMonth(
+      new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() + 1,
+        1
+      )
+    );
+  };
+
+  const goToToday = () => {
+    setCalendarMonth(
+      new Date()
+    );
+  };
+
+  const calendarTitle =
+    new Intl.DateTimeFormat(
+      "en-IN",
+      {
+        month: "long",
+        year: "numeric",
+      }
+    ).format(calendarMonth);
+
+  const todayKey =
+    dateKey(new Date());
+
+  const selectedLead =
+    leads.find(
+      (lead) =>
+        lead._id ===
+        selectedLeadId
+    ) || null;
+
+  const selectedLeadName =
+    selectedLead?.name ||
+    initialLead?.name ||
+    "";
 
   return (
-    <div className="follow-ups-page">
+    <div className="followups-page">
 
-      <div className="follow-ups-page-header">
+      <div className="followups-head">
 
         <div>
-          <p className="follow-ups-eyebrow">
-            CRM ACTIVITY
+          <p className="followups-breadcrumb">
+            Acquire / Follow-ups
           </p>
 
           <h1>
             Follow-ups
           </h1>
 
-          <p>
+          <p className="followups-subtitle">
             {stats.today} due today ·{" "}
-            {stats.overdue} overdue · keep every lead moving
+            {stats.overdue} overdue · keep
+            every lead moving
           </p>
         </div>
 
-        <div className="follow-ups-header-actions">
+        <div className="followups-head-actions">
+
+          <div className="followups-view-switch">
+
+            <button
+              type="button"
+              className={
+                view === "list"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setView("list")
+              }
+            >
+              <Icon
+                name="list"
+                size={16}
+              />
+              List
+            </button>
+
+            <button
+              type="button"
+              className={
+                view === "calendar"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setView("calendar")
+              }
+            >
+              <Icon
+                name="calendar"
+                size={16}
+              />
+              Calendar
+            </button>
+
+          </div>
 
           <button
             type="button"
-            className="follow-ups-view-btn active"
+            className="followups-automation-btn"
           >
-            <Icon
-              name="list"
-              size={16}
-            />
-            List
-          </button>
-
-          <button
-            type="button"
-            className="follow-ups-view-btn"
-          >
-            <Icon
-              name="calendar"
-              size={16}
-            />
-            Calendar
-          </button>
-
-          <button
-            type="button"
-            className="follow-ups-view-btn"
-          >
-            <Icon
-              name="automation"
-              size={16}
-            />
             Automations
           </button>
 
           <button
             type="button"
-            className="follow-ups-schedule-btn"
-            onClick={
-              openScheduleModal
+            className="followups-schedule-btn"
+            onClick={() =>
+              openSchedule()
             }
           >
             <Icon
               name="plus"
-              size={17}
+              size={16}
             />
             Schedule follow-up
           </button>
 
         </div>
+
       </div>
 
-      <div className="follow-ups-stats">
+      <div className="followups-stats">
 
-        <button
-          type="button"
-          className={
-            activeTab === "today"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setActiveTab("today")
-          }
-        >
-          <span className="stat-icon today">
+        <div className="followup-stat today">
+          <span>
             <Icon
-              name="clock"
-              size={17}
+              name="calendar"
+              size={16}
             />
           </span>
 
-          <span className="stat-content">
-            <strong>
-              {stats.today}
-            </strong>
+          <strong>
+            {stats.today}
+          </strong>
 
-            <small>
-              Due today
-            </small>
-          </span>
-        </button>
+          <small>
+            Due today
+          </small>
+        </div>
 
-        <button
-          type="button"
-          className={
-            activeTab === "overdue"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setActiveTab("overdue")
-          }
-        >
-          <span className="stat-icon overdue">
+        <div className="followup-stat overdue">
+          <span>
             !
           </span>
 
-          <span className="stat-content">
-            <strong>
-              {stats.overdue}
-            </strong>
+          <strong>
+            {stats.overdue}
+          </strong>
 
-            <small>
-              Overdue
-            </small>
-          </span>
-        </button>
+          <small>
+            Overdue
+          </small>
+        </div>
 
-        <button
-          type="button"
-          className={
-            activeTab === "upcoming"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setActiveTab("upcoming")
-          }
-        >
-          <span className="stat-icon upcoming">
+        <div className="followup-stat upcoming">
+          <span>
             <Icon
               name="calendar"
-              size={17}
+              size={16}
             />
           </span>
 
-          <span className="stat-content">
-            <strong>
-              {stats.upcoming}
-            </strong>
+          <strong>
+            {stats.upcoming}
+          </strong>
 
-            <small>
-              Upcoming
-            </small>
-          </span>
-        </button>
+          <small>
+            Upcoming
+          </small>
+        </div>
 
-        <button
-          type="button"
-          className={
-            activeTab === "completed"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setActiveTab("completed")
-          }
-        >
-          <span className="stat-icon completed">
-            <Icon
-              name="check"
-              size={17}
-            />
+        <div className="followup-stat completed">
+          <span>
+            ✓
           </span>
 
-          <span className="stat-content">
-            <strong>
-              {stats.completed}
-            </strong>
+          <strong>
+            {stats.completed}
+          </strong>
 
-            <small>
-              Completed
-            </small>
-          </span>
-        </button>
+          <small>
+            Completed
+          </small>
+        </div>
 
       </div>
 
-      {notice && (
-        <div className="follow-ups-notice">
-          {notice}
-        </div>
-      )}
+      {view === "calendar" ? (
+        <section className="followups-calendar-card">
 
-      {error && (
-        <div className="follow-ups-error">
-          {error}
-        </div>
-      )}
+          <div className="followups-calendar-head">
 
-      <section className="follow-ups-list-card">
+            <div className="followups-calendar-title">
 
-        <div className="follow-ups-tabs">
-
-          {tabItems.map(
-            ([value, label, count]) => (
               <button
                 type="button"
-                key={value}
-                className={
-                  activeTab === value
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setActiveTab(value)
+                onClick={
+                  previousMonth
                 }
               >
-                {label}
-
-                <span>
-                  {count}
-                </span>
+                <Icon
+                  name="chevronLeft"
+                  size={18}
+                />
               </button>
-            )
-          )}
 
-        </div>
+              <h2>
+                {calendarTitle}
+              </h2>
 
-        <div className="follow-ups-toolbar">
+              <button
+                type="button"
+                onClick={
+                  nextMonth
+                }
+              >
+                <Icon
+                  name="chevronRight"
+                  size={18}
+                />
+              </button>
 
-          <div className="follow-search">
-            <Icon
-              name="user"
-              size={16}
-            />
+            </div>
+
+            <div className="followups-calendar-actions">
+
+              <button
+                type="button"
+                onClick={
+                  goToToday
+                }
+              >
+                Today
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  openSchedule()
+                }
+              >
+                <Icon
+                  name="plus"
+                  size={15}
+                />
+                Schedule
+              </button>
+
+            </div>
+
+          </div>
+
+          <div className="followups-calendar-weekdays">
+
+            {[
+              "SUN",
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+            ].map((day) => (
+              <div
+                key={day}
+              >
+                {day}
+              </div>
+            ))}
+
+          </div>
+
+          <div className="followups-calendar-grid">
+
+            {calendarDays.map(
+              ({
+                date,
+                currentMonth,
+              }) => {
+                const key =
+                  dateKey(date);
+
+                const dayItems =
+                  calendarFollowUps[
+                  key
+                  ] || [];
+
+                return (
+                  <div
+                    className={`followups-calendar-day ${currentMonth
+                        ? ""
+                        : "outside"
+                      } ${key ===
+                        todayKey
+                        ? "today"
+                        : ""
+                      }`}
+                    key={key}
+                  >
+
+                    <div className="followups-calendar-day-number">
+                      {date.getDate()}
+                    </div>
+
+                    <div className="followups-calendar-events">
+
+                      {dayItems
+                        .slice(0, 4)
+                        .map(
+                          (item) => {
+                            const status =
+                              getFollowUpStatus(
+                                item
+                              );
+
+                            return (
+                              <button
+                                type="button"
+                                className={`followups-calendar-event ${status
+                                  } priority-${String(
+                                    item.priority ||
+                                    "Medium"
+                                  ).toLowerCase()}`}
+                                key={
+                                  item._id
+                                }
+                                onClick={() =>
+                                  openLead(
+                                    item.leadId
+                                  )
+                                }
+                              >
+
+                                <span>
+                                  {formatCalendarTime(
+                                    item.date
+                                  )}
+                                </span>
+
+                                <strong>
+                                  {item.name}
+                                </strong>
+
+                                <small>
+                                  {item.purpose ||
+                                    "Follow-up"}
+                                </small>
+
+                              </button>
+                            );
+                          }
+                        )}
+
+                      {dayItems.length >
+                        4 && (
+                          <span className="followups-calendar-more">
+                            +{" "}
+                            {dayItems.length -
+                              4}{" "}
+                            more
+                          </span>
+                        )}
+
+                    </div>
+
+                  </div>
+                );
+              }
+            )}
+
+          </div>
+
+        </section>
+      ) : (
+        <section className="followups-list-card">
+
+          <div className="followups-tabs">
+
+            <button
+              type="button"
+              className={
+                activeTab === "today"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab(
+                  "today"
+                )
+              }
+            >
+              Today
+              <b>
+                {stats.today}
+              </b>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab ===
+                  "upcoming"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab(
+                  "upcoming"
+                )
+              }
+            >
+              Upcoming
+              <b>
+                {stats.upcoming}
+              </b>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab ===
+                  "overdue"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab(
+                  "overdue"
+                )
+              }
+            >
+              Overdue
+              <b>
+                {stats.overdue}
+              </b>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab ===
+                  "completed"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab(
+                  "completed"
+                )
+              }
+            >
+              Completed
+              <b>
+                {stats.completed}
+              </b>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === "all"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("all")
+              }
+            >
+              All
+              <b>
+                {allFollowUps.length}
+              </b>
+            </button>
+
+          </div>
+
+          <div className="followups-filters">
 
             <input
               type="search"
+              placeholder="Search patient or lead..."
               value={search}
               onChange={(event) =>
                 setSearch(
                   event.target.value
                 )
               }
-              placeholder="Search patient or lead..."
             />
+
+            <select
+              value={assignedFilter}
+              onChange={(event) =>
+                setAssignedFilter(
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                Assigned to
+              </option>
+
+              {assignees.map(
+                (person) => (
+                  <option
+                    value={person}
+                    key={person}
+                  >
+                    {person}
+                  </option>
+                )
+              )}
+            </select>
+
+            <select
+              value={priorityFilter}
+              onChange={(event) =>
+                setPriorityFilter(
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                Priority
+              </option>
+              <option value="Low">
+                Low
+              </option>
+              <option value="Medium">
+                Medium
+              </option>
+              <option value="High">
+                High
+              </option>
+            </select>
+
+            <select
+              value={channelFilter}
+              onChange={(event) =>
+                setChannelFilter(
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                Channel
+              </option>
+              <option value="Call">
+                Call
+              </option>
+              <option value="WhatsApp">
+                WhatsApp
+              </option>
+              <option value="Email">
+                Email
+              </option>
+              <option value="In person">
+                In person
+              </option>
+            </select>
+
+            <span className="followups-result-count">
+              {filteredFollowUps.length}{" "}
+              follow-ups
+            </span>
+
           </div>
 
-          <select defaultValue="">
-            <option value="">
-              Assigned to
-            </option>
-
-            {teamOptions.map(
-              (name) => (
-                <option
-                  value={name}
-                  key={name}
-                >
-                  {name}
-                </option>
-              )
-            )}
-          </select>
-
-          <select defaultValue="">
-            <option value="">
-              Priority
-            </option>
-            <option value="High">
-              High
-            </option>
-            <option value="Medium">
-              Medium
-            </option>
-            <option value="Low">
-              Low
-            </option>
-          </select>
-
-          <select defaultValue="">
-            <option value="">
-              Channel
-            </option>
-            <option value="Call">
-              Call
-            </option>
-            <option value="WhatsApp">
-              WhatsApp
-            </option>
-            <option value="Email">
-              Email
-            </option>
-            <option value="In person">
-              In person
-            </option>
-          </select>
-
-          <strong className="follow-up-total">
-            {filteredFollowUps.length} follow-ups
-          </strong>
-
-        </div>
-
-        <div className="follow-ups-list">
-
           {loading ? (
-            <div className="follow-ups-empty">
+            <div className="followups-empty">
               Loading follow-ups...
             </div>
-          ) : filteredFollowUps.length ? (
-            filteredFollowUps.map(
-              (item) => {
-                const status =
-                  getFollowUpStatus(
-                    item
-                  );
+          ) : error ? (
+            <div className="followups-empty error">
+              {error}
+            </div>
+          ) : filteredFollowUps.length ===
+            0 ? (
+            <div className="followups-empty">
 
-                const priorityClass =
-                  String(
-                    item.priority ||
-                      "Medium"
-                  ).toLowerCase();
+              <div>
+                <Icon
+                  name="calendar"
+                  size={30}
+                />
+              </div>
 
-                return (
-                  <article
-                    className={`follow-up-row ${status} priority-${priorityClass}`}
-                    key={
-                      item._id ||
-                      `${item.leadId}-${item.date}`
-                    }
-                  >
+              <strong>
+                No follow-ups found
+              </strong>
 
-                    <div className="follow-up-priority-line" />
+              <p>
+                Schedule a follow-up
+                for a lead to see it
+                here.
+              </p>
 
-                    <div className="follow-up-check">
-                      <input
-                        type="checkbox"
-                        checked={
-                          status ===
-                          "completed"
-                        }
-                        readOnly
-                      />
-                    </div>
+              <button
+                type="button"
+                onClick={() =>
+                  openSchedule()
+                }
+              >
+                Schedule follow-up
+              </button>
 
-                    <div className="follow-up-avatar">
-                      {getInitials(
-                        item.leadName
-                      )}
-                    </div>
+            </div>
+          ) : (
+            <div className="followups-rows">
 
-                    <div className="follow-up-main">
+              {filteredFollowUps.map(
+                (item) => {
+                  const status =
+                    getFollowUpStatus(
+                      item
+                    );
 
-                      <div className="follow-up-name-row">
+                  return (
+                    <div
+                      className={`followup-row ${status}`}
+                      key={
+                        item._id
+                      }
+                    >
 
-                        <strong>
-                          {item.leadName}
-                        </strong>
-
-                        {status ===
-                          "today" && (
-                          <span className="follow-up-status today">
-                            <i />
-                            Due today
-                          </span>
-                        )}
-
-                        {status ===
-                          "overdue" && (
-                          <span className="follow-up-status overdue">
-                            Overdue
-                          </span>
-                        )}
-
-                        {status ===
-                          "upcoming" && (
-                          <span className="follow-up-status upcoming">
-                            Upcoming
-                          </span>
-                        )}
-
-                        {status ===
-                          "completed" && (
-                          <span className="follow-up-status completed">
-                            Completed
-                          </span>
-                        )}
-
-                        <span
-                          className={`follow-up-priority ${priorityClass}`}
-                        >
-                          {item.priority ||
-                            "Medium"}
-                        </span>
-
+                      <div className="followup-check">
+                        <input
+                          type="checkbox"
+                          checked={
+                            status ===
+                            "completed"
+                          }
+                          readOnly
+                        />
                       </div>
 
-                      <p className="follow-up-purpose">
-                        {item.purpose ||
-                          item.note ||
-                          "Follow up with lead"}
-                      </p>
+                      <div
+                        className={`followup-avatar priority-${String(
+                          item.priority ||
+                          "Medium"
+                        ).toLowerCase()}`}
+                      >
+                        {getInitials(
+                          item.name
+                        )}
+                      </div>
 
-                      <div className="follow-up-meta">
+                      <div className="followup-main">
 
-                        {item.phone && (
+                        <div className="followup-name-line">
+
                           <button
                             type="button"
-                            className="follow-meta-item clickable"
+                            className="followup-lead-name"
                             onClick={() =>
-                              callLead(
-                                item.phone
+                              openLead(
+                                item.leadId
                               )
                             }
                           >
-                            <Icon
-                              name="phone"
-                              size={14}
-                            />
-                            {item.phone}
+                            {item.name}
                           </button>
-                        )}
 
-                        {item.assignedTo && (
-                          <span className="follow-meta-item">
-                            <span className="mini-avatar">
-                              {getInitials(
-                                item.assignedTo
-                              )}
-                            </span>
-
-                            {item.assignedTo}
+                          <span
+                            className={`followup-status-badge ${status}`}
+                          >
+                            {status ===
+                              "today"
+                              ? "Due today"
+                              : status ===
+                                "overdue"
+                                ? "Overdue"
+                                : status ===
+                                  "completed"
+                                  ? "Completed"
+                                  : "Upcoming"}
                           </span>
-                        )}
 
-                        {item.channel && (
-                          <span className="follow-meta-item">
+                          <span
+                            className={`followup-priority ${String(
+                              item.priority ||
+                              "Medium"
+                            ).toLowerCase()}`}
+                          >
+                            {item.priority ||
+                              "Medium"}
+                          </span>
 
-                            {item.channel ===
-                            "WhatsApp" ? (
-                              <Icon
-                                name="whatsapp"
-                                size={14}
-                              />
-                            ) : (
+                        </div>
+
+                        <div className="followup-purpose">
+                          {item.purpose ||
+                            "Follow-up"}
+                        </div>
+
+                        <div className="followup-meta">
+
+                          {item.phone && (
+                            <span>
                               <Icon
                                 name="phone"
-                                size={14}
+                                size={13}
                               />
-                            )}
+                              {item.phone}
+                            </span>
+                          )}
 
+                          {item.owner && (
+                            <span>
+                              {item.owner}
+                            </span>
+                          )}
+
+                          <span>
+                            <Icon
+                              name="phone"
+                              size={13}
+                            />
                             {item.channel}
                           </span>
-                        )}
 
-                        {healthcare &&
-                          item.service && (
-                            <span className="follow-service">
+                          {item.service && (
+                            <span className="followup-service">
                               {item.service}
                             </span>
                           )}
 
+                          {healthcare &&
+                            item.lead
+                              ?.preferredDoctor && (
+                              <span>
+                                {
+                                  item
+                                    .lead
+                                    .preferredDoctor
+                                }
+                              </span>
+                            )}
+
+                        </div>
+
                       </div>
 
-                    </div>
+                      <div className="followup-date">
 
-                    <div className="follow-up-date">
+                        <strong>
+                          {formatDate(
+                            item.date
+                          )}
+                        </strong>
 
-                      <strong>
-                        {status ===
-                        "today"
-                          ? "Today"
-                          : formatDate(
-                              item.date
-                            )}
-                      </strong>
+                        <span>
+                          {formatTime(
+                            item.date
+                          )}
+                        </span>
 
-                      <span>
-                        {formatTime(
-                          item.date
-                        )}
-                      </span>
+                      </div>
 
-                    </div>
+                      <div className="followup-actions">
 
-                    <div className="follow-up-actions">
-
-                      {item.phone && (
                         <button
                           type="button"
-                          className="follow-action call"
                           title="Call"
                           onClick={() =>
                             callLead(
@@ -1263,13 +1593,13 @@ export default function FollowUps() {
                             name="phone"
                             size={17}
                           />
+                          <span>
+                            Call
+                          </span>
                         </button>
-                      )}
 
-                      {item.phone && (
                         <button
                           type="button"
-                          className="follow-action whatsapp"
                           title="WhatsApp"
                           onClick={() =>
                             whatsappLead(
@@ -1281,99 +1611,68 @@ export default function FollowUps() {
                             name="whatsapp"
                             size={17}
                           />
+                          <span>
+                            WhatsApp
+                          </span>
                         </button>
-                      )}
 
-                      <button
-                        type="button"
-                        className="follow-action"
-                        title="Schedule follow-up"
-                        onClick={() =>
-                          openScheduleForLead(
-                            item.lead
-                          )
-                        }
-                      >
-                        <Icon
-                          name="calendar"
-                          size={17}
-                        />
-                      </button>
+                        <button
+                          type="button"
+                          title="Schedule another follow-up"
+                          onClick={() =>
+                            openSchedule(
+                              item.lead
+                            )
+                          }
+                        >
+                          <Icon
+                            name="calendar"
+                            size={17}
+                          />
+                          <span>
+                            Follow-up
+                          </span>
+                        </button>
 
-                      <button
-                        type="button"
-                        className="follow-action"
-                        title="More actions"
-                      >
-                        <Icon
-                          name="more"
-                          size={17}
-                        />
-                      </button>
+                        <button
+                          type="button"
+                          title="More actions"
+                        >
+                          <Icon
+                            name="more"
+                            size={18}
+                          />
+                        </button>
+
+                      </div>
 
                     </div>
-
-                  </article>
-                );
-              }
-            )
-          ) : (
-            <div className="follow-ups-empty">
-
-              <div className="follow-empty-icon">
-                <Icon
-                  name="calendar"
-                  size={26}
-                />
-              </div>
-
-              <strong>
-                No follow-ups found
-              </strong>
-
-              <span>
-                Schedule a follow-up for a lead
-                to see it here.
-              </span>
-
-              <button
-                type="button"
-                className="follow-ups-schedule-btn"
-                onClick={
-                  openScheduleModal
+                  );
                 }
-              >
-                <Icon
-                  name="plus"
-                  size={16}
-                />
-                Schedule follow-up
-              </button>
+              )}
 
             </div>
           )}
 
-        </div>
+        </section>
+      )}
 
-      </section>
-
-      {showSchedule && (
+      {showModal && (
         <div
-          className="follow-up-modal-backdrop"
-          onClick={() =>
-            setShowSchedule(false)
-          }
+          className="followup-modal-overlay"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closeModal();
+            }
+          }}
         >
 
-          <form
-            className="follow-up-schedule-modal"
-            onSubmit={saveFollowUp}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
+          <div className="followup-modal">
 
-            <div className="follow-up-modal-header">
+            <div className="followup-modal-head">
 
               <div>
                 <span>
@@ -1385,306 +1684,439 @@ export default function FollowUps() {
                 </h2>
 
                 <p>
-                  Set the next action for this lead.
+                  Keep the lead moving with
+                  the next action.
                 </p>
               </div>
 
               <button
                 type="button"
-                className="follow-up-modal-close"
-                onClick={() =>
-                  setShowSchedule(false)
+                onClick={
+                  closeModal
                 }
               >
-                <Icon
-                  name="x"
-                  size={18}
-                />
+                ×
               </button>
 
             </div>
 
-            <div className="follow-up-modal-body">
+            <form
+              onSubmit={
+                saveFollowUp
+              }
+            >
 
-              <label className="follow-up-full-field">
-                <span>
-                  {healthcare
-                    ? "Patient / lead"
-                    : "Lead"}
-                </span>
+              <div className="followup-modal-body">
 
-                <select
-                  value={selectedLeadId}
-                  onChange={(event) =>
-                    setSelectedLeadId(
-                      event.target.value
-                    )
-                  }
-                  required
-                >
-                  <option value="">
-                    Select lead
-                  </option>
+                <div className="followup-form-group">
+                  <label>
+                    {isHealthcare(user)
+                      ? "Lead / Patient"
+                      : "Lead"}
+                  </label>
 
-                  {leads.map(
-                    (lead) => (
-                      <option
-                        key={lead._id}
-                        value={lead._id}
-                      >
-                        {lead.name}
-                        {healthcare &&
-                        lead.service
-                          ? ` — ${lead.service}`
-                          : ""}
+                  {selectedLead ? (
+                    <div className="followup-selected-lead">
+                      <span>
+                        {getInitials(
+                          selectedLead.name
+                        )}
+                      </span>
+
+                      <strong>
+                        {selectedLead.name ||
+                          "Unnamed lead"}
+                      </strong>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedLeadId}
+                      onChange={(event) => {
+                        const id =
+                          event.target.value;
+
+                        setSelectedLeadId(id);
+
+                        const lead =
+                          leads.find(
+                            (item) =>
+                              item._id === id
+                          );
+
+                        if (lead) {
+                          updateForm(
+                            "assignedTo",
+                            lead.owner || ""
+                          );
+                        }
+                      }}
+                    >
+                      <option value="">
+                        {isHealthcare(user)
+                          ? "Select lead / patient"
+                          : "Select lead"}
                       </option>
-                    )
+
+                      {leads.map((lead) => (
+                        <option
+                          value={lead._id}
+                          key={lead._id}
+                        >
+                          {lead.name}
+                          {lead.phone
+                            ? ` · ${lead.phone}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
                   )}
-                </select>
-              </label>
+                </div>
 
-              <div className="follow-up-form-grid">
+                <div className="followup-form-grid">
 
-                <label>
-                  <span>
-                    Date
-                  </span>
+                  <div className="followup-form-group">
 
-                  <input
-                    type="date"
-                    value={followUpDate}
-                    onChange={(event) =>
-                      setFollowUpDate(
-                        event.target.value
+                    <label>
+                      Date
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        form.date
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "date",
+                          event.target
+                            .value
+                        )
+                      }
+                      required
+                    />
+
+                  </div>
+
+                  <div className="followup-form-group">
+
+                    <label>
+                      Time
+                    </label>
+
+                    <input
+                      type="time"
+                      value={
+                        form.time
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "time",
+                          event.target
+                            .value
+                        )
+                      }
+                      required
+                    />
+
+                  </div>
+
+                </div>
+
+                <div className="followup-form-grid">
+
+                  <div className="followup-form-group">
+
+                    <label>
+                      Purpose
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        form.purpose
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "purpose",
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="e.g. Confirm consultation"
+                    />
+
+                  </div>
+
+                  <div className="followup-form-group">
+
+                    <label>
+                      Channel
+                    </label>
+
+                    <select
+                      value={
+                        form.channel
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "channel",
+                          event.target
+                            .value
+                        )
+                      }
+                    >
+                      <option value="Call">
+                        Call
+                      </option>
+                      <option value="WhatsApp">
+                        WhatsApp
+                      </option>
+                      <option value="Email">
+                        Email
+                      </option>
+                      <option value="In person">
+                        In person
+                      </option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                {healthcare && (
+                  <div className="followup-form-group">
+
+                    <label>
+                      Treatment / Service
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        selectedLead?.service ||
+                        initialLead?.service ||
+                        ""
+                      }
+                      readOnly
+                      placeholder="Lead service"
+                    />
+
+                  </div>
+                )}
+
+                <div className="followup-form-grid">
+
+                  <div className="followup-form-group">
+
+                    <label>
+                      Assign to
+                    </label>
+
+                    <select
+                      value={
+                        form.assignedTo
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "assignedTo",
+                          event.target
+                            .value
+                        )
+                      }
+                    >
+                      <option value="">
+                        Unassigned
+                      </option>
+
+                      {assignees.map(
+                        (
+                          person
+                        ) => (
+                          <option
+                            value={
+                              person
+                            }
+                            key={
+                              person
+                            }
+                          >
+                            {person}
+                          </option>
+                        )
+                      )}
+
+                      {selectedLead?.owner &&
+                        !assignees.includes(
+                          selectedLead.owner
+                        ) && (
+                          <option
+                            value={
+                              selectedLead.owner
+                            }
+                          >
+                            {
+                              selectedLead.owner
+                            }
+                          </option>
+                        )}
+                    </select>
+
+                  </div>
+
+                  <div className="followup-form-group">
+
+                    <label>
+                      Priority
+                    </label>
+
+                    <select
+                      value={
+                        form.priority
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "priority",
+                          event.target
+                            .value
+                        )
+                      }
+                    >
+                      <option value="Low">
+                        Low
+                      </option>
+                      <option value="Medium">
+                        Medium
+                      </option>
+                      <option value="High">
+                        High
+                      </option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                <div className="followup-form-group">
+
+                  <label>
+                    Note
+                  </label>
+
+                  <textarea
+                    rows="4"
+                    value={
+                      form.note
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "note",
+                        event.target
+                          .value
                       )
                     }
-                    required
+                    placeholder="Add a note for this follow-up..."
                   />
-                </label>
 
-                <label>
-                  <span>
-                    Time
-                  </span>
+                </div>
 
-                  <input
-                    type="time"
-                    value={followUpTime}
-                    onChange={(event) =>
-                      setFollowUpTime(
-                        event.target.value
-                      )
-                    }
-                    required
-                  />
-                </label>
+                <div className="followup-modal-options">
 
-                <label>
-                  <span>
-                    Purpose
-                  </span>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={
+                        form.reminder
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "reminder",
+                          event.target
+                            .checked
+                        )
+                      }
+                    />
 
-                  <select
-                    value={purpose}
-                    onChange={(event) =>
-                      setPurpose(
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select purpose
-                    </option>
+                    <span>
+                      Reminder
+                    </span>
+                  </label>
 
-                    {purposeOptions.map(
-                      (item) => (
-                        <option
-                          value={item}
-                          key={item}
-                        >
-                          {item}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={
+                        form.repeatWeekly
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateForm(
+                          "repeatWeekly",
+                          event.target
+                            .checked
+                        )
+                      }
+                    />
 
-                <label>
-                  <span>
-                    Channel
-                  </span>
+                    <span>
+                      Repeat weekly
+                    </span>
+                  </label>
 
-                  <select
-                    value={channel}
-                    onChange={(event) =>
-                      setChannel(
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="Call">
-                      Call
-                    </option>
+                </div>
 
-                    <option value="WhatsApp">
-                      WhatsApp
-                    </option>
-
-                    <option value="Email">
-                      Email
-                    </option>
-
-                    <option value="In person">
-                      In person
-                    </option>
-                  </select>
-                </label>
-
-                <label>
-                  <span>
-                    Assign to
-                  </span>
-
-                  <select
-                    value={assignedTo}
-                    onChange={(event) =>
-                      setAssignedTo(
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select
-                    </option>
-
-                    {teamOptions.map(
-                      (name) => (
-                        <option
-                          value={name}
-                          key={name}
-                        >
-                          {name}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-
-                <label>
-                  <span>
-                    Priority
-                  </span>
-
-                  <select
-                    value={priority}
-                    onChange={(event) =>
-                      setPriority(
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="Low">
-                      Low
-                    </option>
-
-                    <option value="Medium">
-                      Medium
-                    </option>
-
-                    <option value="High">
-                      High
-                    </option>
-                  </select>
-                </label>
+                {error && (
+                  <div className="followup-form-error">
+                    {error}
+                  </div>
+                )}
 
               </div>
 
-              <label className="follow-up-note-field">
+              <div className="followup-modal-footer">
 
-                <span>
-                  Note
-                </span>
-
-                <textarea
-                  value={note}
-                  onChange={(event) =>
-                    setNote(
-                      event.target.value
-                    )
+                <button
+                  type="button"
+                  className="followup-cancel-btn"
+                  onClick={
+                    closeModal
                   }
-                  placeholder="Add a note..."
-                />
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
 
-              </label>
-
-              <div className="follow-up-options">
-
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={reminder}
-                    onChange={(event) =>
-                      setReminder(
-                        event.target.checked
-                      )
-                    }
-                  />
-
-                  <span>
-                    Remind me 30 minutes before
-                  </span>
-                </label>
-
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={repeatWeekly}
-                    onChange={(event) =>
-                      setRepeatWeekly(
-                        event.target.checked
-                      )
-                    }
-                  />
-
-                  <span>
-                    Repeat weekly
-                  </span>
-                </label>
+                <button
+                  type="submit"
+                  className="followup-save-btn"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Scheduling..."
+                    : "Schedule follow-up"}
+                </button>
 
               </div>
 
-            </div>
+            </form>
 
-            <div className="follow-up-modal-footer">
-
-              <button
-                type="button"
-                className="follow-modal-cancel"
-                onClick={() =>
-                  setShowSchedule(false)
-                }
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="follow-modal-submit"
-                disabled={saving}
-              >
-                <Icon
-                  name="calendar"
-                  size={16}
-                />
-
-                {saving
-                  ? "Scheduling..."
-                  : "Schedule follow-up"}
-              </button>
-
-            </div>
-
-          </form>
+          </div>
 
         </div>
       )}

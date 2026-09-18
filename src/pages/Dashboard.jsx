@@ -6,6 +6,8 @@ import Leads from "./Leads";
 import LeadDetails from "./LeadDetails";
 import Contacts from "./Contacts";
 import FollowUps from "./FollowUps";
+import Calendar from "./Calendar";
+
 
 const navGroups = [
   {
@@ -19,7 +21,6 @@ const navGroups = [
     label: "People",
     items: [
       ["Contacts", "contact"],
-      ["Patients", "patient"],
       ["Calendar", "calendar"],
     ],
   },
@@ -1719,6 +1720,18 @@ export default function Dashboard() {
       return (
         <FollowUps
           user={user}
+        />
+      );
+    }
+
+    if (active === "Calendar") {
+      return (
+        <Calendar
+          user={user}
+          onOpenLeadDetails={(leadId) => {
+            setSelectedLeadId(leadId);
+            setActive("LeadDetails");
+          }}
         />
       );
     }
