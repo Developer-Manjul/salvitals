@@ -5,12 +5,13 @@ import Settings from "./Settings";
 import Leads from "./Leads";
 import LeadDetails from "./LeadDetails";
 import Contacts from "./Contacts";
+import FollowUps from "./FollowUps";
 
 const navGroups = [
   {
     label: "Acquire",
     items: [
-      ["Leads", "users",],
+      ["Leads", "users"],
       ["Follow-ups", "calendar"],
     ],
   },
@@ -128,16 +129,37 @@ const followUps = [
 
 function getRelativeTime(value) {
   const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return "—";
 
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-  if (seconds < 60) return "Just now";
+  if (!Number.isFinite(timestamp)) {
+    return "—";
+  }
+
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / 1000)
+  );
+
+  if (seconds < 60) {
+    return "Just now";
+  }
+
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
+
+  if (hours < 24) {
+    return `${hours} hr ago`;
+  }
+
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+
+  if (days < 7) {
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
 
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
@@ -642,7 +664,10 @@ function ChoosePlan({
   );
 }
 
-function ActualDashboardContent({ user, dashboardLeads }) {
+function ActualDashboardContent({
+  user,
+  dashboardLeads,
+}) {
   const firstName = user?.name
     ? user.name.trim().split(/\s+/)[0]
     : "there";
@@ -994,7 +1019,6 @@ function ActualDashboardContent({ user, dashboardLeads }) {
                   </div>
 
                 </div>
-
               )
             )}
 
@@ -1086,7 +1110,9 @@ function ActualDashboardContent({ user, dashboardLeads }) {
 
                           <Avatar
                             initials={
-                              lead.owner || user?.name || "U"
+                              lead.owner ||
+                              user?.name ||
+                              "U"
                             }
                           />
 
@@ -1097,7 +1123,9 @@ function ActualDashboardContent({ user, dashboardLeads }) {
                             </strong>
 
                             <small>
-                              {getRelativeTime(lead.createdAt)}
+                              {getRelativeTime(
+                                lead.createdAt
+                              )}
                             </small>
 
                           </span>
@@ -1134,11 +1162,12 @@ function ActualDashboardContent({ user, dashboardLeads }) {
                       </td>
 
                       <td className="muted">
-                        {getRelativeTime(lead.createdAt)}
+                        {getRelativeTime(
+                          lead.createdAt
+                        )}
                       </td>
 
                     </tr>
-
                   )
                 )}
 
@@ -1224,7 +1253,6 @@ function ActualDashboardContent({ user, dashboardLeads }) {
                   </button>
 
                 </div>
-
               )
             )}
 
@@ -1249,7 +1277,6 @@ function ActualDashboardContent({ user, dashboardLeads }) {
 }
 
 export default function Dashboard() {
-
   const [active, setActive] =
     useState("Dashboard");
 
@@ -1280,8 +1307,10 @@ export default function Dashboard() {
   const [dashboardLeads, setDashboardLeads] =
     useState([]);
 
-  useEffect(() => {
+  const [pendingFollowUpCount, setPendingFollowUpCount] =
+    useState(0);
 
+  useEffect(() => {
     const dashboardParams =
       new URLSearchParams(window.location.search);
 
@@ -1297,32 +1326,23 @@ export default function Dashboard() {
       sessionStorage.getItem("user");
 
     if (savedUser) {
-
       try {
-
         const parsedUser =
           JSON.parse(savedUser);
 
         setUser(parsedUser);
-
       } catch (error) {
-
         console.error(
           "User data error:",
           error
         );
-
       }
-
     }
 
     const planPurchased =
-      localStorage.getItem(
-        "planPurchased"
-      ) === "true";
+      localStorage.getItem("planPurchased") === "true";
 
     setShowPlans(!planPurchased);
-
   }, []);
 
   const getAuthToken = () =>
@@ -1332,130 +1352,328 @@ export default function Dashboard() {
     sessionStorage.getItem("vitalsToken") ||
     "";
 
-  const loadNotifications = async () => {
+  const loadPendingFollowUpCount = async () => {
     const token = getAuthToken();
-    if (!token) return;
+
+    if (!token) {
+      return;
+    }
 
     try {
-      const [notificationsResponse, countResponse] = await Promise.all([
-        fetch(buildApiUrl("/api/notifications?limit=20"), {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(buildApiUrl("/api/notifications/unread-count"), {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const response = await fetch(
+        buildApiUrl("/api/leads"),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return;
+      }
+
+      const leads = Array.isArray(data.leads)
+        ? data.leads
+        : [];
+
+      const now = new Date();
+
+      const count = leads.reduce(
+        (total, lead) => {
+          const pending =
+            Array.isArray(lead.followUps)
+              ? lead.followUps.filter(
+                  (followUp) => {
+                    if (!followUp?.date) {
+                      return false;
+                    }
+
+                    const status =
+                      String(
+                        followUp.status ||
+                          "Scheduled"
+                      ).toLowerCase();
+
+                    if (
+                      status === "completed" ||
+                      status === "complete" ||
+                      status === "done"
+                    ) {
+                      return false;
+                    }
+
+                    const date =
+                      new Date(
+                        followUp.date
+                      );
+
+                    return (
+                      !Number.isNaN(
+                        date.getTime()
+                      ) &&
+                      date >= now
+                    );
+                  }
+                )
+              : [];
+
+          return total + pending.length;
+        },
+        0
+      );
+
+      setPendingFollowUpCount(count);
+    } catch (error) {
+      console.error(
+        "LOAD FOLLOW-UP COUNT ERROR:",
+        error
+      );
+    }
+  };
+
+  const loadNotifications = async () => {
+    const token = getAuthToken();
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      const [
+        notificationsResponse,
+        countResponse,
+      ] = await Promise.all([
+        fetch(
+          buildApiUrl(
+            "/api/notifications?limit=20"
+          ),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        ),
+        fetch(
+          buildApiUrl(
+            "/api/notifications/unread-count"
+          ),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        ),
       ]);
 
-      const notificationsData = await notificationsResponse.json();
-      const countData = await countResponse.json();
+      const notificationsData =
+        await notificationsResponse.json();
+
+      const countData =
+        await countResponse.json();
 
       if (notificationsResponse.ok) {
         setNotifications(
-          Array.isArray(notificationsData.notifications)
+          Array.isArray(
+            notificationsData.notifications
+          )
             ? notificationsData.notifications
             : []
         );
       }
+
       if (countResponse.ok) {
-        setUnreadNotificationCount(Number(countData.count) || 0);
+        setUnreadNotificationCount(
+          Number(countData.count) || 0
+        );
       }
     } catch (error) {
-      console.error("LOAD NOTIFICATIONS ERROR:", error);
+      console.error(
+        "LOAD NOTIFICATIONS ERROR:",
+        error
+      );
     }
   };
 
   useEffect(() => {
     loadNotifications();
-    const intervalId = window.setInterval(loadNotifications, 30000);
-    return () => window.clearInterval(intervalId);
+
+    const intervalId =
+      window.setInterval(
+        loadNotifications,
+        30000
+      );
+
+    return () =>
+      window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    loadPendingFollowUpCount();
+
+    const intervalId =
+      window.setInterval(
+        loadPendingFollowUpCount,
+        30000
+      );
+
+    return () =>
+      window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
     const loadDashboardLeads = async () => {
       const token = getAuthToken();
-      if (!token) return;
+
+      if (!token) {
+        return;
+      }
 
       try {
-        const response = await fetch(buildApiUrl("/api/leads"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await response.json();
+        const response = await fetch(
+          buildApiUrl("/api/leads"),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data =
+          await response.json();
+
         if (response.ok) {
           setDashboardLeads(
-            Array.isArray(data.leads) ? data.leads.slice(0, 4) : []
+            Array.isArray(data.leads)
+              ? data.leads.slice(0, 4)
+              : []
           );
         }
       } catch (error) {
-        console.error("LOAD DASHBOARD LEADS ERROR:", error);
+        console.error(
+          "LOAD DASHBOARD LEADS ERROR:",
+          error
+        );
       }
     };
 
     loadDashboardLeads();
   }, []);
 
-  const markNotificationAsRead = async (notificationId) => {
+  const markNotificationAsRead = async (
+    notificationId
+  ) => {
     const token = getAuthToken();
-    if (!token) return;
+
+    if (!token) {
+      return;
+    }
 
     try {
-      await fetch(buildApiUrl(`/api/notifications/${notificationId}/read`), {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await fetch(
+        buildApiUrl(
+          `/api/notifications/${notificationId}/read`
+        ),
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
     } catch (error) {
-      console.error("MARK NOTIFICATION READ ERROR:", error);
+      console.error(
+        "MARK NOTIFICATION READ ERROR:",
+        error
+      );
     }
   };
 
-  const handleNotificationClick = async (notification) => {
+  const handleNotificationClick = async (
+    notification
+  ) => {
     if (!notification.isRead) {
-      await markNotificationAsRead(notification._id);
-      setNotifications((previous) =>
-        previous.map((item) =>
-          item._id === notification._id ? { ...item, isRead: true } : item
-        )
+      await markNotificationAsRead(
+        notification._id
       );
-      setUnreadNotificationCount((count) => Math.max(0, count - 1));
+
+      setNotifications(
+        (previous) =>
+          previous.map((item) =>
+            item._id === notification._id
+              ? {
+                  ...item,
+                  isRead: true,
+                }
+              : item
+          )
+      );
+
+      setUnreadNotificationCount(
+        (count) => Math.max(0, count - 1)
+      );
     }
 
     setNotificationsOpen(false);
+
     if (notification.leadId) {
-      setSelectedLeadId(notification.leadId);
+      setSelectedLeadId(
+        notification.leadId
+      );
+
       setActive("LeadDetails");
     }
   };
 
-  const markAllNotificationsAsRead = async () => {
-    const token = getAuthToken();
-    if (!token) return;
+  const markAllNotificationsAsRead =
+    async () => {
+      const token = getAuthToken();
 
-    try {
-      const response = await fetch(buildApiUrl("/api/notifications/read-all"), {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        setNotifications((previous) =>
-          previous.map((item) => ({ ...item, isRead: true }))
-        );
-        setUnreadNotificationCount(0);
+      if (!token) {
+        return;
       }
-    } catch (error) {
-      console.error("MARK ALL NOTIFICATIONS READ ERROR:", error);
-    }
-  };
+
+      try {
+        const response = await fetch(
+          buildApiUrl(
+            "/api/notifications/read-all"
+          ),
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          setNotifications(
+            (previous) =>
+              previous.map((item) => ({
+                ...item,
+                isRead: true,
+              }))
+          );
+
+          setUnreadNotificationCount(0);
+        }
+      } catch (error) {
+        console.error(
+          "MARK ALL NOTIFICATIONS READ ERROR:",
+          error
+        );
+      }
+    };
 
   const selectNav = (name) => {
-
     setActive(name);
     setMobileOpen(false);
     setProfileOpen(false);
-
   };
 
   const handleChoosePlan = (plan) => {
-
     const numericPrice =
       plan.id === "starter"
         ? 59
@@ -1497,22 +1715,40 @@ export default function Dashboard() {
       );
     }
 
+    if (active === "Follow-ups") {
+      return (
+        <FollowUps
+          user={user}
+        />
+      );
+    }
+
     if (active === "Contacts") {
       return <Contacts user={user} />;
     }
 
-    if (active === "LeadDetails" && selectedLeadId) {
+    if (
+      active === "LeadDetails" &&
+      selectedLeadId
+    ) {
       return (
         <LeadDetails
           leadId={selectedLeadId}
           user={user}
-          onBack={() => setActive("Leads")}
+          onBack={() =>
+            setActive("Leads")
+          }
         />
       );
     }
 
     if (showPlans) {
-      return <ChoosePlan user={user} onContinue={handleChoosePlan} />;
+      return (
+        <ChoosePlan
+          user={user}
+          onContinue={handleChoosePlan}
+        />
+      );
     }
 
     return (
@@ -1524,7 +1760,6 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
@@ -1532,7 +1767,6 @@ export default function Dashboard() {
     sessionStorage.removeItem("user");
 
     window.location.href = "/signin";
-
   };
 
   const userName =
@@ -1552,7 +1786,6 @@ export default function Dashboard() {
     "";
 
   return (
-
     <div className="dashboard-shell">
 
       <aside
@@ -1562,7 +1795,6 @@ export default function Dashboard() {
       >
 
         <Brand />
-
 
         <nav className="dash-nav">
 
@@ -1590,7 +1822,6 @@ export default function Dashboard() {
 
           {navGroups.map(
             (group) => (
-
               <div
                 className="dash-nav-group"
                 key={group.label}
@@ -1607,7 +1838,6 @@ export default function Dashboard() {
                     count,
                     countTone,
                   ]) => (
-
                     <button
                       key={name}
                       className={`dash-nav-item ${
@@ -1629,26 +1859,32 @@ export default function Dashboard() {
                         {name}
                       </span>
 
-                      {count && (
+                      {(count ||
+                        name ===
+                          "Follow-ups") && (
                         <em
                           className={
-                            countTone ===
-                              "hot"
+                            name ===
+                            "Follow-ups"
                               ? "hot"
-                              : ""
+                              : countTone ===
+                                  "hot"
+                                ? "hot"
+                                : ""
                           }
                         >
-                          {count}
+                          {name ===
+                          "Follow-ups"
+                            ? pendingFollowUpCount
+                            : count}
                         </em>
                       )}
 
                     </button>
-
                   )
                 )}
 
               </div>
-
             )
           )}
 
@@ -1695,14 +1931,12 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => {
-
               setShowPlans(true);
 
               window.scrollTo({
                 top: 0,
                 behavior: "smooth",
               });
-
             }}
           >
 
@@ -1717,7 +1951,6 @@ export default function Dashboard() {
       </aside>
 
       {mobileOpen && (
-
         <button
           className="dash-overlay"
           aria-label="Close menu"
@@ -1725,7 +1958,6 @@ export default function Dashboard() {
             setMobileOpen(false)
           }
         />
-
       )}
 
       <main className="dash-main">
@@ -1783,53 +2015,124 @@ export default function Dashboard() {
             </button>
 
             <div className="dash-notification-wrap">
+
               <button
                 className="dash-icon-btn notification"
-                onClick={() => setNotificationsOpen((value) => !value)}
+                onClick={() =>
+                  setNotificationsOpen(
+                    (value) => !value
+                  )
+                }
                 aria-label="Notifications"
-                aria-expanded={notificationsOpen}
+                aria-expanded={
+                  notificationsOpen
+                }
               >
-                <Icon name="bell" size={18} />
-                {unreadNotificationCount > 0 && (
+
+                <Icon
+                  name="bell"
+                  size={18}
+                />
+
+                {unreadNotificationCount >
+                  0 && (
                   <b>
-                    {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                    {unreadNotificationCount >
+                    99
+                      ? "99+"
+                      : unreadNotificationCount}
                   </b>
                 )}
+
               </button>
 
               {notificationsOpen && (
                 <div className="dash-notification-panel">
+
                   <div className="dash-notification-head">
-                    <strong>Notifications</strong>
-                    {unreadNotificationCount > 0 && (
-                      <button type="button" onClick={markAllNotificationsAsRead}>
+
+                    <strong>
+                      Notifications
+                    </strong>
+
+                    {unreadNotificationCount >
+                      0 && (
+                      <button
+                        type="button"
+                        onClick={
+                          markAllNotificationsAsRead
+                        }
+                      >
                         Mark all as read
                       </button>
                     )}
+
                   </div>
 
                   <div className="dash-notification-list">
-                    {notifications.length === 0 ? (
-                      <p className="dash-notification-empty">No new notifications</p>
+
+                    {notifications.length ===
+                    0 ? (
+                      <p className="dash-notification-empty">
+                        No new notifications
+                      </p>
                     ) : (
-                      notifications.map((notification) => (
-                        <button
-                          type="button"
-                          className={`dash-notification-item ${notification.isRead ? "read" : "unread"}`}
-                          key={notification._id}
-                          onClick={() => handleNotificationClick(notification)}
-                        >
-                          <span>
-                            <strong>{notification.title}</strong>
-                            <b>{notification.message}</b>
-                            <small>{notification.source || "Other"} · {getRelativeTime(notification.createdAt)}</small>
-                          </span>
-                        </button>
-                      ))
+                      notifications.map(
+                        (
+                          notification
+                        ) => (
+                          <button
+                            type="button"
+                            className={`dash-notification-item ${
+                              notification.isRead
+                                ? "read"
+                                : "unread"
+                            }`}
+                            key={
+                              notification._id
+                            }
+                            onClick={() =>
+                              handleNotificationClick(
+                                notification
+                              )
+                            }
+                          >
+
+                            <span>
+
+                              <strong>
+                                {
+                                  notification.title
+                                }
+                              </strong>
+
+                              <b>
+                                {
+                                  notification.message
+                                }
+                              </b>
+
+                              <small>
+                                {notification.source ||
+                                  "Other"}{" "}
+                                ·{" "}
+                                {getRelativeTime(
+                                  notification.createdAt
+                                )}
+                              </small>
+
+                            </span>
+
+                          </button>
+                        )
+                      )
                     )}
+
                   </div>
+
                 </div>
               )}
+
             </div>
 
             <div className="dash-profile-wrap">
@@ -1851,7 +2154,6 @@ export default function Dashboard() {
                     clinicName ||
                     "Clinic logo"
                   }
-                  
                 />
 
                 <span>
@@ -1874,13 +2176,11 @@ export default function Dashboard() {
               </button>
 
               {profileOpen && (
-
                 <div className="dash-profile-menu">
 
                   <button
                     type="button"
                     onClick={() => {
-
                       setActive(
                         "Settings"
                       );
@@ -1888,7 +2188,6 @@ export default function Dashboard() {
                       setProfileOpen(
                         false
                       );
-
                     }}
                   >
                     Profile & settings
@@ -1904,7 +2203,6 @@ export default function Dashboard() {
                   </button>
 
                 </div>
-
               )}
 
             </div>

@@ -6,7 +6,8 @@ function isConfigured() {
     process.env.META_APP_ID &&
     process.env.META_APP_SECRET &&
     process.env.META_REDIRECT_URI &&
-    process.env.META_WEBHOOK_VERIFY_TOKEN
+    process.env.META_WEBHOOK_VERIFY_TOKEN &&
+    process.env.META_CONFIG_ID
   );
 }
 
@@ -57,6 +58,11 @@ exports.getAuthorizationUrl = (state) => {
     process.env.META_REDIRECT_URI || ""
   );
 
+  url.searchParams.set(
+    "config_id",
+    process.env.META_CONFIG_ID || ""
+  );
+
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
 
@@ -68,6 +74,7 @@ exports.getAuthorizationUrl = (state) => {
       "pages_manage_metadata",
       "business_management",
       "leads_retrieval",
+      "instagram_basic",
     ].join(",")
   );
 
@@ -88,19 +95,73 @@ exports.getPages = (accessToken) =>
   graphRequest("/me/accounts", {
     params: {
       fields:
-        "id,name,access_token,instagram_business_account{id,username},business{id,name}",
+        "id,name,access_token,instagram_business_account,business{id,name}",
       access_token: accessToken,
     },
   });
 
-exports.getPageDetails = (pageId, accessToken) =>
-  graphRequest(`/${encodeURIComponent(pageId)}`, {
+exports.getPageDetails = async (pageId, accessToken) => {
+  const endpoint = `/${encodeURIComponent(pageId)}`;
+
+  const fields =
+    "id,name,instagram_business_account,business{id,name}";
+
+  const details = await graphRequest(endpoint, {
     params: {
-      fields:
-        "id,name,instagram_business_account{id,username,name,profile_picture_url},business{id,name}",
+      fields,
       access_token: accessToken,
     },
   });
+
+  const instagramAccountId =
+    details?.instagram_business_account?.id || "";
+
+  let instagram = null;
+
+  if (instagramAccountId) {
+    try {
+      instagram = await graphRequest(
+        `/${encodeURIComponent(instagramAccountId)}`,
+        {
+          params: {
+            fields:
+              "id,username,name,profile_picture_url",
+            access_token: accessToken,
+          },
+        }
+      );
+    } catch (error) {
+      console.log("META INSTAGRAM PROFILE ERROR:", {
+        pageId: details?.id || String(pageId),
+        instagramAccountId,
+        error: error.message,
+      });
+    }
+  }
+
+  if (instagram) {
+    details.instagram_business_account = {
+      id: instagram.id || instagramAccountId,
+      username: instagram.username || "",
+      name: instagram.name || "",
+      profile_picture_url:
+        instagram.profile_picture_url || "",
+    };
+  }
+
+  console.log("META PAGE DETAILS:", {
+    pageId: details?.id || String(pageId),
+    hasInstagramBusinessAccount: Boolean(
+      details?.instagram_business_account
+    ),
+    instagramAccountId:
+      details?.instagram_business_account?.id || "",
+    instagramUsername:
+      details?.instagram_business_account?.username || "",
+  });
+
+  return details;
+};
 
 exports.getLeadDetails = (leadId, accessToken) =>
   graphRequest(`/${encodeURIComponent(leadId)}`, {
@@ -123,7 +184,10 @@ exports.subscribePageToLeadgen = (pageId, pageAccessToken) =>
     }
   );
 
-exports.refreshConnection = async (integration, accessToken) =>
+exports.refreshConnection = async (
+  integration,
+  accessToken
+) =>
   exports.getPageDetails(
     integration.pageId,
     accessToken

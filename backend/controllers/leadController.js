@@ -156,7 +156,7 @@ exports.createLead = async (
                     firstNote?.trim() || "",
             });
 
-            await processNewLead(lead);
+        await processNewLead(lead);
 
         return res.status(201).json({
             success: true,
@@ -353,24 +353,28 @@ exports.getLead = async (
     res
 ) => {
     try {
-        const userId = getUserId(req);
+        const userId =
+            getUserId(req);
 
         if (!userId) {
             return res.status(401).json({
                 success: false,
-                message: "Authentication required",
+                message:
+                    "Authentication required",
             });
         }
 
-        const lead = await Lead.findOne({
-            _id: req.params.id,
-            userId,
-        });
+        const lead =
+            await Lead.findOne({
+                _id: req.params.id,
+                userId,
+            });
 
         if (!lead) {
             return res.status(404).json({
                 success: false,
-                message: "Lead not found",
+                message:
+                    "Lead not found",
             });
         }
 
@@ -379,10 +383,15 @@ exports.getLead = async (
             lead,
         });
     } catch (error) {
-        console.error("GET LEAD ERROR:", error);
+        console.error(
+            "GET LEAD ERROR:",
+            error
+        );
+
         return res.status(404).json({
             success: false,
-            message: "Lead not found",
+            message:
+                "Lead not found",
         });
     }
 };
@@ -392,31 +401,75 @@ exports.addLeadNote = async (
     res
 ) => {
     try {
-        const userId = getUserId(req);
-        const text = String(req.body?.text || "").trim();
+        const userId =
+            getUserId(req);
+
+        const text =
+            String(
+                req.body?.text || ""
+            ).trim();
 
         if (!userId) {
-            return res.status(401).json({ success: false, message: "Authentication required" });
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Authentication required",
+            });
         }
 
         if (!text) {
-            return res.status(400).json({ success: false, message: "Note is required" });
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Note is required",
+            });
         }
 
-        const lead = await Lead.findOneAndUpdate(
-            { _id: req.params.id, userId },
-            { $push: { notes: { text, userName: req.body?.userName || "" } } },
-            { new: true, runValidators: true }
-        );
+        const lead =
+            await Lead.findOneAndUpdate(
+                {
+                    _id: req.params.id,
+                    userId,
+                },
+                {
+                    $push: {
+                        notes: {
+                            text,
+                            userName:
+                                req.body?.userName ||
+                                "",
+                        },
+                    },
+                },
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            );
 
         if (!lead) {
-            return res.status(404).json({ success: false, message: "Lead not found" });
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Lead not found",
+            });
         }
 
-        return res.status(201).json({ success: true, lead });
+        return res.status(201).json({
+            success: true,
+            lead,
+        });
     } catch (error) {
-        console.error("ADD LEAD NOTE ERROR:", error);
-        return res.status(500).json({ success: false, message: "Unable to add note" });
+        console.error(
+            "ADD LEAD NOTE ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to add note",
+        });
     }
 };
 
@@ -425,30 +478,143 @@ exports.addLeadFollowUp = async (
     res
 ) => {
     try {
-        const userId = getUserId(req);
-        const date = new Date(req.body?.date);
+        const userId =
+            getUserId(req);
 
         if (!userId) {
-            return res.status(401).json({ success: false, message: "Authentication required" });
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Authentication required",
+            });
         }
 
-        if (Number.isNaN(date.getTime())) {
-            return res.status(400).json({ success: false, message: "Follow-up date is required" });
+        const date =
+            new Date(
+                req.body?.date
+            );
+
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Follow-up date is required",
+            });
         }
 
-        const lead = await Lead.findOneAndUpdate(
-            { _id: req.params.id, userId },
-            { $push: { followUps: { date, note: String(req.body?.note || "").trim() } } },
-            { new: true, runValidators: true }
-        );
+        const purpose =
+            String(
+                req.body?.purpose || ""
+            ).trim();
+
+        const channel =
+            String(
+                req.body?.channel || "Call"
+            ).trim();
+
+        const assignedTo =
+            String(
+                req.body?.assignedTo || ""
+            ).trim();
+
+        const priority =
+            String(
+                req.body?.priority || "Medium"
+            ).trim();
+
+        const note =
+            String(
+                req.body?.note || ""
+            ).trim();
+
+        const reminder =
+            req.body?.reminder !== false;
+
+        const repeatWeekly =
+            req.body?.repeatWeekly === true;
+
+        const allowedPriorities = [
+            "Low",
+            "Medium",
+            "High",
+        ];
+
+        const allowedChannels = [
+            "Call",
+            "WhatsApp",
+            "Email",
+            "In person",
+        ];
+
+        const finalPriority =
+            allowedPriorities.includes(
+                priority
+            )
+                ? priority
+                : "Medium";
+
+        const finalChannel =
+            allowedChannels.includes(
+                channel
+            )
+                ? channel
+                : "Call";
+
+        const lead =
+            await Lead.findOneAndUpdate(
+                {
+                    _id: req.params.id,
+                    userId,
+                },
+                {
+                    $push: {
+                        followUps: {
+                            date,
+                            note,
+                            purpose,
+                            channel: finalChannel,
+                            assignedTo,
+                            priority: finalPriority,
+                            reminder,
+                            repeatWeekly,
+                            status: "Scheduled",
+                        },
+                    },
+                },
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            );
 
         if (!lead) {
-            return res.status(404).json({ success: false, message: "Lead not found" });
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Lead not found",
+            });
         }
 
-        return res.status(201).json({ success: true, lead });
+        return res.status(201).json({
+            success: true,
+            message:
+                "Follow-up scheduled successfully",
+            lead,
+        });
     } catch (error) {
-        console.error("ADD LEAD FOLLOW-UP ERROR:", error);
-        return res.status(500).json({ success: false, message: "Unable to schedule follow-up" });
+        console.error(
+            "ADD LEAD FOLLOW-UP ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to schedule follow-up",
+        });
     }
 };
