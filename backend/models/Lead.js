@@ -112,6 +112,10 @@ const leadSchema = new mongoose.Schema(
             default: "",
         },
 
+        /* =========================================
+           META LEAD DATA
+        ========================================== */
+
         metaLeadId: {
             type: String,
             default: "",
@@ -137,98 +141,183 @@ const leadSchema = new mongoose.Schema(
             default: "",
         },
 
+        /* =========================================
+           GOOGLE ADS LEAD DATA
+        ========================================== */
+
+        googleLeadId: {
+            type: String,
+            default: "",
+        },
+
+        googleCustomerId: {
+            type: String,
+            default: "",
+        },
+
+        googleCampaignId: {
+            type: String,
+            default: "",
+        },
+
+        googleAdGroupId: {
+            type: String,
+            default: "",
+        },
+
+        googleAdId: {
+            type: String,
+            default: "",
+        },
+
+        googleAssetId: {
+            type: String,
+            default: "",
+        },
+
+        googleGclid: {
+            type: String,
+            default: "",
+        },
+
+        /* =========================================
+           NOTES
+        ========================================== */
+
         notes: {
-            type: [{
-                text: {
-                    type: String,
-                    trim: true,
+            type: [
+                {
+                    text: {
+                        type: String,
+                        trim: true,
+                    },
+
+                    userName: {
+                        type: String,
+                        trim: true,
+                        default: "",
+                    },
+
+                    createdAt: {
+                        type: Date,
+                        default: Date.now,
+                    },
                 },
-                userName: {
-                    type: String,
-                    trim: true,
-                    default: "",
-                },
-                createdAt: {
-                    type: Date,
-                    default: Date.now,
-                },
-            }],
+            ],
+
             default: [],
         },
 
+        /* =========================================
+           FOLLOW UPS
+        ========================================== */
+
         followUps: {
-            type: [{
-                date: {
-                    type: Date,
-                    required: true,
-                },
+            type: [
+                {
+                    date: {
+                        type: Date,
+                        required: true,
+                    },
 
-                note: {
-                    type: String,
-                    trim: true,
-                    default: "",
-                },
+                    note: {
+                        type: String,
+                        trim: true,
+                        default: "",
+                    },
 
-                purpose: {
-                    type: String,
-                    trim: true,
-                    default: "",
-                },
+                    purpose: {
+                        type: String,
+                        trim: true,
+                        default: "",
+                    },
 
-                channel: {
-                    type: String,
-                    trim: true,
-                    default: "Call",
-                },
+                    channel: {
+                        type: String,
+                        trim: true,
+                        default: "Call",
+                    },
 
-                assignedTo: {
-                    type: String,
-                    trim: true,
-                    default: "",
-                },
+                    assignedTo: {
+                        type: String,
+                        trim: true,
+                        default: "",
+                    },
 
-                priority: {
-                    type: String,
-                    trim: true,
-                    enum: ["Low", "Medium", "High"],
-                    default: "Medium",
-                },
+                    priority: {
+                        type: String,
+                        trim: true,
+                        enum: ["Low", "Medium", "High"],
+                        default: "Medium",
+                    },
 
-                reminder: {
-                    type: Boolean,
-                    default: true,
-                },
+                    reminder: {
+                        type: Boolean,
+                        default: true,
+                    },
 
-                repeatWeekly: {
-                    type: Boolean,
-                    default: false,
-                },
+                    repeatWeekly: {
+                        type: Boolean,
+                        default: false,
+                    },
 
-                status: {
-                    type: String,
-                    trim: true,
-                    default: "Scheduled",
-                },
+                    status: {
+                        type: String,
+                        trim: true,
+                        default: "Scheduled",
+                    },
 
-                createdAt: {
-                    type: Date,
-                    default: Date.now,
+                    createdAt: {
+                        type: Date,
+                        default: Date.now,
+                    },
                 },
-            }],
+            ],
+
             default: [],
         },
     },
+
     {
         timestamps: true,
     }
 );
 
+/* =========================================
+   META LEAD DUPLICATE PROTECTION
+========================================= */
+
 leadSchema.index(
-    { userId: 1, metaLeadId: 1 },
+    {
+        userId: 1,
+        metaLeadId: 1,
+    },
     {
         unique: true,
+
         partialFilterExpression: {
             metaLeadId: {
+                $type: "string",
+                $ne: "",
+            },
+        },
+    }
+);
+
+/* =========================================
+   GOOGLE ADS LEAD DUPLICATE PROTECTION
+========================================= */
+
+leadSchema.index(
+    {
+        userId: 1,
+        googleLeadId: 1,
+    },
+    {
+        unique: true,
+
+        partialFilterExpression: {
+            googleLeadId: {
                 $type: "string",
                 $ne: "",
             },

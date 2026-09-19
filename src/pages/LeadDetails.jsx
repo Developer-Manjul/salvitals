@@ -77,11 +77,18 @@ function normalizePhone(phone) {
 }
 
 function getOwner(lead, user) {
-  return lead?.owner || lead?.preferredDoctor || user?.name || "—";
+  return (
+    lead?.owner ||
+    lead?.preferredDoctor ||
+    user?.name ||
+    "—"
+  );
 }
 
 function isFollowUpCompleted(followUp) {
-  const status = String(followUp?.status || "").toLowerCase();
+  const status = String(
+    followUp?.status || ""
+  ).toLowerCase();
 
   return (
     status === "completed" ||
@@ -117,7 +124,8 @@ function getActivities(lead) {
   });
 
   (lead.followUps || []).forEach((followUp) => {
-    const completed = isFollowUpCompleted(followUp);
+    const completed =
+      isFollowUpCompleted(followUp);
 
     activities.push({
       type: "all",
@@ -125,22 +133,29 @@ function getActivities(lead) {
       title: completed
         ? "Follow-up completed"
         : "Follow-up scheduled",
-      detail: followUp.note || "Follow-up scheduled",
+      detail:
+        followUp.note ||
+        "Follow-up scheduled",
       date: followUp.date,
       followUpDate: followUp.date,
       completed,
-      user: followUp.userName || followUp.createdByName,
+      user:
+        followUp.userName ||
+        followUp.createdByName,
     });
   });
 
   return activities.sort(
     (first, second) =>
-      new Date(second.date || 0) - new Date(first.date || 0)
+      new Date(second.date || 0) -
+      new Date(first.date || 0)
   );
 }
 
 function getNextFollowUp(lead) {
-  if (!lead?.followUps?.length) return null;
+  if (!lead?.followUps?.length) {
+    return null;
+  }
 
   const now = new Date();
 
@@ -148,18 +163,25 @@ function getNextFollowUp(lead) {
     lead.followUps
       .filter((item) => {
         if (!item?.date) return false;
-        if (isFollowUpCompleted(item)) return false;
 
-        const followUpDate = new Date(item.date);
+        if (isFollowUpCompleted(item)) {
+          return false;
+        }
+
+        const followUpDate =
+          new Date(item.date);
 
         return (
-          !Number.isNaN(followUpDate.getTime()) &&
+          !Number.isNaN(
+            followUpDate.getTime()
+          ) &&
           followUpDate >= now
         );
       })
       .sort(
         (first, second) =>
-          new Date(first.date) - new Date(second.date)
+          new Date(first.date) -
+          new Date(second.date)
       )[0] || null
   );
 }
@@ -168,31 +190,57 @@ function getSavedNotes(lead) {
   if (!lead?.notes?.length) return [];
 
   return lead.notes.filter(
-    (note) => note?.text && note.text.trim()
+    (note) =>
+      note?.text &&
+      note.text.trim()
   );
 }
 
-export default function LeadDetails({ leadId, user, onBack }) {
-  const [lead, setLead] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
+export default function LeadDetails({
+  leadId,
+  user,
+  onBack,
+}) {
+  const [lead, setLead] =
+    useState(null);
 
-  const [noteText, setNoteText] = useState("");
+  const [loading, setLoading] =
+    useState(true);
 
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpDate, setFollowUpDate] = useState("");
-  const [followUpNote, setFollowUpNote] = useState("");
+  const [error, setError] =
+    useState("");
 
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [activeTab, setActiveTab] =
+    useState("all");
+
+  const [noteText, setNoteText] =
+    useState("");
+
+  const [showFollowUp, setShowFollowUp] =
+    useState(false);
+
+  const [followUpDate, setFollowUpDate] =
+    useState("");
+
+  const [followUpNote, setFollowUpNote] =
+    useState("");
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [notice, setNotice] =
+    useState("");
 
   const loadLead = async () => {
     const token = getToken();
 
     if (!token) {
-      setError("Authentication required. Please sign in again.");
+      setError(
+        "Authentication required. Please sign in again."
+      );
+
       setLoading(false);
+
       return;
     }
 
@@ -200,19 +248,24 @@ export default function LeadDetails({ leadId, user, onBack }) {
 
     try {
       const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}`),
+        buildApiUrl(
+          `/api/leads/${leadId}`
+        ),
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization:
+              `Bearer ${token}`,
           },
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to load lead"
+          data.message ||
+            "Unable to load lead"
         );
       }
 
@@ -220,7 +273,8 @@ export default function LeadDetails({ leadId, user, onBack }) {
       setError("");
     } catch (loadError) {
       setError(
-        loadError.message || "Unable to load lead"
+        loadError.message ||
+          "Unable to load lead"
       );
     } finally {
       setLoading(false);
@@ -236,18 +290,21 @@ export default function LeadDetails({ leadId, user, onBack }) {
     [lead]
   );
 
-  const visibleActivities = activities.filter(
-    (activity) =>
-      activeTab === "all" ||
-      activity.type === activeTab
-  );
+  const visibleActivities =
+    activities.filter(
+      (activity) =>
+        activeTab === "all" ||
+        activity.type === activeTab
+    );
 
   const savedNotes = useMemo(
     () => getSavedNotes(lead),
     [lead]
   );
 
-  const phone = normalizePhone(lead?.phone);
+  const phone = normalizePhone(
+    lead?.phone
+  );
 
   const nextFollowUp = useMemo(
     () => getNextFollowUp(lead),
@@ -264,44 +321,124 @@ export default function LeadDetails({ leadId, user, onBack }) {
 
     try {
       const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}/notes`),
+        buildApiUrl(
+          `/api/leads/${leadId}/notes`
+        ),
         {
           method: "POST",
+
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${getToken()}`,
           },
+
           body: JSON.stringify({
             text,
-            userName: user?.name || "",
+            userName:
+              user?.name || "",
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to save note"
+          data.message ||
+            "Unable to save note"
         );
       }
 
       setLead(data.lead);
+
       setNoteText("");
-      setNotice("Note saved successfully.");
+
+      setNotice(
+        "Note saved successfully."
+      );
     } catch (saveError) {
       setNotice(
-        saveError.message || "Unable to save note"
+        saveError.message ||
+          "Unable to save note"
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const saveFollowUp = async (event) => {
+  /*
+   * =========================================
+   * SAVE FOLLOW-UP
+   * =========================================
+   *
+   * IMPORTANT:
+   * datetime-local gives browser local
+   * date/time without timezone.
+   *
+   * Example:
+   * 2026-09-19T10:40
+   *
+   * new Date() interprets this in the
+   * user's local timezone (India = +05:30).
+   *
+   * toISOString() converts that exact
+   * moment to UTC for backend/database.
+   *
+   * When displayed again, Intl.DateTimeFormat
+   * converts it back to local time.
+   */
+  const saveFollowUp = async (
+    event
+  ) => {
     event.preventDefault();
 
-    if (!followUpDate) return;
+    if (!followUpDate) {
+      setNotice(
+        "Please select date and time."
+      );
+
+      return;
+    }
+
+    /*
+     * Convert the selected local
+     * datetime into a real Date object.
+     */
+    const selectedDate =
+      new Date(followUpDate);
+
+    /*
+     * Validate selected date.
+     */
+    if (
+      Number.isNaN(
+        selectedDate.getTime()
+      )
+    ) {
+      setNotice(
+        "Please select a valid date and time."
+      );
+
+      return;
+    }
+
+    /*
+     * Don't allow an old date/time.
+     */
+    if (
+      selectedDate.getTime() <
+      Date.now()
+    ) {
+      setNotice(
+        "Please select a future date and time."
+      );
+
+      return;
+    }
 
     setSaving(true);
     setNotice("");
@@ -313,18 +450,30 @@ export default function LeadDetails({ leadId, user, onBack }) {
         ),
         {
           method: "POST",
+
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${getToken()}`,
           },
+
           body: JSON.stringify({
-            date: followUpDate,
-            note: followUpNote.trim(),
+            /*
+             * Store exact selected moment.
+             */
+            date:
+              selectedDate.toISOString(),
+
+            note:
+              followUpNote.trim(),
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -333,11 +482,29 @@ export default function LeadDetails({ leadId, user, onBack }) {
         );
       }
 
+      /*
+       * Update lead with latest
+       * follow-up data.
+       */
       setLead(data.lead);
+
+      /*
+       * Clear form.
+       */
       setFollowUpDate("");
       setFollowUpNote("");
+
+      /*
+       * Close modal.
+       */
       setShowFollowUp(false);
-      setNotice("Follow-up scheduled successfully.");
+
+      /*
+       * Success message.
+       */
+      setNotice(
+        "Follow-up scheduled successfully."
+      );
     } catch (saveError) {
       setNotice(
         saveError.message ||
@@ -350,6 +517,10 @@ export default function LeadDetails({ leadId, user, onBack }) {
 
   const openFollowUpModal = () => {
     setNotice("");
+
+    setFollowUpDate("");
+    setFollowUpNote("");
+
     setShowFollowUp(true);
   };
 
@@ -381,6 +552,7 @@ export default function LeadDetails({ leadId, user, onBack }) {
 
   return (
     <div className="lead-details-page">
+
       <button
         type="button"
         className="lead-details-back"
@@ -389,15 +561,25 @@ export default function LeadDetails({ leadId, user, onBack }) {
         Leads &gt; {lead.name}
       </button>
 
+      {/* =========================================
+          HERO
+      ========================================== */}
+
       <section className="lead-detail-hero">
+
         <div className="lead-detail-identity">
+
           <span className="lead-detail-avatar">
             {getInitials(lead.name)}
           </span>
 
           <div>
+
             <div className="lead-detail-title-row">
-              <h1>{lead.name}</h1>
+
+              <h1>
+                {lead.name}
+              </h1>
 
               <span className="lead-stage-pill">
                 {lead.stage || "—"}
@@ -408,28 +590,47 @@ export default function LeadDetails({ leadId, user, onBack }) {
                   {lead.priority}
                 </span>
               )}
+
             </div>
 
             <p>
               {lead.phone || "—"}
+
               <span> • </span>
+
               {lead.email || "—"}
             </p>
 
             <div className="lead-detail-meta">
-              <span>{lead.source || "—"}</span>
-              <span>{lead.service || "—"}</span>
+
               <span>
-                {lead.preferredDoctor || "—"}
+                {lead.source || "—"}
               </span>
+
               <span>
-                {getOwner(lead, user)}
+                {lead.service || "—"}
               </span>
+
+              <span>
+                {lead.preferredDoctor ||
+                  "—"}
+              </span>
+
+              <span>
+                {getOwner(
+                  lead,
+                  user
+                )}
+              </span>
+
             </div>
+
           </div>
+
         </div>
 
         <div className="lead-detail-actions">
+
           {lead.phone && (
             <a
               className="dash-btn"
@@ -453,7 +654,9 @@ export default function LeadDetails({ leadId, user, onBack }) {
           <button
             type="button"
             className="dash-btn"
-            onClick={openFollowUpModal}
+            onClick={
+              openFollowUpModal
+            }
           >
             Follow-up
           </button>
@@ -489,27 +692,40 @@ export default function LeadDetails({ leadId, user, onBack }) {
               Email
             </a>
           )}
+
         </div>
 
         <div className="lead-detail-summary-bar">
+
           <div>
+
             <strong>
               {lead.stage || "—"}
             </strong>
-            <span>Status</span>
+
+            <span>
+              Status
+            </span>
+
           </div>
 
           <div>
+
             <strong>
               {formatDate(
                 lead.createdAt,
                 true
               )}
             </strong>
-            <span>Created date</span>
+
+            <span>
+              Created date
+            </span>
+
           </div>
 
           <div className="lead-next-follow-up-summary">
+
             <strong>
               {nextFollowUp
                 ? formatFollowUpDate(
@@ -526,27 +742,46 @@ export default function LeadDetails({ leadId, user, onBack }) {
                 : "—"}
             </span>
 
-            <small>Follow-up</small>
+            <small>
+              Follow-up
+            </small>
+
           </div>
+
         </div>
+
       </section>
 
+      {/* =========================================
+          MAIN CONTENT
+      ========================================== */}
+
       <div className="lead-details-layout">
+
         <main>
+
+          {/* NOTE COMPOSER */}
+
           <section className="lead-note-composer">
+
             <textarea
               value={noteText}
               onChange={(event) =>
-                setNoteText(event.target.value)
+                setNoteText(
+                  event.target.value
+                )
               }
               placeholder="Add a note about this lead — what was discussed, objections, next steps..."
             />
 
             <div>
+
               <button
                 type="button"
                 className="lead-secondary-btn"
-                onClick={openFollowUpModal}
+                onClick={
+                  openFollowUpModal
+                }
               >
                 Add follow-up
               </button>
@@ -556,14 +791,17 @@ export default function LeadDetails({ leadId, user, onBack }) {
                 className="dash-btn primary"
                 onClick={saveNote}
                 disabled={
-                  saving || !noteText.trim()
+                  saving ||
+                  !noteText.trim()
                 }
               >
                 {saving
                   ? "Saving..."
                   : "Save note"}
               </button>
+
             </div>
+
           </section>
 
           {notice && (
@@ -572,39 +810,63 @@ export default function LeadDetails({ leadId, user, onBack }) {
             </p>
           )}
 
+          {/* =========================================
+              ACTIVITY TIMELINE
+          ========================================== */}
+
           <section className="lead-activity-card">
+
             <header>
-              <h2>Activity timeline</h2>
+
+              <h2>
+                Activity timeline
+              </h2>
 
               <div>
+
                 {[
                   ["all", "All"],
                   ["notes", "Notes"],
                   ["calls", "Calls"],
-                  ["whatsapp", "WhatsApp"],
-                ].map(([value, label]) => (
-                  <button
-                    type="button"
-                    className={
-                      activeTab === value
-                        ? "active"
-                        : ""
-                    }
-                    key={value}
-                    onClick={() =>
-                      setActiveTab(value)
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
+                  [
+                    "whatsapp",
+                    "WhatsApp",
+                  ],
+                ].map(
+                  ([value, label]) => (
+                    <button
+                      type="button"
+                      className={
+                        activeTab === value
+                          ? "active"
+                          : ""
+                      }
+                      key={value}
+                      onClick={() =>
+                        setActiveTab(
+                          value
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+
               </div>
+
             </header>
 
             <div className="lead-activity-list">
+
               {visibleActivities.length ? (
+
                 visibleActivities.map(
-                  (activity, index) => (
+                  (
+                    activity,
+                    index
+                  ) => (
+
                     <article
                       key={`${activity.title}-${activity.date}-${index}`}
                       className={
@@ -614,11 +876,13 @@ export default function LeadDetails({ leadId, user, onBack }) {
                           : ""
                       }
                     >
+
                       <span className="lead-activity-icon">
                         {activity.icon}
                       </span>
 
                       <div>
+
                         <strong>
                           {activity.title}
                         </strong>
@@ -626,7 +890,9 @@ export default function LeadDetails({ leadId, user, onBack }) {
                         {activity.title ===
                           "Follow-up scheduled" &&
                           activity.followUpDate && (
+
                             <div className="lead-follow-up-datetime">
+
                               <span>
                                 {formatFollowUpDate(
                                   activity.followUpDate
@@ -638,13 +904,17 @@ export default function LeadDetails({ leadId, user, onBack }) {
                                   activity.followUpDate
                                 )}
                               </span>
+
                             </div>
+
                           )}
 
                         {activity.title ===
                           "Follow-up completed" &&
                           activity.followUpDate && (
+
                             <div className="lead-follow-up-datetime completed">
+
                               <span>
                                 Completed
                               </span>
@@ -652,13 +922,17 @@ export default function LeadDetails({ leadId, user, onBack }) {
                               <span>
                                 {formatFollowUpDate(
                                   activity.followUpDate
-                                )}{" "}
-                                ·{" "}
+                                )}
+
+                                {" · "}
+
                                 {formatFollowUpTime(
                                   activity.followUpDate
                                 )}
                               </span>
+
                             </div>
+
                           )}
 
                         <p>
@@ -670,44 +944,82 @@ export default function LeadDetails({ leadId, user, onBack }) {
                             getOwner(
                               lead,
                               user
-                            )}{" "}
-                          ·{" "}
+                            )}
+
+                          {" · "}
+
                           {formatDate(
                             activity.date,
                             true
                           )}
                         </small>
+
                       </div>
+
                     </article>
+
                   )
                 )
+
               ) : (
+
                 <p className="lead-detail-empty">
                   No activity recorded yet.
                 </p>
+
               )}
+
             </div>
+
           </section>
+
         </main>
 
+        {/* =========================================
+            SIDEBAR
+        ========================================== */}
+
         <aside>
+
           <section className="lead-information-card">
+
             <header>
-              <h2>Lead information</h2>
+
+              <h2>
+                Lead information
+              </h2>
+
             </header>
 
             {[
-              ["Source", lead.source],
-              ["Service", lead.service],
+              [
+                "Source",
+                lead.source,
+              ],
+
+              [
+                "Service",
+                lead.service,
+              ],
+
               [
                 "Doctor / Preferred doctor",
                 lead.preferredDoctor,
               ],
+
               [
                 "Assigned staff / Owner",
-                getOwner(lead, user),
+                getOwner(
+                  lead,
+                  user
+                ),
               ],
-              ["Priority", lead.priority],
+
+              [
+                "Priority",
+                lead.priority,
+              ],
+
               [
                 "Next follow-up",
                 nextFollowUp
@@ -718,11 +1030,17 @@ export default function LeadDetails({ leadId, user, onBack }) {
                     )}`
                   : null,
               ],
+
               [
                 "Estimated value",
                 lead.estimatedValue,
               ],
-              ["Lead ID", lead._id],
+
+              [
+                "Lead ID",
+                lead._id,
+              ],
+
               [
                 "Created date",
                 formatDate(
@@ -730,57 +1048,104 @@ export default function LeadDetails({ leadId, user, onBack }) {
                   true
                 ),
               ],
-            ].map(([label, value]) => (
-              <div
-                className="lead-information-row"
-                key={label}
-              >
-                <span>{label}</span>
+            ].map(
+              ([label, value]) => (
 
-                <strong>
-                  {value || "—"}
-                </strong>
-              </div>
-            ))}
+                <div
+                  className="lead-information-row"
+                  key={label}
+                >
+
+                  <span>
+                    {label}
+                  </span>
+
+                  <strong>
+                    {value || "—"}
+                  </strong>
+
+                </div>
+
+              )
+            )}
+
           </section>
 
+          {/* SAVED NOTES */}
+
           {savedNotes.length > 0 && (
+
             <section className="lead-information-card">
+
               <header>
-                <h2>First note</h2>
+
+                <h2>
+                  First note
+                </h2>
+
               </header>
 
               <div className="lead-saved-notes">
-                {savedNotes.map((note, index) => (
-                  <div
-                    className="lead-saved-note"
-                    key={`${note.createdAt || "note"}-${index}`}
-                  >
-                    <p>{note.text}</p>
 
-                    <small>
-                      {note.userName ||
-                        getOwner(lead, user)}
-                      {note.createdAt
-                        ? ` · ${formatDate(
-                            note.createdAt,
-                            true
-                          )}`
-                        : ""}
-                    </small>
-                  </div>
-                ))}
+                {savedNotes.map(
+                  (
+                    note,
+                    index
+                  ) => (
+
+                    <div
+                      className="lead-saved-note"
+                      key={`${note.createdAt || "note"}-${index}`}
+                    >
+
+                      <p>
+                        {note.text}
+                      </p>
+
+                      <small>
+
+                        {note.userName ||
+                          getOwner(
+                            lead,
+                            user
+                          )}
+
+                        {note.createdAt
+                          ? ` · ${formatDate(
+                              note.createdAt,
+                              true
+                            )}`
+                          : ""}
+
+                      </small>
+
+                    </div>
+
+                  )
+                )}
+
               </div>
+
             </section>
+
           )}
 
+          {/* NEXT FOLLOW-UP */}
+
           {nextFollowUp && (
+
             <section className="lead-information-card lead-next-follow-up-card">
+
               <header>
-                <h2>Next follow-up</h2>
+
+                <h2>
+                  Next follow-up
+                </h2>
+
               </header>
 
               <div className="lead-follow-up-highlight">
+
                 <strong>
                   {formatFollowUpDate(
                     nextFollowUp.date
@@ -792,6 +1157,7 @@ export default function LeadDetails({ leadId, user, onBack }) {
                     nextFollowUp.date
                   )}
                 </span>
+
               </div>
 
               {nextFollowUp.note && (
@@ -801,6 +1167,7 @@ export default function LeadDetails({ leadId, user, onBack }) {
               )}
 
               <div className="lead-follow-up-actions">
+
                 {lead.phone && (
                   <a
                     className="dash-btn"
@@ -820,28 +1187,45 @@ export default function LeadDetails({ leadId, user, onBack }) {
                     WhatsApp
                   </a>
                 )}
+
               </div>
+
             </section>
+
           )}
+
         </aside>
+
       </div>
 
+      {/* =========================================
+          FOLLOW-UP MODAL
+      ========================================== */}
+
       {showFollowUp && (
+
         <div
           className="lead-modal-backdrop"
           onClick={() =>
+            !saving &&
             setShowFollowUp(false)
           }
         >
+
           <form
             className="lead-follow-up-modal"
-            onSubmit={saveFollowUp}
+            onSubmit={
+              saveFollowUp
+            }
             onClick={(event) =>
               event.stopPropagation()
             }
           >
+
             <div className="lead-follow-up-modal-header">
+
               <div>
+
                 <span className="lead-follow-up-modal-label">
                   FOLLOW-UP
                 </span>
@@ -851,9 +1235,11 @@ export default function LeadDetails({ leadId, user, onBack }) {
                 </h2>
 
                 <p>
-                  Set a date and time to follow
-                  up with {lead.name}.
+                  Set a date and time to
+                  follow up with{" "}
+                  {lead.name}.
                 </p>
+
               </div>
 
               <button
@@ -862,19 +1248,30 @@ export default function LeadDetails({ leadId, user, onBack }) {
                 onClick={() =>
                   setShowFollowUp(false)
                 }
+                disabled={saving}
                 aria-label="Close"
               >
                 ×
               </button>
+
             </div>
 
             <div className="lead-follow-up-form">
+
               <label>
-                <span>Date & time</span>
+
+                <span>
+                  Date & time
+                </span>
 
                 <input
                   type="datetime-local"
                   value={followUpDate}
+                  min={
+                    new Date()
+                      .toISOString()
+                      .slice(0, 16)
+                  }
                   onChange={(event) =>
                     setFollowUpDate(
                       event.target.value
@@ -882,10 +1279,14 @@ export default function LeadDetails({ leadId, user, onBack }) {
                   }
                   required
                 />
+
               </label>
 
               <label>
-                <span>Follow-up note</span>
+
+                <span>
+                  Follow-up note
+                </span>
 
                 <textarea
                   value={followUpNote}
@@ -896,16 +1297,20 @@ export default function LeadDetails({ leadId, user, onBack }) {
                   }
                   placeholder="What should you discuss or follow up on?"
                 />
+
               </label>
+
             </div>
 
             <div className="lead-follow-up-modal-footer">
+
               <button
                 type="button"
                 className="lead-secondary-btn"
                 onClick={() =>
                   setShowFollowUp(false)
                 }
+                disabled={saving}
               >
                 Cancel
               </button>
@@ -919,10 +1324,15 @@ export default function LeadDetails({ leadId, user, onBack }) {
                   ? "Scheduling..."
                   : "Schedule follow-up"}
               </button>
+
             </div>
+
           </form>
+
         </div>
+
       )}
+
     </div>
   );
 }

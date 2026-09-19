@@ -350,6 +350,9 @@ export default function FollowUps({
   const [leads, setLeads] =
     useState([]);
 
+  const [services, setServices] =
+    useState([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -377,6 +380,9 @@ export default function FollowUps({
   const [showModal, setShowModal] =
     useState(false);
 
+  const [isRescheduling, setIsRescheduling] =
+    useState(false);
+
   const [selectedLeadId, setSelectedLeadId] =
     useState(
       initialLead?._id || ""
@@ -390,6 +396,7 @@ export default function FollowUps({
       channel: "Call",
       assignedTo: "",
       priority: "Medium",
+      service: "",
       note: "",
       reminder: true,
       repeatWeekly: false,
@@ -411,36 +418,70 @@ export default function FollowUps({
 
     try {
       setLoading(true);
+      setError("");
 
-      const response = await fetch(
-        buildApiUrl("/api/leads"),
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const [leadsResponse, servicesResponse] =
+        await Promise.all([
+          fetch(
+            buildApiUrl("/api/leads"),
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          ),
+          fetch(
+            buildApiUrl("/api/services"),
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          ),
+        ]);
 
-      const data =
-        await response.json();
+      const leadsData =
+        await leadsResponse.json();
 
-      if (!response.ok) {
+      if (!leadsResponse.ok) {
         throw new Error(
-          data?.message ||
+          leadsData?.message ||
           "Unable to load follow-ups."
         );
       }
 
       setLeads(
-        Array.isArray(data.leads)
-          ? data.leads
+        Array.isArray(leadsData.leads)
+          ? leadsData.leads
           : []
       );
+
+      /*
+       * Services are maintained from Settings > Services.
+       * Only services belonging to the logged-in clinic/user
+       * are returned by the authenticated API.
+       */
+      if (servicesResponse.ok) {
+        const servicesData =
+          await servicesResponse.json();
+
+        setServices(
+          Array.isArray(
+            servicesData?.services
+          )
+            ? servicesData.services
+            : []
+        );
+      } else {
+        setServices([]);
+      }
     } catch (err) {
       console.error(
         "LOAD FOLLOW UPS ERROR:",
         err
       );
+
       setError(
         err.message ||
         "Unable to load follow-ups."
@@ -626,26 +667,82 @@ export default function FollowUps({
       ];
     }, [allFollowUps]);
 
-  const openSchedule = (lead = null) => {
+  const openSchedule = (
+    lead = null,
+    existingFollowUp = null
+  ) => {
+    /*
+     * New "Schedule follow-up" from the Follow-ups page
+     * starts with no lead selected, so the user can choose
+     * ANY lead from the complete leads list.
+     *
+     * Reschedule keeps the existing lead fixed and prefills
+     * its exact local date/time.
+     */
     const targetLead =
       lead ||
-      initialLead ||
-      leads[0] ||
-      null;
+      (existingFollowUp
+        ? initialLead
+        : null);
 
     setSelectedLeadId(
       targetLead?._id || ""
     );
 
+    setIsRescheduling(
+      Boolean(existingFollowUp)
+    );
+
+    let existingDate = "";
+    let existingTime = "";
+
+    if (existingFollowUp?.date) {
+      const existing = new Date(
+        existingFollowUp.date
+      );
+
+      if (!Number.isNaN(existing.getTime())) {
+        const year =
+          existing.getFullYear();
+
+        const month = String(
+          existing.getMonth() + 1
+        ).padStart(2, "0");
+
+        const day = String(
+          existing.getDate()
+        ).padStart(2, "0");
+
+        const hours = String(
+          existing.getHours()
+        ).padStart(2, "0");
+
+        const minutes = String(
+          existing.getMinutes()
+        ).padStart(2, "0");
+
+        existingDate =
+          `${year}-${month}-${day}`;
+
+        existingTime =
+          `${hours}:${minutes}`;
+      }
+    }
+
     setForm({
-      date: "",
-      time: "",
+      date: existingDate,
+      time: existingTime,
       purpose: "",
       channel: "Call",
-      assignedTo:
-        targetLead?.owner || "",
+      assignedTo: "",
       priority: "Medium",
-      note: "",
+      service:
+        targetLead?.service ||
+        existingFollowUp?.service ||
+        "",
+      note:
+        existingFollowUp?.note ||
+        "",
       reminder: true,
       repeatWeekly: false,
     });
@@ -658,6 +755,7 @@ export default function FollowUps({
     if (saving) return;
 
     setShowModal(false);
+    setIsRescheduling(false);
     setError("");
   };
 
@@ -707,9 +805,19 @@ export default function FollowUps({
       setSaving(true);
       setError("");
 
+      // form.date + form.time are local browser values.
+      // new Date() interprets them in the browser timezone;
+      // toISOString() stores that exact moment for the API.
       const dateTime = new Date(
         `${form.date}T${form.time}`
       );
+
+      if (Number.isNaN(dateTime.getTime())) {
+        setError(
+          "Please select a valid date and time."
+        );
+        return;
+      }
 
       const response = await fetch(
         buildApiUrl(
@@ -723,21 +831,10 @@ export default function FollowUps({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            date:
-              dateTime.toISOString(),
-            note: form.note,
-            purpose:
-              form.purpose,
-            channel:
-              form.channel,
-            assignedTo:
-              form.assignedTo,
-            priority:
-              form.priority,
-            reminder:
-              form.reminder,
-            repeatWeekly:
-              form.repeatWeekly,
+            date: dateTime.toISOString(),
+            note: form.note.trim(),
+            service: form.service || "",
+            reminder: true,
           }),
         }
       );
@@ -1531,15 +1628,6 @@ export default function FollowUps({
                               {item.owner}
                             </span>
                           )}
-
-                          <span>
-                            <Icon
-                              name="phone"
-                              size={13}
-                            />
-                            {item.channel}
-                          </span>
-
                           {item.service && (
                             <span className="followup-service">
                               {item.service}
@@ -1615,13 +1703,13 @@ export default function FollowUps({
                             WhatsApp
                           </span>
                         </button>
-
                         <button
                           type="button"
-                          title="Schedule another follow-up"
+                          title="Reschedule follow-up"
                           onClick={() =>
                             openSchedule(
-                              item.lead
+                              item.lead,
+                              item
                             )
                           }
                         >
@@ -1630,7 +1718,7 @@ export default function FollowUps({
                             size={17}
                           />
                           <span>
-                            Follow-up
+                            Reschedule
                           </span>
                         </button>
 
@@ -1680,12 +1768,15 @@ export default function FollowUps({
                 </span>
 
                 <h2>
-                  Schedule follow-up
+                  {isRescheduling
+                    ? "Reschedule follow-up"
+                    : "Schedule follow-up"}
                 </h2>
 
                 <p>
-                  Keep the lead moving with
-                  the next action.
+                  {isRescheduling
+                    ? "Update the date, time and note for this follow-up."
+                    : "Keep the lead moving with the next action."}
                 </p>
               </div>
 
@@ -1715,16 +1806,19 @@ export default function FollowUps({
                       : "Lead"}
                   </label>
 
-                  {selectedLead ? (
+                  {isRescheduling ? (
                     <div className="followup-selected-lead">
                       <span>
                         {getInitials(
-                          selectedLead.name
+                          selectedLead?.name ||
+                          initialLead?.name ||
+                          ""
                         )}
                       </span>
 
                       <strong>
-                        {selectedLead.name ||
+                        {selectedLead?.name ||
+                          initialLead?.name ||
                           "Unnamed lead"}
                       </strong>
                     </div>
@@ -1743,13 +1837,12 @@ export default function FollowUps({
                               item._id === id
                           );
 
-                        if (lead) {
-                          updateForm(
-                            "assignedTo",
-                            lead.owner || ""
-                          );
-                        }
+                        updateForm(
+                          "service",
+                          lead?.service || ""
+                        );
                       }}
+                      required
                     >
                       <option value="">
                         {isHealthcare(user)
@@ -1762,7 +1855,8 @@ export default function FollowUps({
                           value={lead._id}
                           key={lead._id}
                         >
-                          {lead.name}
+                          {lead.name ||
+                            "Unnamed lead"}
                           {lead.phone
                             ? ` · ${lead.phone}`
                             : ""}
@@ -1826,185 +1920,41 @@ export default function FollowUps({
 
                 </div>
 
-                <div className="followup-form-grid">
+                <div className="followup-form-group">
 
-                  <div className="followup-form-group">
+                  <label>
+                    {healthcare
+                      ? "Treatment"
+                      : "Service"}
+                  </label>
 
-                    <label>
-                      Purpose
-                    </label>
+                  <select
+                    value={form.service}
+                    onChange={(event) =>
+                      updateForm(
+                        "service",
+                        event.target.value
+                      )
+                    }
+                    required
+                  >
+                    <option value="">
+                      {healthcare
+                        ? "Select treatment"
+                        : "Select service"}
+                    </option>
 
-                    <input
-                      type="text"
-                      value={
-                        form.purpose
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "purpose",
-                          event.target
-                            .value
-                        )
-                      }
-                      placeholder="e.g. Confirm consultation"
-                    />
-
-                  </div>
-
-                  <div className="followup-form-group">
-
-                    <label>
-                      Channel
-                    </label>
-
-                    <select
-                      value={
-                        form.channel
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "channel",
-                          event.target
-                            .value
-                        )
-                      }
-                    >
-                      <option value="Call">
-                        Call
-                      </option>
-                      <option value="WhatsApp">
-                        WhatsApp
-                      </option>
-                      <option value="Email">
-                        Email
-                      </option>
-                      <option value="In person">
-                        In person
-                      </option>
-                    </select>
-
-                  </div>
-
-                </div>
-
-                {healthcare && (
-                  <div className="followup-form-group">
-
-                    <label>
-                      Treatment / Service
-                    </label>
-
-                    <input
-                      type="text"
-                      value={
-                        selectedLead?.service ||
-                        initialLead?.service ||
-                        ""
-                      }
-                      readOnly
-                      placeholder="Lead service"
-                    />
-
-                  </div>
-                )}
-
-                <div className="followup-form-grid">
-
-                  <div className="followup-form-group">
-
-                    <label>
-                      Assign to
-                    </label>
-
-                    <select
-                      value={
-                        form.assignedTo
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "assignedTo",
-                          event.target
-                            .value
-                        )
-                      }
-                    >
-                      <option value="">
-                        Unassigned
-                      </option>
-
-                      {assignees.map(
-                        (
-                          person
-                        ) => (
-                          <option
-                            value={
-                              person
-                            }
-                            key={
-                              person
-                            }
-                          >
-                            {person}
-                          </option>
-                        )
-                      )}
-
-                      {selectedLead?.owner &&
-                        !assignees.includes(
-                          selectedLead.owner
-                        ) && (
-                          <option
-                            value={
-                              selectedLead.owner
-                            }
-                          >
-                            {
-                              selectedLead.owner
-                            }
-                          </option>
-                        )}
-                    </select>
-
-                  </div>
-
-                  <div className="followup-form-group">
-
-                    <label>
-                      Priority
-                    </label>
-
-                    <select
-                      value={
-                        form.priority
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "priority",
-                          event.target
-                            .value
-                        )
-                      }
-                    >
-                      <option value="Low">
-                        Low
-                      </option>
-                      <option value="Medium">
-                        Medium
-                      </option>
-                      <option value="High">
-                        High
-                      </option>
-                    </select>
-
-                  </div>
+                    {services.map(
+                      (service) => (
+                        <option
+                          key={service._id}
+                          value={service.name}
+                        >
+                          {service.name}
+                        </option>
+                      )
+                    )}
+                  </select>
 
                 </div>
 
@@ -2030,54 +1980,6 @@ export default function FollowUps({
                     }
                     placeholder="Add a note for this follow-up..."
                   />
-
-                </div>
-
-                <div className="followup-modal-options">
-
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={
-                        form.reminder
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "reminder",
-                          event.target
-                            .checked
-                        )
-                      }
-                    />
-
-                    <span>
-                      Reminder
-                    </span>
-                  </label>
-
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={
-                        form.repeatWeekly
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateForm(
-                          "repeatWeekly",
-                          event.target
-                            .checked
-                        )
-                      }
-                    />
-
-                    <span>
-                      Repeat weekly
-                    </span>
-                  </label>
 
                 </div>
 
@@ -2108,8 +2010,12 @@ export default function FollowUps({
                   disabled={saving}
                 >
                   {saving
-                    ? "Scheduling..."
-                    : "Schedule follow-up"}
+                    ? isRescheduling
+                      ? "Rescheduling..."
+                      : "Scheduling..."
+                    : isRescheduling
+                      ? "Reschedule follow-up"
+                      : "Schedule follow-up"}
                 </button>
 
               </div>

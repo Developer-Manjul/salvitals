@@ -71,6 +71,11 @@ const metaIntegrationRoutes = require(
     "./routes/metaIntegrationRoutes"
 );
 
+const googleIntegrationRoutes = require(
+    "./routes/googleIntegrationRoutes"
+);
+
+
 const notificationRoutes = require(
     "./routes/notificationRoutes"
 );
@@ -93,6 +98,10 @@ console.log(
 
 console.log(
     "LEAD ROUTES LOADED"
+);
+
+console.log(
+    "LEAD INTEGRATION ROUTES LOADED"
 );
 
 console.log(
@@ -138,6 +147,12 @@ app.use(
     "/api/integrations/meta",
     metaIntegrationRoutes
 );
+
+app.use(
+    "/api/integrations/google",
+    googleIntegrationRoutes
+);
+
 
 app.use(
     "/api/notifications",

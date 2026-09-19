@@ -50,9 +50,7 @@ function getInitials(name = "") {
 function dateKey(value) {
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
+    if (Number.isNaN(date.getTime())) return "";
 
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -64,9 +62,7 @@ function dateKey(value) {
 function formatCalendarTime(value) {
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
+    if (Number.isNaN(date.getTime())) return "";
 
     return new Intl.DateTimeFormat("en-IN", {
         hour: "2-digit",
@@ -76,28 +72,18 @@ function formatCalendarTime(value) {
 }
 
 function getMonthStart(date) {
-    return new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        1
-    );
+    return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function getMonthEnd(date) {
-    return new Date(
-        date.getFullYear(),
-        date.getMonth() + 1,
-        0
-    );
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
 function buildCalendarDays(monthDate) {
     const start = getMonthStart(monthDate);
     const end = getMonthEnd(monthDate);
-
     const firstDay = start.getDay();
     const totalDays = end.getDate();
-
     const previousMonthEnd = new Date(
         monthDate.getFullYear(),
         monthDate.getMonth(),
@@ -113,10 +99,7 @@ function buildCalendarDays(monthDate) {
             previousMonthEnd.getDate() - i
         );
 
-        days.push({
-            date,
-            currentMonth: false,
-        });
+        days.push({ date, currentMonth: false });
     }
 
     for (let day = 1; day <= totalDays; day++) {
@@ -149,9 +132,7 @@ function buildCalendarDays(monthDate) {
 }
 
 function getFollowUpStatus(item) {
-    const status = String(
-        item?.status || ""
-    ).toLowerCase();
+    const status = String(item?.status || "").toLowerCase();
 
     if (
         status === "completed" ||
@@ -163,13 +144,9 @@ function getFollowUpStatus(item) {
 
     const time = new Date(item?.date).getTime();
 
-    if (!Number.isFinite(time)) {
-        return "upcoming";
-    }
+    if (!Number.isFinite(time)) return "upcoming";
 
-    if (time < Date.now()) {
-        return "overdue";
-    }
+    if (time < Date.now()) return "overdue";
 
     const today = new Date();
     const target = new Date(item.date);
@@ -196,26 +173,17 @@ function normalizeFollowUp(lead, followUp, index) {
         name: lead.name || "Unnamed lead",
         phone: lead.phone || "",
         email: lead.email || "",
-        service: lead.service || "",
-        owner:
-            followUp?.assignedTo ||
-            lead.owner ||
-            "Unassigned",
+        service:
+            followUp?.service ||
+            lead.service ||
+            "",
         date: followUp?.date,
         note: followUp?.note || "",
         purpose:
             followUp?.purpose ||
             followUp?.note ||
             "Follow-up",
-        channel:
-            followUp?.channel ||
-            "Call",
-        priority:
-            followUp?.priority ||
-            "Medium",
-        status:
-            followUp?.status ||
-            "Scheduled",
+        status: followUp?.status || "Scheduled",
     };
 }
 
@@ -235,25 +203,12 @@ function Icon({ name, size = 18 }) {
     const paths = {
         calendar: (
             <>
-                <rect
-                    x="3"
-                    y="4"
-                    width="18"
-                    height="17"
-                    rx="2"
-                />
+                <rect x="3" y="4" width="18" height="17" rx="2" />
                 <path d="M16 2v4M8 2v4M3 10h18" />
             </>
         ),
-
-        chevronLeft: (
-            <path d="m15 18-6-6 6-6" />
-        ),
-
-        chevronRight: (
-            <path d="m9 18 6-6-6-6" />
-        ),
-
+        chevronLeft: <path d="m15 18-6-6 6-6" />,
+        chevronRight: <path d="m9 18 6-6-6-6" />,
         plus: (
             <>
                 <path d="M12 5v14" />
@@ -262,11 +217,7 @@ function Icon({ name, size = 18 }) {
         ),
     };
 
-    return (
-        <svg {...common}>
-            {paths[name] || paths.calendar}
-        </svg>
-    );
+    return <svg {...common}>{paths[name] || paths.calendar}</svg>;
 }
 
 export default function Calendar({
@@ -274,43 +225,33 @@ export default function Calendar({
     onOpenLeadDetails,
 }) {
     const user = passedUser || getUser();
+    const healthcare = isHealthcare(user);
 
     const [leads, setLeads] = useState([]);
+    const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [calendarMonth, setCalendarMonth] =
-        useState(new Date());
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
 
-    const [showModal, setShowModal] =
-        useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [selectedLeadId, setSelectedLeadId] = useState("");
 
-    const [selectedLeadId, setSelectedLeadId] =
-        useState("");
+    const [form, setForm] = useState({
+        date: "",
+        time: "",
+        service: "",
+        note: "",
+    });
 
-    const [form, setForm] =
-        useState({
-            date: "",
-            time: "",
-            purpose: "",
-            channel: "Call",
-            assignedTo: "",
-            priority: "Medium",
-            note: "",
-            reminder: true,
-            repeatWeekly: false,
-        });
-
-    const [saving, setSaving] =
-        useState(false);
-
-    const [formError, setFormError] =
-        useState("");
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState("");
 
     const loadCalendarData = async () => {
         const token = getToken();
 
         if (!token) {
             setLoading(false);
+            setError("Authentication required. Please sign in again.");
             return;
         }
 
@@ -318,35 +259,47 @@ export default function Calendar({
             setLoading(true);
             setError("");
 
-            const response = await fetch(
-                buildApiUrl("/api/leads"),
-                {
+            const [leadsResponse, servicesResponse] = await Promise.all([
+                fetch(buildApiUrl("/api/leads"), {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
-                }
-            );
+                }),
+                fetch(buildApiUrl("/api/services"), {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                }),
+            ]);
 
-            const data = await response.json();
+            const leadsData = await leadsResponse.json();
+            const servicesData = await servicesResponse.json();
 
-            if (!response.ok) {
+            if (!leadsResponse.ok) {
                 throw new Error(
-                    data?.message ||
-                    "Unable to load calendar."
+                    leadsData?.message ||
+                    "Unable to load leads."
                 );
             }
 
             setLeads(
-                Array.isArray(data.leads)
-                    ? data.leads
+                Array.isArray(leadsData?.leads)
+                    ? leadsData.leads
                     : []
             );
-        } catch (err) {
-            console.error(
-                "LOAD CALENDAR ERROR:",
-                err
-            );
 
+            if (servicesResponse.ok && servicesData?.success !== false) {
+                setServices(
+                    Array.isArray(servicesData?.services)
+                        ? servicesData.services
+                        : []
+                );
+            } else {
+                setServices([]);
+            }
+        } catch (err) {
+            console.error("LOAD CALENDAR ERROR:", err);
             setError(
                 err.message ||
                 "Unable to load calendar."
@@ -364,21 +317,17 @@ export default function Calendar({
         const items = [];
 
         leads.forEach((lead) => {
-            if (!Array.isArray(lead.followUps)) {
-                return;
-            }
+            if (!Array.isArray(lead.followUps)) return;
 
-            lead.followUps.forEach(
-                (followUp, index) => {
-                    items.push(
-                        normalizeFollowUp(
-                            lead,
-                            followUp,
-                            index
-                        )
-                    );
-                }
-            );
+            lead.followUps.forEach((followUp, index) => {
+                items.push(
+                    normalizeFollowUp(
+                        lead,
+                        followUp,
+                        index
+                    )
+                );
+            });
         });
 
         return items.sort(
@@ -398,28 +347,14 @@ export default function Calendar({
 
         allFollowUps.forEach((item) => {
             const key = dateKey(item.date);
-
             if (!key) return;
 
-            if (!map[key]) {
-                map[key] = [];
-            }
-
+            if (!map[key]) map[key] = [];
             map[key].push(item);
         });
 
         return map;
     }, [allFollowUps]);
-
-    const assignees = useMemo(() => {
-        return [
-            ...new Set(
-                leads
-                    .map((lead) => lead.owner)
-                    .filter(Boolean)
-            ),
-        ];
-    }, [leads]);
 
     const selectedLead = leads.find(
         (lead) => lead._id === selectedLeadId
@@ -432,39 +367,51 @@ export default function Calendar({
         }));
     };
 
-    const openSchedule = (lead = null) => {
-        const targetLead =
-            lead ||
-            selectedLead ||
-            leads[0] ||
-            null;
-
-        setSelectedLeadId(
-            targetLead?._id || ""
-        );
-
+    const openSchedule = () => {
+        // IMPORTANT: do not automatically select the first lead.
+        setSelectedLeadId("");
         setForm({
             date: "",
             time: "",
-            purpose: "",
-            channel: "Call",
-            assignedTo:
-                targetLead?.owner || "",
-            priority: "Medium",
+            service: "",
             note: "",
-            reminder: true,
-            repeatWeekly: false,
         });
-
         setFormError("");
         setShowModal(true);
     };
 
     const closeModal = () => {
         if (saving) return;
-
         setShowModal(false);
         setFormError("");
+    };
+
+    const handleLeadChange = (event) => {
+        const id = event.target.value;
+        setSelectedLeadId(id);
+
+        const lead = leads.find(
+            (item) => item._id === id
+        );
+
+        // If the selected lead already has a treatment/service,
+        // preselect it only when that treatment exists in Settings.
+        const leadService = String(
+            lead?.service || ""
+        ).trim();
+
+        const matchingService = services.find(
+            (service) =>
+                String(service?.name || "")
+                    .trim()
+                    .toLowerCase() ===
+                leadService.toLowerCase()
+        );
+
+        setForm((previous) => ({
+            ...previous,
+            service: matchingService?.name || "",
+        }));
     };
 
     const saveFollowUp = async (event) => {
@@ -472,21 +419,28 @@ export default function Calendar({
 
         if (!selectedLeadId) {
             setFormError(
-                "Please select a lead."
+                healthcare
+                    ? "Please select a patient."
+                    : "Please select a lead."
             );
             return;
         }
 
         if (!form.date) {
-            setFormError(
-                "Please select a date."
-            );
+            setFormError("Please select a date.");
             return;
         }
 
         if (!form.time) {
+            setFormError("Please select a time.");
+            return;
+        }
+
+        if (!form.service) {
             setFormError(
-                "Please select a time."
+                healthcare
+                    ? "Please select a treatment."
+                    : "Please select a service."
             );
             return;
         }
@@ -495,7 +449,7 @@ export default function Calendar({
 
         if (!token) {
             setFormError(
-                "Your session has expired."
+                "Your session has expired. Please sign in again."
             );
             return;
         }
@@ -504,9 +458,28 @@ export default function Calendar({
             setSaving(true);
             setFormError("");
 
+            // Build the Date using the browser's LOCAL timezone.
+            // The exact selected date/time is therefore preserved.
+            const [year, month, day] = form.date
+                .split("-")
+                .map(Number);
+            const [hours, minutes] = form.time
+                .split(":")
+                .map(Number);
+
             const dateTime = new Date(
-                `${form.date}T${form.time}`
+                year,
+                month - 1,
+                day,
+                hours,
+                minutes,
+                0,
+                0
             );
+
+            if (Number.isNaN(dateTime.getTime())) {
+                throw new Error("Invalid date or time selected.");
+            }
 
             const response = await fetch(
                 buildApiUrl(
@@ -515,20 +488,14 @@ export default function Calendar({
                 {
                     method: "POST",
                     headers: {
-                        "Content-Type":
-                            "application/json",
+                        "Content-Type": "application/json",
                         Authorization: `Bearer ${token}`,
                     },
                     body: JSON.stringify({
                         date: dateTime.toISOString(),
-                        note: form.note,
-                        purpose: form.purpose,
-                        channel: form.channel,
-                        assignedTo: form.assignedTo,
-                        priority: form.priority,
-                        reminder: form.reminder,
-                        repeatWeekly:
-                            form.repeatWeekly,
+                        service: form.service,
+                        note: form.note.trim(),
+                        reminder: true,
                     }),
                 }
             );
@@ -543,6 +510,14 @@ export default function Calendar({
             }
 
             setShowModal(false);
+            setSelectedLeadId("");
+            setForm({
+                date: "",
+                time: "",
+                service: "",
+                note: "",
+            });
+
             await loadCalendarData();
         } catch (err) {
             console.error(
@@ -583,94 +558,65 @@ export default function Calendar({
         setCalendarMonth(new Date());
     };
 
-    const calendarTitle =
-        new Intl.DateTimeFormat("en-IN", {
-            month: "long",
-            year: "numeric",
-        }).format(calendarMonth);
+    const calendarTitle = new Intl.DateTimeFormat("en-IN", {
+        month: "long",
+        year: "numeric",
+    }).format(calendarMonth);
 
     const todayKey = dateKey(new Date());
 
     const openLead = (leadId) => {
-        if (
-            typeof onOpenLeadDetails ===
-            "function"
-        ) {
+        if (typeof onOpenLeadDetails === "function") {
             onOpenLeadDetails(leadId);
         }
     };
 
     return (
         <div className="followups-page calendar-page">
-
             <div className="followups-head">
-
                 <div>
                     <p className="followups-breadcrumb">
                         People / Calendar
                     </p>
-
-                    <h1>
-                        Calendar
-                    </h1>
-
+                    <h1>Calendar</h1>
                     <p className="followups-subtitle">
                         View and manage all scheduled follow-ups
                     </p>
                 </div>
 
                 <div className="followups-head-actions">
-
                     <button
                         type="button"
                         className="followups-schedule-btn"
-                        onClick={() => openSchedule()}
+                        onClick={openSchedule}
                     >
-                        <Icon
-                            name="plus"
-                            size={16}
-                        />
+                        <Icon name="plus" size={16} />
                         Schedule follow-up
                     </button>
-
                 </div>
-
             </div>
 
             <section className="followups-calendar-card">
-
                 <div className="followups-calendar-head">
-
                     <div className="followups-calendar-title">
-
                         <button
                             type="button"
                             onClick={previousMonth}
                         >
-                            <Icon
-                                name="chevronLeft"
-                                size={18}
-                            />
+                            <Icon name="chevronLeft" size={18} />
                         </button>
 
-                        <h2>
-                            {calendarTitle}
-                        </h2>
+                        <h2>{calendarTitle}</h2>
 
                         <button
                             type="button"
                             onClick={nextMonth}
                         >
-                            <Icon
-                                name="chevronRight"
-                                size={18}
-                            />
+                            <Icon name="chevronRight" size={18} />
                         </button>
-
                     </div>
 
                     <div className="followups-calendar-actions">
-
                         <button
                             type="button"
                             onClick={goToToday}
@@ -680,17 +626,12 @@ export default function Calendar({
 
                         <button
                             type="button"
-                            onClick={() => openSchedule()}
+                            onClick={openSchedule}
                         >
-                            <Icon
-                                name="plus"
-                                size={15}
-                            />
+                            <Icon name="plus" size={15} />
                             Schedule
                         </button>
-
                     </div>
-
                 </div>
 
                 {loading ? (
@@ -713,58 +654,41 @@ export default function Calendar({
                                 "FRI",
                                 "SAT",
                             ].map((day) => (
-                                <div key={day}>
-                                    {day}
-                                </div>
+                                <div key={day}>{day}</div>
                             ))}
                         </div>
 
                         <div className="followups-calendar-grid">
-
                             {calendarDays.map(
-                                ({
-                                    date,
-                                    currentMonth,
-                                }) => {
+                                ({ date, currentMonth }) => {
                                     const key = dateKey(date);
-
                                     const dayItems =
-                                        calendarFollowUps[key] ||
-                                        [];
+                                        calendarFollowUps[key] || [];
 
                                     return (
                                         <div
-                                            className={`followups-calendar-day ${currentMonth
-                                                ? ""
-                                                : "outside"
-                                                } ${key === todayKey
-                                                    ? "today"
-                                                    : ""
-                                                }`}
+                                            className={`followups-calendar-day ${
+                                                currentMonth ? "" : "outside"
+                                            } ${
+                                                key === todayKey ? "today" : ""
+                                            }`}
                                             key={key}
                                         >
-
                                             <div className="followups-calendar-day-number">
                                                 {date.getDate()}
                                             </div>
 
                                             <div className="followups-calendar-events">
-
                                                 {dayItems
                                                     .slice(0, 4)
                                                     .map((item) => {
                                                         const status =
-                                                            getFollowUpStatus(
-                                                                item
-                                                            );
+                                                            getFollowUpStatus(item);
 
                                                         return (
                                                             <button
                                                                 type="button"
-                                                                className={`followups-calendar-event ${status} priority-${String(
-                                                                    item.priority ||
-                                                                    "Medium"
-                                                                ).toLowerCase()}`}
+                                                                className={`followups-calendar-event ${status}`}
                                                                 key={item._id}
                                                                 onClick={() =>
                                                                     openLead(
@@ -777,11 +701,9 @@ export default function Calendar({
                                                                         item.date
                                                                     )}
                                                                 </span>
-
                                                                 <strong>
                                                                     {item.name}
                                                                 </strong>
-
                                                                 <small>
                                                                     {item.purpose ||
                                                                         "Follow-up"}
@@ -792,52 +714,35 @@ export default function Calendar({
 
                                                 {dayItems.length > 4 && (
                                                     <span className="followups-calendar-more">
-                                                        +{" "}
-                                                        {dayItems.length - 4}{" "}
-                                                        more
+                                                        + {dayItems.length - 4} more
                                                     </span>
                                                 )}
-
                                             </div>
-
                                         </div>
                                     );
                                 }
                             )}
-
                         </div>
                     </>
                 )}
-
             </section>
 
             {showModal && (
                 <div
                     className="followup-modal-overlay"
                     onMouseDown={(event) => {
-                        if (
-                            event.target ===
-                            event.currentTarget
-                        ) {
+                        if (event.target === event.currentTarget) {
                             closeModal();
                         }
                     }}
                 >
                     <div className="followup-modal">
-
                         <div className="followup-modal-head">
                             <div>
-                                <span>
-                                    FOLLOW-UP
-                                </span>
-
-                                <h2>
-                                    Schedule follow-up
-                                </h2>
-
+                                <span>FOLLOW-UP</span>
+                                <h2>Schedule follow-up</h2>
                                 <p>
-                                    Keep the lead moving with
-                                    the next action.
+                                    Keep the lead moving with the next action.
                                 </p>
                             </div>
 
@@ -845,86 +750,49 @@ export default function Calendar({
                                 type="button"
                                 onClick={closeModal}
                                 disabled={saving}
+                                aria-label="Close"
                             >
                                 ×
                             </button>
                         </div>
 
                         <form onSubmit={saveFollowUp}>
-
                             <div className="followup-modal-body">
-
                                 <div className="followup-form-group">
                                     <label>
-                                        {isHealthcare(user)
+                                        {healthcare
                                             ? "Lead / Patient"
                                             : "Lead"}
                                     </label>
 
-                                    {selectedLead ? (
-                                        <div className="followup-selected-lead">
-                                            <span>
-                                                {getInitials(
-                                                    selectedLead.name
-                                                )}
-                                            </span>
+                                    <select
+                                        value={selectedLeadId}
+                                        onChange={handleLeadChange}
+                                        required
+                                    >
+                                        <option value="">
+                                            {healthcare
+                                                ? "Select lead / patient"
+                                                : "Select lead"}
+                                        </option>
 
-                                            <strong>
-                                                {selectedLead.name ||
-                                                    "Unnamed lead"}
-                                            </strong>
-                                        </div>
-                                    ) : (
-                                        <select
-                                            value={selectedLeadId}
-                                            onChange={(event) => {
-                                                const id =
-                                                    event.target.value;
-
-                                                setSelectedLeadId(id);
-
-                                                const lead =
-                                                    leads.find(
-                                                        (item) =>
-                                                            item._id === id
-                                                    );
-
-                                                if (lead) {
-                                                    updateForm(
-                                                        "assignedTo",
-                                                        lead.owner || ""
-                                                    );
-                                                }
-                                            }}
-                                        >
-                                            <option value="">
-                                                {isHealthcare(user)
-                                                    ? "Select lead / patient"
-                                                    : "Select lead"}
+                                        {leads.map((lead) => (
+                                            <option
+                                                value={lead._id}
+                                                key={lead._id}
+                                            >
+                                                {lead.name || "Unnamed lead"}
+                                                {lead.phone
+                                                    ? ` · ${lead.phone}`
+                                                    : ""}
                                             </option>
-
-                                            {leads.map((lead) => (
-                                                <option
-                                                    value={lead._id}
-                                                    key={lead._id}
-                                                >
-                                                    {lead.name}
-                                                    {lead.phone
-                                                        ? ` · ${lead.phone}`
-                                                        : ""}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className="followup-form-grid">
-
                                     <div className="followup-form-group">
-                                        <label>
-                                            Date
-                                        </label>
-
+                                        <label>Date</label>
                                         <input
                                             type="date"
                                             value={form.date}
@@ -939,10 +807,7 @@ export default function Calendar({
                                     </div>
 
                                     <div className="followup-form-group">
-                                        <label>
-                                            Time
-                                        </label>
-
+                                        <label>Time</label>
                                         <input
                                             type="time"
                                             value={form.time}
@@ -955,157 +820,44 @@ export default function Calendar({
                                             required
                                         />
                                     </div>
-
-                                </div>
-
-                                <div className="followup-form-grid">
-
-                                    <div className="followup-form-group">
-                                        <label>
-                                            Purpose
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            value={form.purpose}
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "purpose",
-                                                    event.target.value
-                                                )
-                                            }
-                                            placeholder="e.g. Confirm consultation"
-                                        />
-                                    </div>
-
-                                    <div className="followup-form-group">
-                                        <label>
-                                            Channel
-                                        </label>
-
-                                        <select
-                                            value={form.channel}
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "channel",
-                                                    event.target.value
-                                                )
-                                            }
-                                        >
-                                            <option value="Call">
-                                                Call
-                                            </option>
-                                            <option value="WhatsApp">
-                                                WhatsApp
-                                            </option>
-                                            <option value="Email">
-                                                Email
-                                            </option>
-                                            <option value="In person">
-                                                In person
-                                            </option>
-                                        </select>
-                                    </div>
-
-                                </div>
-
-                                {isHealthcare(user) && (
-                                    <div className="followup-form-group">
-                                        <label>
-                                            Treatment / Service
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            value={
-                                                selectedLead?.service ||
-                                                ""
-                                            }
-                                            readOnly
-                                            placeholder="Lead service"
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="followup-form-grid">
-
-                                    <div className="followup-form-group">
-                                        <label>
-                                            Assign to
-                                        </label>
-
-                                        <select
-                                            value={form.assignedTo}
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "assignedTo",
-                                                    event.target.value
-                                                )
-                                            }
-                                        >
-                                            <option value="">
-                                                Unassigned
-                                            </option>
-
-                                            {assignees.map(
-                                                (person) => (
-                                                    <option
-                                                        value={person}
-                                                        key={person}
-                                                    >
-                                                        {person}
-                                                    </option>
-                                                )
-                                            )}
-
-                                            {selectedLead?.owner &&
-                                                !assignees.includes(
-                                                    selectedLead.owner
-                                                ) && (
-                                                    <option
-                                                        value={
-                                                            selectedLead.owner
-                                                        }
-                                                    >
-                                                        {selectedLead.owner}
-                                                    </option>
-                                                )}
-                                        </select>
-                                    </div>
-
-                                    <div className="followup-form-group">
-                                        <label>
-                                            Priority
-                                        </label>
-
-                                        <select
-                                            value={form.priority}
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "priority",
-                                                    event.target.value
-                                                )
-                                            }
-                                        >
-                                            <option value="Low">
-                                                Low
-                                            </option>
-                                            <option value="Medium">
-                                                Medium
-                                            </option>
-                                            <option value="High">
-                                                High
-                                            </option>
-                                        </select>
-                                    </div>
-
                                 </div>
 
                                 <div className="followup-form-group">
                                     <label>
-                                        Note
+                                        {healthcare
+                                            ? "Treatment"
+                                            : "Service"}
                                     </label>
 
+                                    <select
+                                        value={form.service}
+                                        onChange={(event) =>
+                                            updateForm(
+                                                "service",
+                                                event.target.value
+                                            )
+                                        }
+                                        required
+                                    >
+                                        <option value="">
+                                            {healthcare
+                                                ? "Select treatment"
+                                                : "Select service"}
+                                        </option>
+
+                                        {services.map((service) => (
+                                            <option
+                                                key={service._id}
+                                                value={service.name}
+                                            >
+                                                {service.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="followup-form-group">
+                                    <label>Note</label>
                                     <textarea
                                         rows="4"
                                         value={form.note}
@@ -1119,56 +871,14 @@ export default function Calendar({
                                     />
                                 </div>
 
-                                <div className="followup-modal-options">
-
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={form.reminder}
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "reminder",
-                                                    event.target.checked
-                                                )
-                                            }
-                                        />
-
-                                        <span>
-                                            Reminder
-                                        </span>
-                                    </label>
-
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                form.repeatWeekly
-                                            }
-                                            onChange={(event) =>
-                                                updateForm(
-                                                    "repeatWeekly",
-                                                    event.target.checked
-                                                )
-                                            }
-                                        />
-
-                                        <span>
-                                            Repeat weekly
-                                        </span>
-                                    </label>
-
-                                </div>
-
                                 {formError && (
                                     <div className="followup-form-error">
                                         {formError}
                                     </div>
                                 )}
-
                             </div>
 
                             <div className="followup-modal-footer">
-
                                 <button
                                     type="button"
                                     className="followup-cancel-btn"
@@ -1187,15 +897,11 @@ export default function Calendar({
                                         ? "Scheduling..."
                                         : "Schedule follow-up"}
                                 </button>
-
                             </div>
-
                         </form>
-
                     </div>
                 </div>
             )}
-
         </div>
     );
 }
