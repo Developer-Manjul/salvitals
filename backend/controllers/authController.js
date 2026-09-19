@@ -5,11 +5,6 @@ const nodemailer = require("nodemailer");
 
 const User = require("../models/User");
 
-
-/* =====================================================
-   JWT TOKEN
-===================================================== */
-
 const generateToken = (user) =>
   jwt.sign(
     {
@@ -22,11 +17,6 @@ const generateToken = (user) =>
       expiresIn: "7d",
     }
   );
-
-
-/* =====================================================
-   USER RESPONSE
-===================================================== */
 
 const formatUserResponse = (user) => ({
   id: user._id.toString(),
@@ -55,7 +45,18 @@ const formatUserResponse = (user) => ({
 
   clinicLogo: user.clinicLogo || "",
 
-  accountSetupCompleted: user.accountSetupCompleted === true,
+  bankName: user.bankName || "",
+
+  accountHolderName: user.accountHolderName || "",
+
+  accountNumber: user.accountNumber || "",
+
+  ifscCode: user.ifscCode || "",
+
+  upiId: user.upiId || "",
+
+  accountSetupCompleted:
+    user.accountSetupCompleted === true,
 
   role: user.role,
 
@@ -64,47 +65,24 @@ const formatUserResponse = (user) => ({
   emailVerified: !!user.emailVerified,
 });
 
-
-/* =====================================================
-   CREATE VERIFICATION TOKEN
-===================================================== */
-
 const createVerificationToken = () => {
+  const rawToken = crypto
+    .randomBytes(32)
+    .toString("hex");
 
-  const rawToken =
-    crypto
-      .randomBytes(32)
-      .toString("hex");
-
-
-  const hashedToken =
-    crypto
-      .createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
 
   return {
-
     rawToken,
-
     hashedToken,
-
-    // 1 HOUR
-    expires:
-      new Date(
-        Date.now() +
-        60 * 60 * 1000
-      ),
-
+    expires: new Date(
+      Date.now() + 60 * 60 * 1000
+    ),
   };
-
 };
-
-
-/* =====================================================
-   SEND VERIFICATION EMAIL
-===================================================== */
 
 async function sendVerificationEmail(user, token) {
   if (
@@ -112,18 +90,26 @@ async function sendVerificationEmail(user, token) {
     !process.env.SMTP_USER ||
     !process.env.SMTP_PASS
   ) {
-    throw new Error("SMTP configuration is missing");
+    throw new Error(
+      "SMTP configuration is missing"
+    );
   }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE) === "true",
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  const transporter =
+    nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(
+        process.env.SMTP_PORT || 587
+      ),
+      secure:
+        String(
+          process.env.SMTP_SECURE
+        ) === "true",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
 
   const base = (
     process.env.FRONTEND_URL ||
@@ -131,36 +117,33 @@ async function sendVerificationEmail(user, token) {
   ).replace(/\/$/, "");
 
   const verificationUrl =
-    `${base}/verify-email?token=${encodeURIComponent(token)}`;
+    `${base}/verify-email?token=${encodeURIComponent(
+      token
+    )}`;
 
   const logoUrl =
     "https://salevitals.com/logo.png";
 
   await transporter.sendMail({
     from:
-      `"SaleVitals" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-
+      `"SaleVitals" <${
+        process.env.SMTP_FROM ||
+        process.env.SMTP_USER
+      }>`,
     to: user.email,
-
     subject:
       "Verify your SaleVitals email",
 
     html: `
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
   <meta charset="UTF-8">
-
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
   >
-
   <title>Verify your SaleVitals email</title>
-
 </head>
 
 <body
@@ -182,9 +165,7 @@ async function sendVerificationEmail(user, token) {
     padding:40px 15px;
   "
 >
-
 <tr>
-
 <td align="center">
 
 <table
@@ -202,7 +183,6 @@ async function sendVerificationEmail(user, token) {
 >
 
 <tr>
-
 <td
   style="
     background:#ffffff;
@@ -263,11 +243,9 @@ async function sendVerificationEmail(user, token) {
 </div>
 
 </td>
-
 </tr>
 
 <tr>
-
 <td
   style="
     padding:32px 60px 35px;
@@ -334,9 +312,7 @@ async function sendVerificationEmail(user, token) {
   cellspacing="0"
   border="0"
 >
-
 <tr>
-
 <td align="center">
 
 <a
@@ -358,9 +334,7 @@ async function sendVerificationEmail(user, token) {
 </a>
 
 </td>
-
 </tr>
-
 </table>
 
 <div
@@ -416,10 +390,8 @@ Your verification link will expire in
     line-height:1.6;
   "
 >
-
-If the button doesn't work, copy and paste
-the link below into your browser:
-
+  If the button doesn't work, copy and paste
+  the link below into your browser:
 </p>
 
 <a
@@ -442,11 +414,9 @@ the link below into your browser:
 </a>
 
 </td>
-
 </tr>
 
 <tr>
-
 <td
   style="
     background:#f8fafc;
@@ -495,31 +465,32 @@ the link below into your browser:
     font-size:10px;
   "
 >
-  <a
-    href="${base}"
-    style="
-      color:#55708f;
-      text-decoration:none;
-    "
-  >
-    Visit SaleVitals
-  </a>
 
-  &nbsp; · &nbsp;
+<a
+  href="${base}"
+  style="
+    color:#55708f;
+    text-decoration:none;
+  "
+>
+  Visit SaleVitals
+</a>
 
-  <a
-    href="${base}/privacy-policy"
-    style="
-      color:#55708f;
-      text-decoration:none;
-    "
-  >
-    Privacy
-  </a>
+&nbsp; · &nbsp;
+
+<a
+  href="${base}/privacy-policy"
+  style="
+    color:#55708f;
+    text-decoration:none;
+  "
+>
+  Privacy
+</a>
+
 </div>
 
 </td>
-
 </tr>
 
 </table>
@@ -537,846 +508,467 @@ the link below into your browser:
 </p>
 
 </td>
-
 </tr>
-
 </table>
 
 </body>
-
 </html>
-  `,
+    `,
   });
 
   return true;
 }
 
+exports.register = async (req, res) => {
+  try {
+    const {
+      name,
+      personName,
+      email,
+      workEmail,
+      password,
+      clinicName,
+      businessName,
+      phone,
+      phoneCountryCode,
+      speciality,
+      numberOfDoctors,
+      displayName,
+      address,
+      gstin,
+      zipCode,
+      website,
+    } = req.body;
 
-/* =====================================================
-   REGISTER
-===================================================== */
+    const finalName = String(
+      name || personName || ""
+    ).trim();
 
-exports.register =
-  async (req, res) => {
+    const finalEmail = String(
+      email || workEmail || ""
+    )
+      .trim()
+      .toLowerCase();
 
-    try {
+    const finalClinic = String(
+      clinicName || businessName || ""
+    ).trim();
 
-      const {
+    if (!finalName) {
+      return res.status(400).json({
+        success: false,
+        message: "Name is required",
+      });
+    }
 
-        name,
-        personName,
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        finalEmail
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please enter a valid email",
+      });
+    }
 
-        email,
-        workEmail,
+    if (!finalClinic) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Business Name is required",
+      });
+    }
 
-        password,
+    if (
+      !password ||
+      password.length < 8
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters",
+      });
+    }
 
-        clinicName,
-        businessName,
+    const existingUser =
+      await User.findOne({
+        email: finalEmail,
+      });
 
-        phone,
-        phoneCountryCode,
-
-        speciality,
-
-        numberOfDoctors,
-
-        displayName,
-
-        address,
-
-        gstin,
-
-        zipCode,
-
-        website,
-
-      } = req.body;
-
-
-      const finalName =
-        String(
-          name ||
-          personName ||
-          ""
-        ).trim();
-
-
-      const finalEmail =
-        String(
-          email ||
-          workEmail ||
-          ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const finalClinic =
-        String(
-          clinicName ||
-          businessName ||
-          ""
-        ).trim();
-
-
-      if (!finalName) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Name is required",
-
-          });
-
-      }
-
-
-      if (
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-          finalEmail
-        )
-      ) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Please enter a valid email",
-
-          });
-
-      }
-
-
-      if (!finalClinic) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Business Name is required",
-
-          });
-
-      }
-
-
-      if (
-        !password ||
-        password.length < 8
-      ) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Password must be at least 8 characters",
-
-          });
-
-      }
-
-
-      const existingUser =
-        await User.findOne({
-
-          email:
-            finalEmail,
-
+    if (existingUser) {
+      if (existingUser.emailVerified) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "An account with this email already exists",
         });
-
-
-      /* =========================================
-         USER ALREADY EXISTS
-      ========================================== */
-
-      if (existingUser) {
-
-
-        if (
-          existingUser.emailVerified
-        ) {
-
-          return res
-            .status(409)
-            .json({
-
-              success: false,
-
-              message:
-                "An account with this email already exists",
-
-            });
-
-        }
-
-
-        const {
-
-          rawToken,
-
-          hashedToken,
-
-          expires,
-
-        } =
-          createVerificationToken();
-
-
-        existingUser.emailVerificationToken =
-          hashedToken;
-
-
-        existingUser.emailVerificationExpires =
-          expires;
-
-
-        await existingUser.save();
-
-
-        await sendVerificationEmail(
-          existingUser,
-          rawToken
-        );
-
-
-        return res
-          .status(200)
-          .json({
-
-            success: true,
-
-            message:
-              "Your account already exists but is not verified. A new verification email has been sent.",
-
-            emailVerificationRequired:
-              true,
-
-            email:
-              existingUser.email,
-
-          });
-
       }
 
-
-      /* =========================================
-         CREATE NEW USER
-      ========================================== */
-
       const {
-
         rawToken,
-
         hashedToken,
-
         expires,
+      } = createVerificationToken();
 
-      } =
-        createVerificationToken();
+      existingUser.emailVerificationToken =
+        hashedToken;
 
+      existingUser.emailVerificationExpires =
+        expires;
 
-      const user =
-        await User.create({
-
-          name:
-            finalName,
-
-          email:
-            finalEmail,
-
-
-          password:
-            await bcrypt.hash(
-              password,
-              12
-            ),
-
-
-          clinicName:
-            finalClinic,
-
-
-          phone:
-            String(
-              phone || ""
-            ).trim(),
-
-
-          phoneCountryCode:
-            String(
-              phoneCountryCode || ""
-            ).trim(),
-
-
-          speciality:
-            String(
-              speciality || ""
-            ).trim(),
-
-
-          numberOfDoctors:
-            String(
-              numberOfDoctors || ""
-            ).trim(),
-
-
-          displayName:
-            String(
-              displayName || ""
-            ).trim(),
-
-
-          address:
-            String(
-              address || ""
-            ).trim(),
-
-
-          gstin:
-            String(
-              gstin || ""
-            )
-              .trim()
-              .toUpperCase(),
-
-
-          zipCode:
-            String(
-              zipCode || ""
-            ).trim(),
-
-
-          website:
-            String(
-              website || ""
-            ).trim(),
-
-
-          emailVerified:
-            false,
-
-
-          emailVerificationToken:
-            hashedToken,
-
-
-          emailVerificationExpires:
-            expires,
-
-        });
-
+      await existingUser.save();
 
       await sendVerificationEmail(
-        user,
+        existingUser,
         rawToken
       );
 
-
-      return res
-        .status(201)
-        .json({
-
-          success: true,
-
-          message:
-            "Account created. Please verify your email.",
-
-
-          user:
-            formatUserResponse(user),
-
-
-          emailVerificationRequired:
-            true,
-
-        });
-
-
-    } catch (error) {
-
-
-      console.error(
-        "Register error:",
-        error
-      );
-
-
-      if (
-        error?.code === 11000
-      ) {
-
-        return res
-          .status(409)
-          .json({
-
-            success: false,
-
-            message:
-              "An account with this email already exists",
-
-          });
-
-      }
-
-
-      return res
-        .status(500)
-        .json({
-
-          success: false,
-
-          message:
-            "Server error while creating account",
-
-        });
-
+      return res.status(200).json({
+        success: true,
+        message:
+          "Your account already exists but is not verified. A new verification email has been sent.",
+        emailVerificationRequired: true,
+        email: existingUser.email,
+      });
     }
 
-  };
+    const {
+      rawToken,
+      hashedToken,
+      expires,
+    } = createVerificationToken();
 
+    const user = await User.create({
+      name: finalName,
 
-/* =====================================================
-   VERIFY EMAIL
-===================================================== */
+      email: finalEmail,
 
-exports.verifyEmail =
-  async (req, res) => {
+      password:
+        await bcrypt.hash(
+          password,
+          12
+        ),
 
-    try {
+      clinicName: finalClinic,
 
-      const token =
-        String(
+      phone: String(
+        phone || ""
+      ).trim(),
 
-          req.body.token ||
-          req.query.token ||
-          ""
+      phoneCountryCode: String(
+        phoneCountryCode || ""
+      ).trim(),
 
-        ).trim();
+      speciality: String(
+        speciality || ""
+      ).trim(),
 
+      numberOfDoctors: String(
+        numberOfDoctors || ""
+      ).trim(),
 
-      if (!token) {
+      displayName: String(
+        displayName || ""
+      ).trim(),
 
-        return res
-          .status(400)
-          .json({
+      address: String(
+        address || ""
+      ).trim(),
 
-            success: false,
+      gstin: String(
+        gstin || ""
+      )
+        .trim()
+        .toUpperCase(),
 
-            message:
-              "Verification token is missing",
+      zipCode: String(
+        zipCode || ""
+      ).trim(),
 
-          });
+      website: String(
+        website || ""
+      ).trim(),
 
-      }
+      emailVerified: false,
 
+      emailVerificationToken:
+        hashedToken,
 
-      const hash =
-        crypto
-          .createHash("sha256")
-          .update(token)
-          .digest("hex");
+      emailVerificationExpires:
+        expires,
+    });
 
+    await sendVerificationEmail(
+      user,
+      rawToken
+    );
 
-      const user =
-        await User.findOne({
+    return res.status(201).json({
+      success: true,
+      message:
+        "Account created. Please verify your email.",
+      user:
+        formatUserResponse(user),
+      emailVerificationRequired:
+        true,
+    });
+  } catch (error) {
+    console.error(
+      "Register error:",
+      error
+    );
 
-          emailVerificationToken:
-            hash,
-
-          emailVerificationExpires: {
-
-            $gt:
-              new Date(),
-
-          },
-
-        });
-
-
-      if (!user) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Invalid or expired verification link",
-
-          });
-
-      }
-
-
-      user.emailVerified =
-        true;
-
-
-      user.emailVerificationToken =
-        undefined;
-
-
-      user.emailVerificationExpires =
-        undefined;
-
-
-      await user.save();
-
-
-      return res.json({
-
-        success: true,
-
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
         message:
-          "Email verified successfully",
+          "An account with this email already exists",
+      });
+    }
 
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while creating account",
+    });
+  }
+};
 
-        token:
-          generateToken(user),
+exports.verifyEmail = async (
+  req,
+  res
+) => {
+  try {
+    const token = String(
+      req.body.token ||
+        req.query.token ||
+        ""
+    ).trim();
 
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification token is missing",
+      });
+    }
 
-        user:
-          formatUserResponse(user),
+    const hash = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
 
+    const user =
+      await User.findOne({
+        emailVerificationToken:
+          hash,
+        emailVerificationExpires: {
+          $gt: new Date(),
+        },
       });
 
-
-    } catch (error) {
-
-
-      console.error(
-        "Verify email error:",
-        error.message
-      );
-
-
-      return res
-        .status(500)
-        .json({
-
-          success: false,
-
-          message:
-            "Unable to verify email",
-
-        });
-
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid or expired verification link",
+      });
     }
 
-  };
+    user.emailVerified = true;
+    user.emailVerificationToken =
+      undefined;
+    user.emailVerificationExpires =
+      undefined;
 
+    await user.save();
 
-/* =====================================================
-   RESEND VERIFICATION EMAIL
-===================================================== */
+    return res.json({
+      success: true,
+      message:
+        "Email verified successfully",
+      token: generateToken(user),
+      user:
+        formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error(
+      "Verify email error:",
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to verify email",
+    });
+  }
+};
 
 exports.resendVerification =
   async (req, res) => {
-
     try {
-
-      const email =
-        String(
-          req.body.email || ""
-        )
-          .trim()
-          .toLowerCase();
-
+      const email = String(
+        req.body.email || ""
+      )
+        .trim()
+        .toLowerCase();
 
       if (!email) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Email is required",
-
-          });
-
+        return res.status(400).json({
+          success: false,
+          message:
+            "Email is required",
+        });
       }
-
 
       const user =
         await User.findOne({
-
           email,
-
         });
 
-
       if (!user) {
-
-        return res
-          .status(404)
-          .json({
-
-            success: false,
-
-            message:
-              "Account not found",
-
-          });
-
+        return res.status(404).json({
+          success: false,
+          message:
+            "Account not found",
+        });
       }
 
-
-      if (
-        user.emailVerified
-      ) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            message:
-              "Email is already verified",
-
-          });
-
+      if (user.emailVerified) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Email is already verified",
+        });
       }
-
 
       const {
-
         rawToken,
-
         hashedToken,
-
         expires,
-
-      } =
-        createVerificationToken();
-
+      } = createVerificationToken();
 
       user.emailVerificationToken =
         hashedToken;
 
-
       user.emailVerificationExpires =
         expires;
 
-
       await user.save();
-
 
       await sendVerificationEmail(
         user,
         rawToken
       );
 
-
       return res.json({
-
         success: true,
-
         message:
           "Verification email sent successfully",
-
       });
-
-
     } catch (error) {
-
-
       console.error(
         "Resend verification error:",
         error.message
       );
 
-
-      return res
-        .status(500)
-        .json({
-
-          success: false,
-
-          message:
-            "Unable to resend verification email",
-
-        });
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to resend verification email",
+      });
     }
-
   };
 
+exports.login = async (
+  req,
+  res
+) => {
+  try {
+    const email = String(
+      req.body.email || ""
+    )
+      .trim()
+      .toLowerCase();
 
-/* =====================================================
-   LOGIN
-===================================================== */
+    const password =
+      req.body.password || "";
 
-exports.login =
-  async (req, res) => {
-
-    try {
-
-      const email =
-        String(
-          req.body.email || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const password =
-        req.body.password || "";
-
-
-      const user =
-        await User.findOne({
-
-          email,
-
-        });
-
-
-      if (
-
-        !user ||
-
-        !(
-          await bcrypt.compare(
-            password,
-            user.password
-          )
-        )
-
-      ) {
-
-        return res
-          .status(401)
-          .json({
-
-            success: false,
-
-            message:
-              "Invalid email or password",
-
-          });
-
-      }
-
-
-      /* EMAIL NOT VERIFIED */
-
-      if (
-        !user.emailVerified
-      ) {
-
-        return res
-          .status(403)
-          .json({
-
-            success: false,
-
-            message:
-              "Please verify your email before logging in.",
-
-            emailVerificationRequired:
-              true,
-
-            email:
-              user.email,
-
-          });
-
-      }
-
-
-      /* ACCOUNT INACTIVE */
-
-      if (
-        user.isActive === false
-      ) {
-
-        return res
-          .status(403)
-          .json({
-
-            success: false,
-
-            message:
-              "Your account is inactive",
-
-          });
-
-      }
-
-
-      return res.json({
-
-        success: true,
-
-        token:
-          generateToken(user),
-
-        user:
-          formatUserResponse(user),
-
+    const user =
+      await User.findOne({
+        email,
       });
 
-
-    } catch (error) {
-
-
-      console.error(
-        "Login error:",
-        error.message
-      );
-
-
-      return res
-        .status(500)
-        .json({
-
-          success: false,
-
-          message:
-            "Login failed",
-
-        });
-
+    if (
+      !user ||
+      !(await bcrypt.compare(
+        password,
+        user.password
+      ))
+    ) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Invalid email or password",
+      });
     }
 
-  };
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Please verify your email before logging in.",
+        emailVerificationRequired:
+          true,
+        email: user.email,
+      });
+    }
 
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your account is inactive",
+      });
+    }
 
-/* =====================================================
-   COMPLETE ACCOUNT SETUP
-===================================================== */
+    return res.json({
+      success: true,
+      token: generateToken(user),
+      user:
+        formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error(
+      "Login error:",
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+    });
+  }
+};
 
 exports.completeSetup =
   async (req, res) => {
-
     try {
-
       const authorization =
         req.headers.authorization || "";
 
-      if (!authorization.startsWith("Bearer ")) {
+      if (
+        !authorization.startsWith(
+          "Bearer "
+        )
+      ) {
         return res.status(401).json({
           success: false,
-          message: "Authentication required",
+          message:
+            "Authentication required",
         });
       }
 
@@ -1385,12 +977,16 @@ exports.completeSetup =
         process.env.JWT_SECRET
       );
 
-      const user = await User.findById(decoded.id);
+      const user =
+        await User.findById(
+          decoded.id
+        );
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "User not found",
+          message:
+            "User not found",
         });
       }
 
@@ -1403,228 +999,319 @@ exports.completeSetup =
         clinicLogo,
       } = req.body;
 
-      user.displayName = String(displayName || "").trim();
-      user.address = String(address || "").trim();
-      user.gstin = String(gstin || "").trim().toUpperCase();
-      user.zipCode = String(zipCode || "").trim();
-      user.website = String(website || "").trim();
-      user.clinicLogo = String(clinicLogo || "").trim();
-      user.accountSetupCompleted = true;
+      user.displayName =
+        String(
+          displayName || ""
+        ).trim();
+
+      user.address =
+        String(
+          address || ""
+        ).trim();
+
+      user.gstin =
+        String(
+          gstin || ""
+        )
+          .trim()
+          .toUpperCase();
+
+      user.zipCode =
+        String(
+          zipCode || ""
+        ).trim();
+
+      user.website =
+        String(
+          website || ""
+        ).trim();
+
+      user.clinicLogo =
+        String(
+          clinicLogo || ""
+        ).trim();
+
+      user.accountSetupCompleted =
+        true;
 
       await user.save();
 
       return res.json({
         success: true,
-        user: formatUserResponse(user),
+        user:
+          formatUserResponse(user),
       });
-
     } catch (error) {
-
-      console.error("Complete setup error:", error.message);
+      console.error(
+        "Complete setup error:",
+        error.message
+      );
 
       return res.status(401).json({
         success: false,
-        message: "Invalid or expired authentication token",
+        message:
+          "Invalid or expired authentication token",
       });
-
     }
-
   };
 
-  exports.getProfile = async (req, res) => {
-    try {
-        const authorization =
-            req.headers.authorization || "";
+exports.getProfile = async (
+  req,
+  res
+) => {
+  try {
+    const authorization =
+      req.headers.authorization || "";
 
-        if (!authorization.startsWith("Bearer ")) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
-        }
-
-        const token =
-            authorization.slice(7);
-
-        const decoded =
-            jwt.verify(
-                token,
-                process.env.JWT_SECRET
-            );
-
-        const user =
-            await User.findById(
-                decoded.id
-            ).select(
-                "-password -emailVerificationToken -emailVerificationExpires"
-            );
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            user,
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Get profile error:",
-            error
-        );
-
-        return res.status(401).json({
-            success: false,
-            message:
-                "Invalid or expired authentication token",
-        });
+    if (
+      !authorization.startsWith(
+        "Bearer "
+      )
+    ) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Authentication required",
+      });
     }
+
+    const token =
+      authorization.slice(7);
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    const user =
+      await User.findById(
+        decoded.id
+      ).select(
+        "-password -emailVerificationToken -emailVerificationExpires"
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error(
+      "Get profile error:",
+      error
+    );
+
+    return res.status(401).json({
+      success: false,
+      message:
+        "Invalid or expired authentication token",
+    });
+  }
 };
 
+exports.updateProfile = async (
+  req,
+  res
+) => {
+  try {
+    const authorization =
+      req.headers.authorization || "";
 
-exports.updateProfile = async (req, res) => {
-    try {
-        const authorization =
-            req.headers.authorization || "";
-
-        if (!authorization.startsWith("Bearer ")) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
-        }
-
-        const token =
-            authorization.slice(7);
-
-        const decoded =
-            jwt.verify(
-                token,
-                process.env.JWT_SECRET
-            );
-
-        const user =
-            await User.findById(
-                decoded.id
-            );
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        const {
-            name,
-            clinicName,
-            phone,
-            phoneCountryCode,
-            speciality,
-            numberOfDoctors,
-            displayName,
-            address,
-            gstin,
-            zipCode,
-            website,
-            clinicLogo,
-        } = req.body;
-
-        if (name !== undefined) {
-            user.name =
-                String(name).trim();
-        }
-
-        if (clinicName !== undefined) {
-            user.clinicName =
-                String(clinicName).trim();
-        }
-
-        if (phone !== undefined) {
-            user.phone =
-                String(phone).trim();
-        }
-
-        if (phoneCountryCode !== undefined) {
-            user.phoneCountryCode =
-                String(phoneCountryCode).trim();
-        }
-
-        if (speciality !== undefined) {
-            user.speciality =
-                String(speciality).trim();
-        }
-
-        if (numberOfDoctors !== undefined) {
-            user.numberOfDoctors =
-                String(numberOfDoctors).trim();
-        }
-
-        if (displayName !== undefined) {
-            user.displayName =
-                String(displayName).trim();
-        }
-
-        if (address !== undefined) {
-            user.address =
-                String(address).trim();
-        }
-
-        if (gstin !== undefined) {
-            user.gstin =
-                String(gstin)
-                    .trim()
-                    .toUpperCase();
-        }
-
-        if (zipCode !== undefined) {
-            user.zipCode =
-                String(zipCode).trim();
-        }
-
-        if (website !== undefined) {
-            user.website =
-                String(website).trim();
-        }
-
-        if (clinicLogo !== undefined) {
-            user.clinicLogo =
-                String(clinicLogo).trim();
-        }
-
-        await user.save();
-
-        const updatedUser =
-            await User.findById(
-                user._id
-            ).select(
-                "-password -emailVerificationToken -emailVerificationExpires"
-            );
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Clinic profile updated successfully",
-            user: updatedUser,
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Update profile error:",
-            error
-        );
-
-        return res.status(500).json({
-            success: false,
-            message:
-                error.message ||
-                "Unable to update clinic profile",
-        });
+    if (
+      !authorization.startsWith(
+        "Bearer "
+      )
+    ) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Authentication required",
+      });
     }
+
+    const token =
+      authorization.slice(7);
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    const user =
+      await User.findById(
+        decoded.id
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "User not found",
+      });
+    }
+
+    const {
+      name,
+      clinicName,
+      phone,
+      phoneCountryCode,
+      speciality,
+      numberOfDoctors,
+      displayName,
+      address,
+      gstin,
+      zipCode,
+      website,
+      clinicLogo,
+      bankName,
+      accountHolderName,
+      accountNumber,
+      ifscCode,
+      upiId,
+    } = req.body;
+
+    if (name !== undefined) {
+      user.name =
+        String(name).trim();
+    }
+
+    if (clinicName !== undefined) {
+      user.clinicName =
+        String(clinicName).trim();
+    }
+
+    if (phone !== undefined) {
+      user.phone =
+        String(phone).trim();
+    }
+
+    if (
+      phoneCountryCode !==
+      undefined
+    ) {
+      user.phoneCountryCode =
+        String(
+          phoneCountryCode
+        ).trim();
+    }
+
+    if (speciality !== undefined) {
+      user.speciality =
+        String(speciality).trim();
+    }
+
+    if (
+      numberOfDoctors !==
+      undefined
+    ) {
+      user.numberOfDoctors =
+        String(
+          numberOfDoctors
+        ).trim();
+    }
+
+    if (displayName !== undefined) {
+      user.displayName =
+        String(displayName).trim();
+    }
+
+    if (address !== undefined) {
+      user.address =
+        String(address).trim();
+    }
+
+    if (gstin !== undefined) {
+      user.gstin =
+        String(gstin)
+          .trim()
+          .toUpperCase();
+    }
+
+    if (zipCode !== undefined) {
+      user.zipCode =
+        String(zipCode).trim();
+    }
+
+    if (website !== undefined) {
+      user.website =
+        String(website).trim();
+    }
+
+    if (clinicLogo !== undefined) {
+      user.clinicLogo =
+        String(clinicLogo).trim();
+    }
+
+    if (bankName !== undefined) {
+      user.bankName =
+        String(bankName).trim();
+    }
+
+    if (
+      accountHolderName !==
+      undefined
+    ) {
+      user.accountHolderName =
+        String(
+          accountHolderName
+        ).trim();
+    }
+
+    if (
+      accountNumber !==
+      undefined
+    ) {
+      user.accountNumber =
+        String(
+          accountNumber
+        ).trim();
+    }
+
+    if (ifscCode !== undefined) {
+      user.ifscCode =
+        String(ifscCode)
+          .trim()
+          .toUpperCase();
+    }
+
+    if (upiId !== undefined) {
+      user.upiId =
+        String(upiId).trim();
+    }
+
+    await user.save();
+
+    const updatedUser =
+      await User.findById(
+        user._id
+      ).select(
+        "-password -emailVerificationToken -emailVerificationExpires"
+      );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Clinic profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error(
+      "Update profile error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to update clinic profile",
+    });
+  }
 };

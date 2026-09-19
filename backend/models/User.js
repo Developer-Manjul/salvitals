@@ -104,6 +104,45 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
+        // =========================================
+        // BANK DETAILS
+        // =========================================
+
+        bankName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        accountHolderName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        accountNumber: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        ifscCode: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: "",
+        },
+
+        upiId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        // =========================================
+        // ACCOUNT SETUP
+        // =========================================
+
         accountSetupCompleted: {
             type: Boolean,
             default: false,
