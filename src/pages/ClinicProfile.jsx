@@ -16,6 +16,13 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
     zipCode: "",
     website: "",
     clinicLogo: "",
+
+    // Bank Details
+    bankName: user?.bankName || "",
+    accountHolderName: user?.accountHolderName || "",
+    accountNumber: user?.accountNumber || "",
+    ifscCode: user?.ifscCode || "",
+    upiId: user?.upiId || "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -80,27 +87,86 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
       const profileUser = data.user || {};
 
       setProfile({
-        name: profileUser.name || user?.name || "",
-        email: profileUser.email || user?.email || "",
-        clinicName: profileUser.clinicName || user?.clinicName || "",
-        phone: profileUser.phone || user?.phone || "",
+        name:
+          profileUser.name ||
+          user?.name ||
+          "",
+
+        email:
+          profileUser.email ||
+          user?.email ||
+          "",
+
+        clinicName:
+          profileUser.clinicName ||
+          user?.clinicName ||
+          "",
+
+        phone:
+          profileUser.phone ||
+          user?.phone ||
+          "",
+
         phoneCountryCode:
-          profileUser.phoneCountryCode || "+91",
-        speciality: profileUser.speciality || user?.speciality || "",
+          profileUser.phoneCountryCode ||
+          "+91",
+
+        speciality:
+          profileUser.speciality ||
+          user?.speciality ||
+          "",
+
         numberOfDoctors:
-          profileUser.numberOfDoctors || user?.numberOfDoctors || "",
+          profileUser.numberOfDoctors ||
+          user?.numberOfDoctors ||
+          "",
+
         displayName:
-          profileUser.displayName || profileUser.clinicName || user?.clinicName || "",
+          profileUser.displayName ||
+          profileUser.clinicName ||
+          user?.clinicName ||
+          "",
+
         address:
-          profileUser.address || "",
+          profileUser.address ||
+          "",
+
         gstin:
-          profileUser.gstin || "",
+          profileUser.gstin ||
+          "",
+
         zipCode:
-          profileUser.zipCode || "",
+          profileUser.zipCode ||
+          "",
+
         website:
-          profileUser.website || "",
+          profileUser.website ||
+          "",
+
         clinicLogo:
-          profileUser.clinicLogo || "",
+          profileUser.clinicLogo ||
+          "",
+
+        // Bank Details
+        bankName:
+          profileUser.bankName ||
+          "",
+
+        accountHolderName:
+          profileUser.accountHolderName ||
+          "",
+
+        accountNumber:
+          profileUser.accountNumber ||
+          "",
+
+        ifscCode:
+          profileUser.ifscCode ||
+          "",
+
+        upiId:
+          profileUser.upiId ||
+          "",
       });
 
       setLoading(false);
@@ -221,23 +287,41 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             name: profile.name,
             clinicName: profile.clinicName,
             phone: profile.phone,
             phoneCountryCode:
               profile.phoneCountryCode,
-            speciality: profile.speciality,
+            speciality:
+              profile.speciality,
             numberOfDoctors:
               profile.numberOfDoctors,
             displayName:
               profile.displayName,
-            address: profile.address,
-            gstin: profile.gstin,
-            zipCode: profile.zipCode,
-            website: profile.website,
+            address:
+              profile.address,
+            gstin:
+              profile.gstin,
+            zipCode:
+              profile.zipCode,
+            website:
+              profile.website,
             clinicLogo:
               profile.clinicLogo,
+
+            // Bank Details
+            bankName:
+              profile.bankName,
+            accountHolderName:
+              profile.accountHolderName,
+            accountNumber:
+              profile.accountNumber,
+            ifscCode:
+              profile.ifscCode,
+            upiId:
+              profile.upiId,
           }),
         }
       );
@@ -258,45 +342,77 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
       setProfile({
         name:
-          updatedUser.name || "",
+          updatedUser.name ||
+          "",
 
         email:
           updatedUser.email ||
           profile.email,
 
         clinicName:
-          updatedUser.clinicName || "",
+          updatedUser.clinicName ||
+          "",
 
         phone:
-          updatedUser.phone || "",
+          updatedUser.phone ||
+          "",
 
         phoneCountryCode:
           updatedUser.phoneCountryCode ||
           "+91",
 
         speciality:
-          updatedUser.speciality || "",
+          updatedUser.speciality ||
+          "",
 
         numberOfDoctors:
-          updatedUser.numberOfDoctors || "",
+          updatedUser.numberOfDoctors ||
+          "",
 
         displayName:
-          updatedUser.displayName || "",
+          updatedUser.displayName ||
+          "",
 
         address:
-          updatedUser.address || "",
+          updatedUser.address ||
+          "",
 
         gstin:
-          updatedUser.gstin || "",
+          updatedUser.gstin ||
+          "",
 
         zipCode:
-          updatedUser.zipCode || "",
+          updatedUser.zipCode ||
+          "",
 
         website:
-          updatedUser.website || "",
+          updatedUser.website ||
+          "",
 
         clinicLogo:
-          updatedUser.clinicLogo || "",
+          updatedUser.clinicLogo ||
+          "",
+
+        // Bank Details
+        bankName:
+          updatedUser.bankName ||
+          "",
+
+        accountHolderName:
+          updatedUser.accountHolderName ||
+          "",
+
+        accountNumber:
+          updatedUser.accountNumber ||
+          "",
+
+        ifscCode:
+          updatedUser.ifscCode ||
+          "",
+
+        upiId:
+          updatedUser.upiId ||
+          "",
       });
 
       const currentUserJson =
@@ -352,7 +468,9 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
       }
 
       if (
-        sessionStorage.getItem("vitalsUser")
+        sessionStorage.getItem(
+          "vitalsUser"
+        )
       ) {
         sessionStorage.setItem(
           "vitalsUser",
@@ -403,7 +521,7 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
     return (
       <div className="clinic-profile-page">
         <div className="clinic-profile-loading">
-          Loading  profile...
+          Loading profile...
         </div>
       </div>
     );
@@ -412,10 +530,16 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
   return (
     <div className="clinic-profile-page">
 
+      {/* =========================================
+          PROFILE HEADER
+      ========================================== */}
+
       <div className="clinic-profile-header">
         <div>
           <h2>
-            {isHealthcare ? "Profile" : "Business Profile"}
+            {isHealthcare
+              ? "Profile"
+              : "Business Profile"}
           </h2>
 
           <p>
@@ -425,11 +549,19 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
         </div>
       </div>
 
+      {/* =========================================
+          SUCCESS MESSAGE
+      ========================================== */}
+
       {message && (
         <div className="clinic-profile-success">
           {message}
         </div>
       )}
+
+      {/* =========================================
+          ERROR MESSAGE
+      ========================================== */}
 
       {error && (
         <div className="clinic-profile-error">
@@ -441,6 +573,10 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
         onSubmit={handleSave}
         className="clinic-profile-form"
       >
+
+        {/* =========================================
+            LOGO
+        ========================================== */}
 
         <div className="clinic-logo-section">
 
@@ -462,7 +598,9 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
           <div className="clinic-logo-content">
 
             <strong>
-              {isHealthcare ? "Website logo" : "Business logo"}
+              {isHealthcare
+                ? "Website logo"
+                : "Business logo"}
             </strong>
 
             <span>
@@ -506,12 +644,18 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
         </div>
 
+        {/* =========================================
+            PROFILE DETAILS
+        ========================================== */}
+
         <div className="clinic-profile-grid">
+
+          {/* Business Name */}
 
           <div className="clinic-field">
 
             <label>
-              {isHealthcare ? "Business Name" : "Business Name"}
+              Business Name
             </label>
 
             <input
@@ -523,14 +667,12 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
                   e.target.value
                 )
               }
-              placeholder={
-                isHealthcare
-                  ? "Enter business name"
-                  : "Enter business name"
-              }
+              placeholder="Enter business name"
             />
 
           </div>
+
+          {/* Display Name */}
 
           <div className="clinic-field">
 
@@ -552,10 +694,14 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* Person Name */}
+
           <div className="clinic-field">
 
             <label>
-              {isHealthcare ? "Person Name" : "Contact Person"}
+              {isHealthcare
+                ? "Person Name"
+                : "Contact Person"}
             </label>
 
             <input
@@ -576,6 +722,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* Email */}
+
           <div className="clinic-field">
 
             <label>
@@ -593,6 +741,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
             </small>
 
           </div>
+
+          {/* Phone */}
 
           <div className="clinic-field">
 
@@ -638,6 +788,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* Speciality */}
+
           <div className="clinic-field">
 
             <label>
@@ -659,6 +811,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
             />
 
           </div>
+
+          {/* Number Of Team */}
 
           <div className="clinic-field">
 
@@ -702,6 +856,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* GSTIN */}
+
           <div className="clinic-field">
 
             <label>
@@ -724,6 +880,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* Address */}
+
           <div className="clinic-field clinic-field-full">
 
             <label>
@@ -745,6 +903,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
             />
 
           </div>
+
+          {/* ZIP */}
 
           <div className="clinic-field">
 
@@ -769,6 +929,8 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
           </div>
 
+          {/* Website */}
+
           <div className="clinic-field">
 
             <label>
@@ -792,6 +954,162 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
           </div>
 
         </div>
+
+        {/* =========================================
+            BANK DETAILS
+        ========================================== */}
+
+        <div className="clinic-bank-section">
+
+          <div className="clinic-bank-header">
+
+            <div>
+              <h3>
+                Bank Details
+              </h3>
+
+              <p>
+                Add your bank and payment details
+                for invoices and payouts.
+              </p>
+            </div>
+
+          </div>
+
+          <div className="clinic-profile-grid">
+
+            {/* Bank Name */}
+
+            <div className="clinic-field">
+
+              <label>
+                Bank Name
+              </label>
+
+              <input
+                type="text"
+                value={
+                  profile.bankName
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "bankName",
+                    e.target.value
+                  )
+                }
+                placeholder="Enter bank name"
+              />
+
+            </div>
+
+            {/* Account Holder */}
+
+            <div className="clinic-field">
+
+              <label>
+                Account Holder Name
+              </label>
+
+              <input
+                type="text"
+                value={
+                  profile.accountHolderName
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "accountHolderName",
+                    e.target.value
+                  )
+                }
+                placeholder="Enter account holder name"
+              />
+
+            </div>
+
+            {/* Account Number */}
+
+            <div className="clinic-field">
+
+              <label>
+                Account Number
+              </label>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                value={
+                  profile.accountNumber
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "accountNumber",
+                    e.target.value.replace(
+                      /\D/g,
+                      ""
+                    )
+                  )
+                }
+                placeholder="Enter account number"
+              />
+
+            </div>
+
+            {/* IFSC */}
+
+            <div className="clinic-field">
+
+              <label>
+                IFSC Code
+              </label>
+
+              <input
+                type="text"
+                value={
+                  profile.ifscCode
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "ifscCode",
+                    e.target.value.toUpperCase()
+                  )
+                }
+                placeholder="Enter IFSC code"
+                maxLength={11}
+              />
+
+            </div>
+
+            {/* UPI */}
+
+            <div className="clinic-field">
+
+              <label>
+                UPI ID
+              </label>
+
+              <input
+                type="text"
+                value={
+                  profile.upiId
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "upiId",
+                    e.target.value
+                  )
+                }
+                placeholder="example@upi"
+              />
+
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* =========================================
+            FOOTER
+        ========================================== */}
 
         <div className="clinic-profile-footer">
 

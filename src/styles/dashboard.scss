@@ -6598,3 +6598,54 @@
 .google-connect-btn:hover .google-arrow {
     transform: translateX(3px);
 }
+
+/* =========================================
+   BANK DETAILS
+========================================= */
+
+.clinic-bank-section {
+    margin-top: 28px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.clinic-bank-header {
+    padding: 20px 22px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafafa;
+}
+
+.clinic-bank-header h3 {
+    margin: 0 0 5px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.clinic-bank-header p {
+    margin: 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.clinic-bank-section .clinic-profile-grid {
+    padding: 22px;
+}
+
+@media (max-width: 768px) {
+
+    .clinic-bank-section {
+        margin-top: 20px;
+    }
+
+    .clinic-bank-header {
+        padding: 16px;
+    }
+
+    .clinic-bank-section .clinic-profile-grid {
+        padding: 16px;
+    }
+
+}

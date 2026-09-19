@@ -7,6 +7,7 @@ import LeadDetails from "./LeadDetails";
 import Contacts from "./Contacts";
 import FollowUps from "./FollowUps";
 import Calendar from "./Calendar";
+import Invoice from "./Invoice";
 
 
 const navGroups = [
@@ -1738,6 +1739,10 @@ export default function Dashboard() {
 
     if (active === "Contacts") {
       return <Contacts user={user} />;
+    }
+
+    if (active === "Invoices") {
+      return <Invoice />;
     }
 
     if (

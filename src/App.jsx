@@ -12,7 +12,6 @@ import FeatureGrid from "./components/FeatureGrid";
 import Specialities from "./components/Specialities";
 import HowItWorks from "./components/HowItWorks";
 import Integrations from "./components/Integrations";
-// import ProductTour from "./components/ProductTour";
 import Results from "./components/Results";
 import Testimonials from "./components/Testimonials";
 import Pricing from "./components/Pricing";
@@ -28,6 +27,7 @@ import CreateAccount from "./pages/CreateAccount";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Cart from "./pages/Cart";
+import Invoice from "./pages/Invoice";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import DataProcessingAddendum from "./pages/DataProcessingAddendum";
 import TermsOfService from "./pages/TermsOfService";
@@ -50,7 +50,6 @@ function VerifyEmail() {
         setMessage(
           "Verification token is missing."
         );
-
         return;
       }
 
@@ -61,11 +60,9 @@ function VerifyEmail() {
           `${api}/api/auth/verify-email`,
           {
             method: "POST",
-
             headers: {
               "Content-Type": "application/json",
             },
-
             body: JSON.stringify({
               token,
             }),
@@ -77,9 +74,8 @@ function VerifyEmail() {
         if (!response.ok || !data.success) {
           setMessage(
             data.message ||
-            "Verification failed."
+              "Verification failed."
           );
-
           return;
         }
 
@@ -111,7 +107,6 @@ function VerifyEmail() {
           window.location.href =
             "/signin?message=email-verified";
         }, 1800);
-
       } catch (error) {
         console.error(
           "Email verification error:",
@@ -133,8 +128,7 @@ function VerifyEmail() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        fontFamily:
-          "Arial, sans-serif",
+        fontFamily: "Arial, sans-serif",
         padding: "20px",
       }}
     >
@@ -145,20 +139,15 @@ function VerifyEmail() {
           textAlign: "center",
         }}
       >
-        <h1>
-          Email verification
-        </h1>
+        <h1>Email verification</h1>
 
-        <p>
-          {message}
-        </p>
+        <p>{message}</p>
       </div>
     </div>
   );
 }
 
 function CheckEmail() {
-
   const params = new URLSearchParams(
     window.location.search
   );
@@ -175,75 +164,53 @@ function CheckEmail() {
   const [loading, setLoading] =
     useState(false);
 
-
   const resendEmail = async () => {
-
     if (!email) {
-
       setError(
         "Email address is missing."
       );
-
       return;
     }
 
-
     setLoading(true);
-
     setMessage("");
-
     setError("");
 
-
     try {
-
       const api =
         getApiBaseUrl();
-
 
       const response =
         await fetch(
           `${api}/api/auth/resend-verification`,
           {
-
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
             },
-
             body: JSON.stringify({
               email,
             }),
-
           }
         );
-
 
       const data =
         await response.json();
 
-
       if (!response.ok) {
-
         setError(
           data.message ||
-          "Unable to resend verification email."
+            "Unable to resend verification email."
         );
-
         return;
       }
 
-
       setMessage(
         data.message ||
-        "Verification email sent successfully."
+          "Verification email sent successfully."
       );
-
-
     } catch (err) {
-
       console.error(
         "Resend verification error:",
         err
@@ -252,31 +219,23 @@ function CheckEmail() {
       setError(
         "Unable to connect to server. Please try again."
       );
-
     } finally {
-
       setLoading(false);
-
     }
-
   };
 
-
   return (
-
     <div
       style={{
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
         padding: "20px",
-        fontFamily:
-          "Arial, sans-serif",
+        fontFamily: "Arial, sans-serif",
         background:
           "linear-gradient(135deg, #f4f7fb 0%, #eef2f7 100%)",
       }}
     >
-
       <div
         style={{
           width: "100%",
@@ -289,9 +248,6 @@ function CheckEmail() {
             "0 20px 60px rgba(0,0,0,0.12)",
         }}
       >
-
-        {/* EMAIL ICON */}
-
         <div
           style={{
             fontSize: "52px",
@@ -300,9 +256,6 @@ function CheckEmail() {
         >
           ✉️
         </div>
-
-
-        {/* TITLE */}
 
         <h1
           style={{
@@ -314,9 +267,6 @@ function CheckEmail() {
           Check your email
         </h1>
 
-
-        {/* TEXT */}
-
         <p
           style={{
             margin: "0 0 8px",
@@ -327,9 +277,6 @@ function CheckEmail() {
         >
           We sent a verification link to
         </p>
-
-
-        {/* EMAIL */}
 
         <p
           style={{
@@ -343,9 +290,6 @@ function CheckEmail() {
           {email}
         </p>
 
-
-        {/* DESCRIPTION */}
-
         <p
           style={{
             margin: "0 0 28px",
@@ -357,9 +301,6 @@ function CheckEmail() {
           Please open your email and click the
           verification link to continue.
         </p>
-
-
-        {/* RESEND BUTTON */}
 
         <button
           type="button"
@@ -384,18 +325,12 @@ function CheckEmail() {
             transition: "0.2s ease",
           }}
         >
-
           {loading
             ? "Sending..."
             : "Resend verification email"}
-
         </button>
 
-
-        {/* SUCCESS MESSAGE */}
-
         {message && (
-
           <div
             style={{
               marginTop: "18px",
@@ -406,18 +341,11 @@ function CheckEmail() {
               fontSize: "14px",
             }}
           >
-
             {message}
-
           </div>
-
         )}
 
-
-        {/* ERROR MESSAGE */}
-
         {error && (
-
           <div
             style={{
               marginTop: "18px",
@@ -428,15 +356,9 @@ function CheckEmail() {
               fontSize: "14px",
             }}
           >
-
             {error}
-
           </div>
-
         )}
-
-
-        {/* EXTRA INFO */}
 
         <p
           style={{
@@ -450,18 +372,12 @@ function CheckEmail() {
           Didn't receive the email? Check your spam folder
           or resend the verification email.
         </p>
-
       </div>
-
     </div>
-
   );
-
 }
 
-
 function Home() {
-
   useEffect(() => {
     initSite();
   }, []);
@@ -479,7 +395,6 @@ function Home() {
       <Specialities />
       <HowItWorks />
       <Integrations />
-      {/* <ProductTour /> */}
       <Results />
       <Testimonials />
       <Pricing />
@@ -493,49 +408,31 @@ function Home() {
   );
 }
 
-
 export default function App() {
-
   const [path, setPath] = useState(
     window.location.pathname.toLowerCase()
   );
 
-
   useEffect(() => {
-
     const updatePath = () => {
-
       const currentPath =
         window.location.pathname.toLowerCase();
 
-      console.log("Current path:", currentPath);
-
       setPath(currentPath);
-
     };
-
 
     window.addEventListener(
       "popstate",
       updatePath
     );
 
-
     return () => {
-
       window.removeEventListener(
         "popstate",
         updatePath
       );
-
     };
-
   }, []);
-
-
-  /* =========================================
-     AUTH
-  ========================================= */
 
   if (
     path === "/signin" ||
@@ -543,7 +440,6 @@ export default function App() {
   ) {
     return <SignIn />;
   }
-
 
   if (
     path === "/signup" ||
@@ -553,15 +449,12 @@ export default function App() {
     return <CreateAccount />;
   }
 
-
-  if (path === "/verify-email") { return <VerifyEmail />; }
+  if (path === "/verify-email") {
+    return <VerifyEmail />;
+  }
 
   if (path === "/check-email") {
     return <CheckEmail />;
-  }
-
-  if (path === "/verify-email") {
-    return <VerifyEmail />;
   }
 
   if (
@@ -570,11 +463,6 @@ export default function App() {
   ) {
     return <ForgotPassword />;
   }
-
-
-  /* =========================================
-     PRIVACY POLICY
-  ========================================= */
 
   if (
     path === "/privacy-policy" ||
@@ -607,11 +495,6 @@ export default function App() {
     return <SecurityOverview />;
   }
 
-
-  /* =========================================
-     CART
-  ========================================= */
-
   if (
     path === "/cart" ||
     path === "/cart/" ||
@@ -620,10 +503,14 @@ export default function App() {
     return <Cart />;
   }
 
-
-  /* =========================================
-     DASHBOARD
-  ========================================= */
+  if (
+    path === "/invoices" ||
+    path === "/invoices/" ||
+    path === "/invoice" ||
+    path === "/invoice/"
+  ) {
+    return <Invoice />;
+  }
 
   if (
     path === "/dashboard" ||
@@ -632,11 +519,6 @@ export default function App() {
   ) {
     return <Dashboard />;
   }
-
-
-  /* =========================================
-     HOME
-  ========================================= */
 
   return <Home />;
 }
