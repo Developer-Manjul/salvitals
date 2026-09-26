@@ -7,12 +7,44 @@ dotenv.config();
 
 const app = express();
 
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+| CRM frontend:
+| - Local development
+| - Live SaleVitals
+|
+| AI Widget:
+| - Can be embedded on client websites
+| - Client website URL is NOT hard-coded here
+|--------------------------------------------------------------------------
+*/
+
+const allowedCRMOrigins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://salevitals.com",
+    "https://www.salevitals.com",
+];
+
 app.use(
     cors({
-        origin: [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        origin: (origin, callback) => {
+            // Server-to-server / curl / Postman requests
+            if (!origin) {
+                return callback(null, true);
+            }
+
+            // SaleVitals CRM origins
+            if (allowedCRMOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+
+            // Other origins are handled by the AI widget CORS below.
+            return callback(null, false);
+        },
+
         methods: [
             "GET",
             "POST",
@@ -21,14 +53,22 @@ app.use(
             "DELETE",
             "OPTIONS",
         ],
+
         allowedHeaders: [
             "Content-Type",
             "Authorization",
             "x-api-key",
         ],
+
         credentials: true,
     })
 );
+
+/*
+|--------------------------------------------------------------------------
+| Body Parsers
+|--------------------------------------------------------------------------
+*/
 
 app.use(
     express.json({
@@ -43,6 +83,12 @@ app.use(
     })
 );
 
+/*
+|--------------------------------------------------------------------------
+| Routes
+|--------------------------------------------------------------------------
+*/
+
 const authRoutes = require("./routes/authRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const serviceRoutes = require("./routes/serviceRoutes");
@@ -55,19 +101,54 @@ const googleIntegrationRoutes = require("./routes/googleIntegrationRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+
 const aiAssistantRoutes = require("./routes/aiAssistantRoutes");
 const aiKnowledgeRoutes = require("./routes/aiKnowledgeRoutes");
 const aiConversationRoutes = require("./routes/aiConversationRoutes");
 const aiWidgetRoutes = require("./routes/aiWidgetRoutes");
 
+/*
+|--------------------------------------------------------------------------
+| AI Widget CORS
+|--------------------------------------------------------------------------
+| IMPORTANT:
+| Do NOT add client domains here.
+|
+| Example:
+| drpreetiyadav.com
+| anotherclinic.com
+| abc.com
+|
+| All of them can use the widget because the widget API is public.
+|--------------------------------------------------------------------------
+*/
+
 app.use(
     "/api/ai-widget",
     cors({
         origin: true,
-        methods: ["GET", "POST", "OPTIONS"],
-        allowedHeaders: ["Content-Type"],
+
+        methods: [
+            "GET",
+            "POST",
+            "OPTIONS",
+        ],
+
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "x-api-key",
+        ],
+
+        credentials: false,
     })
 );
+
+/*
+|--------------------------------------------------------------------------
+| Normal API Routes
+|--------------------------------------------------------------------------
+*/
 
 app.use("/api/auth", authRoutes);
 
@@ -95,10 +176,37 @@ app.use("/api/contacts", contactRoutes);
 
 app.use("/api/invoices", invoiceRoutes);
 
-app.use("/api/ai-assistant", aiAssistantRoutes);
-app.use("/api/ai-knowledge", aiKnowledgeRoutes);
-app.use("/api/ai-conversations", aiConversationRoutes);
-app.use("/api/ai-widget", aiWidgetRoutes);
+/*
+|--------------------------------------------------------------------------
+| AI Assistant Routes
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+    "/api/ai-assistant",
+    aiAssistantRoutes
+);
+
+app.use(
+    "/api/ai-knowledge",
+    aiKnowledgeRoutes
+);
+
+app.use(
+    "/api/ai-conversations",
+    aiConversationRoutes
+);
+
+app.use(
+    "/api/ai-widget",
+    aiWidgetRoutes
+);
+
+/*
+|--------------------------------------------------------------------------
+| Location API
+|--------------------------------------------------------------------------
+*/
 
 app.get("/api/location", (req, res) => {
     const forwarded = String(
@@ -107,8 +215,8 @@ app.get("/api/location", (req, res) => {
 
     const countryCode = String(
         req.headers["cf-ipcountry"] ||
-            req.headers["x-country-code"] ||
-            ""
+        req.headers["x-country-code"] ||
+        ""
     ).toUpperCase();
 
     const ip =
@@ -122,12 +230,24 @@ app.get("/api/location", (req, res) => {
     });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Health Check
+|--------------------------------------------------------------------------
+*/
+
 app.get("/api/health", (req, res) => {
     res.status(200).json({
         success: true,
         message: "Vitals Backend API is running",
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Root
+|--------------------------------------------------------------------------
+*/
 
 app.get("/", (req, res) => {
     res.json({
@@ -136,12 +256,24 @@ app.get("/", (req, res) => {
     });
 });
 
+/*
+|--------------------------------------------------------------------------
+| 404
+|--------------------------------------------------------------------------
+*/
+
 app.use((req, res) => {
     res.status(404).json({
         success: false,
         message: "API route not found",
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Server
+|--------------------------------------------------------------------------
+*/
 
 const PORT = process.env.PORT || 5000;
 
@@ -182,6 +314,10 @@ mongoose
 
                 console.log(
                     `Invoices API: http://localhost:${PORT}/api/invoices`
+                );
+
+                console.log(
+                    `AI Widget API: http://localhost:${PORT}/api/ai-widget`
                 );
             }
         );
