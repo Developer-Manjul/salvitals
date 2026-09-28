@@ -8,6 +8,13 @@ const orderSchema = new mongoose.Schema(
             required: true,
         },
 
+        orderType: {
+            type: String,
+            enum: ["subscription", "addon"],
+            default: "subscription",
+            index: true,
+        },
+
         planId: {
             type: String,
             required: true,
@@ -16,6 +23,48 @@ const orderSchema = new mongoose.Schema(
         planName: {
             type: String,
             default: "",
+        },
+
+        addonType: {
+            type: String,
+            enum: ["", "contacts", "ai_chat"],
+            default: "",
+            index: true,
+        },
+
+        addonName: {
+            type: String,
+            default: "",
+        },
+
+        addonMonths: {
+            type: Number,
+            default: 0,
+        },
+
+        addonUnitPrice: {
+            type: Number,
+            default: 0,
+        },
+
+        addonQuota: {
+            type: Number,
+            default: 0,
+        },
+
+        addonQuotaUsed: {
+            type: Number,
+            default: 0,
+        },
+
+        addonStartsAt: {
+            type: Date,
+            default: null,
+        },
+
+        addonExpiresAt: {
+            type: Date,
+            default: null,
         },
 
         amount: {
@@ -67,11 +116,13 @@ const orderSchema = new mongoose.Schema(
                 "failed",
             ],
             default: "pending",
+            index: true,
         },
 
         razorpayOrderId: {
             type: String,
             default: "",
+            index: true,
         },
 
         razorpayPaymentId: {

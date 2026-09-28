@@ -11,6 +11,56 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+const PLANS = {
+    starter: {
+        name: "Starter",
+        inr: 1489,
+        usd: 63,
+    },
+    growth: {
+        name: "Growth",
+        inr: 2289,
+        usd: 93,
+    },
+    scale: {
+        name: "Scale",
+        inr: 3189,
+        usd: 113,
+    },
+};
+
+const DISCOUNTS = {
+    1: 0,
+    3: 5,
+    6: 7,
+    9: 9,
+    12: 12,
+    24: 15,
+};
+
+const ADDONS = {
+    contacts: {
+        name: "Extra Contacts",
+        unitPrice: 500,
+        quotaPerMonth: 1000,
+        unitLabel: "contacts",
+    },
+    ai_chat: {
+        name: "AI Chatbot",
+        unitPrice: 500,
+        quotaPerMonth: 1200,
+        unitLabel: "AI conversations",
+    },
+};
+
+const ADDON_PERIODS = [
+    1,
+    2,
+    3,
+    6,
+    12,
+];
+
 function getUserId(req) {
     const authorization =
         req.headers.authorization || "";
@@ -25,11 +75,10 @@ function getUserId(req) {
     }
 
     try {
-        const decoded =
-            jwt.verify(
-                token,
-                process.env.JWT_SECRET
-            );
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
 
         return (
             decoded.id ||
@@ -42,29 +91,261 @@ function getUserId(req) {
     }
 }
 
-function getNumber(...values) {
-    for (const value of values) {
-        if (
-            value !== undefined &&
-            value !== null &&
-            value !== "" &&
-            Number.isFinite(Number(value))
-        ) {
-            return Number(value);
-        }
+function normalizePlanId(value) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
+
+    if (normalized === "custom") {
+        return "enterprise";
     }
 
-    return 0;
+    return normalized;
 }
 
-async function sendInvoiceIfNeeded(order) {
-    if (order.invoiceEmailSentAt) {
+function getPlan(planId) {
+    return (
+        PLANS[normalizePlanId(planId)] ||
+        null
+    );
+}
+
+function getAddon(addonType) {
+    const normalized =
+        String(addonType || "")
+            .trim()
+            .toLowerCase();
+
+    return ADDONS[normalized] || null;
+}
+
+function getDiscountPercentage(period) {
+    return DISCOUNTS[Number(period)] || 0;
+}
+
+function getMonthlyPrice(
+    planId,
+    currency
+) {
+    const plan = getPlan(planId);
+
+    if (!plan) {
+        return null;
+    }
+
+    return currency === "USD"
+        ? plan.usd
+        : plan.inr;
+}
+
+function calculateSubscription(
+    planId,
+    period,
+    currency
+) {
+    const monthlyPrice =
+        getMonthlyPrice(
+            planId,
+            currency
+        );
+
+    if (
+        monthlyPrice === null ||
+        monthlyPrice === undefined
+    ) {
+        return null;
+    }
+
+    const months =
+        Number(period) || 1;
+
+    const discountPercentage =
+        getDiscountPercentage(months);
+
+    const originalAmount =
+        monthlyPrice * months;
+
+    const discountAmount =
+        Math.round(
+            originalAmount *
+                (discountPercentage / 100) *
+                100
+        ) / 100;
+
+    const discountedAmount =
+        originalAmount -
+        discountAmount;
+
+    return {
+        monthlyPrice,
+        months,
+        discountPercentage,
+        originalAmount,
+        discountAmount,
+        discountedAmount,
+    };
+}
+
+function calculateAddon(
+    addonType,
+    months,
+    currency
+) {
+    const addon =
+        getAddon(addonType);
+
+    if (!addon) {
+        return null;
+    }
+
+    if (currency !== "INR") {
+        return null;
+    }
+
+    const duration =
+        Number(months);
+
+    if (
+        !Number.isInteger(duration) ||
+        !ADDON_PERIODS.includes(duration)
+    ) {
+        return null;
+    }
+
+    const amount =
+        addon.unitPrice * duration;
+
+    const quota =
+        addon.quotaPerMonth * duration;
+
+    return {
+        addonType,
+        addonName: addon.name,
+        months: duration,
+        unitPrice: addon.unitPrice,
+        quotaPerMonth:
+            addon.quotaPerMonth,
+        quota,
+        amount,
+        currency: "INR",
+    };
+}
+
+function calculateSetupFee(
+    user,
+    currency
+) {
+    if (
+        user?.subscription?.setupFeePaid
+    ) {
+        return 0;
+    }
+
+    if (
+        user?.subscription?.status ===
+        "active"
+    ) {
+        return 0;
+    }
+
+    return currency === "INR"
+        ? 699
+        : 180;
+}
+
+function calculateTax(
+    subtotal,
+    currency
+) {
+    if (currency !== "INR") {
+        return 0;
+    }
+
+    return Math.round(
+        subtotal * 0.18 * 100
+    ) / 100;
+}
+
+function addMonths(
+    date,
+    months
+) {
+    const result = new Date(date);
+
+    const originalDate =
+        result.getDate();
+
+    result.setMonth(
+        result.getMonth() +
+            Number(months)
+    );
+
+    if (
+        result.getDate() !==
+        originalDate
+    ) {
+        result.setDate(0);
+    }
+
+    return result;
+}
+
+function getSubscriptionDates(
+    period
+) {
+    const startedAt =
+        new Date();
+
+    const expiresAt =
+        addMonths(
+            startedAt,
+            Number(period) || 1
+        );
+
+    return {
+        startedAt,
+        expiresAt,
+        nextBillingAt:
+            expiresAt,
+    };
+}
+
+function getAddonDates(
+    months
+) {
+    const startedAt =
+        new Date();
+
+    const expiresAt =
+        addMonths(
+            startedAt,
+            Number(months) || 1
+        );
+
+    return {
+        startedAt,
+        expiresAt,
+    };
+}
+
+async function sendInvoiceIfNeeded(
+    order
+) {
+    if (
+        order.invoiceEmailSentAt
+    ) {
         return false;
     }
 
-    const user = await User.findById(order.userId);
+    const user =
+        await User.findById(
+            order.userId
+        );
 
-    if (!user || !user.email) {
+    if (
+        !user ||
+        !user.email
+    ) {
         return false;
     }
 
@@ -72,22 +353,24 @@ async function sendInvoiceIfNeeded(order) {
         await sendInvoiceEmail({
             user,
             order,
-            paymentId: order.razorpayPaymentId,
+            paymentId:
+                order.razorpayPaymentId,
         });
 
-        order.invoiceEmailSentAt = new Date();
-        order.invoiceEmailError = "";
-        await order.save();
+        order.invoiceEmailSentAt =
+            new Date();
 
-        console.log(
-            "Invoice email sent successfully to:",
-            user.email
-        );
+        order.invoiceEmailError =
+            "";
+
+        await order.save();
 
         return true;
     } catch (emailError) {
         order.invoiceEmailError =
-            emailError.message || "Unable to send invoice email";
+            emailError.message ||
+            "Unable to send invoice email";
+
         await order.save();
 
         console.error(
@@ -99,12 +382,349 @@ async function sendInvoiceIfNeeded(order) {
     }
 }
 
-async function recoverPaidOrder(userId) {
-    const pendingOrder = await Order.findOne({
-        userId,
-        paymentStatus: "pending",
-        razorpayOrderId: { $ne: "" },
-    }).sort({ createdAt: -1 });
+async function activateSubscription(
+    order
+) {
+    const user =
+        await User.findById(
+            order.userId
+        );
+
+    if (!user) {
+        throw new Error(
+            "User not found while activating subscription"
+        );
+    }
+
+    const planId =
+        normalizePlanId(
+            order.planId
+        );
+
+    const planName =
+        planId === "enterprise"
+            ? "Enterprise"
+            : (
+                getPlan(planId)?.name ||
+                order.planName ||
+                planId
+            );
+
+    const period =
+        Number(order.period) || 1;
+
+    const dates =
+        getSubscriptionDates(
+            period
+        );
+
+    const existingSetupFeePaid =
+        Boolean(
+            user.subscription?.setupFeePaid
+        );
+
+    const setupFeePaid =
+        existingSetupFeePaid ||
+        Number(order.setupFee || 0) > 0;
+
+    user.subscription = {
+        planId,
+        planName,
+        status: "active",
+        billingCycle:
+            period === 1
+                ? "monthly"
+                : `${period}-months`,
+        startedAt:
+            dates.startedAt,
+        expiresAt:
+            dates.expiresAt,
+        nextBillingAt:
+            dates.nextBillingAt,
+        amount:
+            Number(
+                order.planAmount || 0
+            ),
+        currency:
+            order.currency || "INR",
+        orderId:
+            order._id,
+        razorpayOrderId:
+            order.razorpayOrderId || "",
+        paymentId:
+            order.razorpayPaymentId || "",
+        setupFeePaid,
+    };
+
+    await user.save();
+
+    return user;
+}
+
+async function activateAddon(
+    order
+) {
+    const user =
+        await User.findById(
+            order.userId
+        );
+
+    if (!user) {
+        throw new Error(
+            "User not found while activating add-on"
+        );
+    }
+
+    if (
+        user.subscription?.status !==
+        "active"
+    ) {
+        throw new Error(
+            "Active subscription required for add-on"
+        );
+    }
+
+    const addonType =
+        String(
+            order.addonType || ""
+        )
+            .trim()
+            .toLowerCase();
+
+    if (
+        !ADDONS[addonType]
+    ) {
+        throw new Error(
+            "Invalid add-on type"
+        );
+    }
+
+    const addon =
+        user.addons?.[addonType] || {};
+
+    const now =
+        new Date();
+
+    const existingExpiresAt =
+        addon.expiresAt
+            ? new Date(
+                addon.expiresAt
+            )
+            : null;
+
+    const existingActive =
+        Boolean(
+            addon.enabled &&
+            existingExpiresAt &&
+            existingExpiresAt.getTime() >
+                now.getTime()
+        );
+
+    const purchasedMonths =
+        Number(
+            order.addonMonths || 0
+        );
+
+    const purchasedQuota =
+        Number(
+            order.addonQuota || 0
+        );
+
+    const unitPrice =
+        Number(
+            order.addonUnitPrice ||
+            ADDONS[addonType]
+                .unitPrice
+        );
+
+    let startsAt;
+    let expiresAt;
+    let quota;
+    let used;
+    let months;
+
+    if (existingActive) {
+        startsAt =
+            addon.startsAt
+                ? new Date(
+                    addon.startsAt
+                )
+                : now;
+
+        expiresAt =
+            addMonths(
+                existingExpiresAt,
+                purchasedMonths
+            );
+
+        quota =
+            Number(
+                addon.quota || 0
+            ) +
+            purchasedQuota;
+
+        used =
+            Number(
+                addon.used || 0
+            );
+
+        months =
+            Number(
+                addon.months || 0
+            ) +
+            purchasedMonths;
+    } else {
+        startsAt =
+            order.addonStartsAt
+                ? new Date(
+                    order.addonStartsAt
+                )
+                : now;
+
+        expiresAt =
+            order.addonExpiresAt
+                ? new Date(
+                    order.addonExpiresAt
+                )
+                : addMonths(
+                    startsAt,
+                    purchasedMonths
+                );
+
+        quota =
+            purchasedQuota;
+
+        used = 0;
+
+        months =
+            purchasedMonths;
+    }
+
+    if (!user.addons) {
+        user.addons = {};
+    }
+
+    user.addons[addonType] = {
+        enabled: true,
+        quota,
+        used,
+        months,
+        unitPrice,
+        startsAt,
+        expiresAt,
+        orderId:
+            order._id,
+        razorpayOrderId:
+            order.razorpayOrderId || "",
+        paymentId:
+            order.razorpayPaymentId || "",
+    };
+
+    order.addonStartsAt =
+        startsAt;
+
+    order.addonExpiresAt =
+        expiresAt;
+
+    order.addonQuotaUsed =
+        used;
+
+    await order.save();
+    await user.save();
+
+    return user;
+}
+
+async function activatePaidOrder(
+    order
+) {
+    if (
+        !order
+    ) {
+        return null;
+    }
+
+    if (
+        order.orderType ===
+        "addon"
+    ) {
+        return activateAddon(
+            order
+        );
+    }
+
+    return activateSubscription(
+        order
+    );
+}
+
+async function ensureSubscriptionForPaidOrder(
+    userId,
+    paidOrder
+) {
+    if (!paidOrder) {
+        return null;
+    }
+
+    const user =
+        await User.findById(
+            userId
+        );
+
+    if (!user) {
+        return null;
+    }
+
+    const subscription =
+        user.subscription || {};
+
+    const orderMatches =
+        String(
+            subscription.orderId || ""
+        ) ===
+        String(
+            paidOrder._id
+        );
+
+    const subscriptionActive =
+        subscription.status ===
+        "active";
+
+    const samePlan =
+        normalizePlanId(
+            subscription.planId
+        ) ===
+        normalizePlanId(
+            paidOrder.planId
+        );
+
+    if (
+        !subscriptionActive ||
+        !orderMatches ||
+        !samePlan
+    ) {
+        return activateSubscription(
+            paidOrder
+        );
+    }
+
+    return user;
+}
+
+async function recoverPaidOrder(
+    userId
+) {
+    const pendingOrder =
+        await Order.findOne({
+            userId,
+            paymentStatus:
+                "pending",
+            razorpayOrderId: {
+                $ne: "",
+            },
+        }).sort({
+            createdAt: -1,
+        });
 
     if (!pendingOrder) {
         return null;
@@ -115,31 +735,51 @@ async function recoverPaidOrder(userId) {
             pendingOrder.razorpayOrderId
         );
 
-    const capturedPayment = payments.items?.find(
-        (payment) => payment.status === "captured"
-    );
+    const capturedPayment =
+        payments.items?.find(
+            (payment) =>
+                payment.status ===
+                "captured"
+        );
 
     if (!capturedPayment) {
         return null;
     }
 
-    const currentYear = new Date().getFullYear();
-    const paidOrdersCount = await Order.countDocuments({
-        paymentStatus: "paid",
-        invoiceNumber: {
-            $regex: `^SV_${currentYear}_`,
-        },
-    });
+    const currentYear =
+        new Date().getFullYear();
+
+    const paidOrdersCount =
+        await Order.countDocuments({
+            paymentStatus:
+                "paid",
+            invoiceNumber: {
+                $regex:
+                    `^SV_${currentYear}_`,
+            },
+        });
 
     pendingOrder.invoiceNumber =
         pendingOrder.invoiceNumber ||
         `SV_${currentYear}_${String(
             paidOrdersCount + 1
         ).padStart(3, "0")}`;
-    pendingOrder.paymentStatus = "paid";
-    pendingOrder.razorpayPaymentId = capturedPayment.id;
+
+    pendingOrder.paymentStatus =
+        "paid";
+
+    pendingOrder.razorpayPaymentId =
+        capturedPayment.id;
+
     await pendingOrder.save();
-    await sendInvoiceIfNeeded(pendingOrder);
+
+    await activatePaidOrder(
+        pendingOrder
+    );
+
+    await sendInvoiceIfNeeded(
+        pendingOrder
+    );
 
     return pendingOrder;
 }
@@ -167,7 +807,7 @@ exports.getPaymentStatus =
                 });
             }
 
-            const user =
+            let user =
                 await User.findById(
                     userId
                 );
@@ -188,20 +828,24 @@ exports.getPaymentStatus =
 
             let paidOrder =
                 await Order.findOne({
-                    userId:
-                        userId,
-
+                    userId,
+                    orderType:
+                        "subscription",
                     paymentStatus:
                         "paid",
                 }).sort({
-                    createdAt:
-                        -1,
+                    createdAt: -1,
                 });
 
             if (!paidOrder) {
                 try {
-                    paidOrder = await recoverPaidOrder(userId);
-                } catch (recoveryError) {
+                    paidOrder =
+                        await recoverPaidOrder(
+                            userId
+                        );
+                } catch (
+                    recoveryError
+                ) {
                     console.error(
                         "PAYMENT RECOVERY ERROR:",
                         recoveryError
@@ -210,120 +854,170 @@ exports.getPaymentStatus =
             }
 
             if (paidOrder) {
-                await sendInvoiceIfNeeded(paidOrder);
+                try {
+                    user =
+                        await ensureSubscriptionForPaidOrder(
+                            userId,
+                            paidOrder
+                        );
+                } catch (
+                    subscriptionError
+                ) {
+                    console.error(
+                        "SUBSCRIPTION SYNC ERROR:",
+                        subscriptionError
+                    );
+                }
 
-                console.log(
-                    "================================="
+                await sendInvoiceIfNeeded(
+                    paidOrder
                 );
 
-                console.log(
-                    "PAYMENT STATUS CHECK"
-                );
-
-                console.log(
-                    "USER ID:",
-                    userId
-                );
-
-                console.log(
-                    "USER EMAIL:",
-                    user.email
-                );
-
-                console.log(
-                    "PAID ORDER:",
-                    paidOrder._id
-                );
-
-                console.log(
-                    "PLAN:",
-                    paidOrder.planName
-                );
-
-                console.log(
-                    "PAYMENT STATUS:",
-                    paidOrder.paymentStatus
-                );
-
-                console.log(
-                    "================================="
-                );
+                const subscription =
+                    user?.subscription ||
+                    {};
 
                 return res.status(200).json({
                     success: true,
-
                     payment_completed:
                         true,
-
                     payment_status:
                         "paid",
-
                     status:
                         "paid",
-
                     orderId:
                         paidOrder._id,
-
                     planId:
                         paidOrder.planId,
-
                     planName:
                         paidOrder.planName,
-
                     invoiceNumber:
-                        paidOrder.invoiceNumber || "",
-
+                        paidOrder.invoiceNumber ||
+                        "",
+                    subscription: {
+                        planId:
+                            subscription.planId ||
+                            paidOrder.planId ||
+                            "",
+                        planName:
+                            subscription.planName ||
+                            paidOrder.planName ||
+                            "",
+                        status:
+                            subscription.status ||
+                            "active",
+                        billingCycle:
+                            subscription.billingCycle ||
+                            "",
+                        startedAt:
+                            subscription.startedAt ||
+                            null,
+                        expiresAt:
+                            subscription.expiresAt ||
+                            null,
+                        nextBillingAt:
+                            subscription.nextBillingAt ||
+                            null,
+                        amount:
+                            Number(
+                                subscription.amount ||
+                                paidOrder.planAmount ||
+                                0
+                            ),
+                        currency:
+                            subscription.currency ||
+                            paidOrder.currency ||
+                            "INR",
+                        setupFeePaid:
+                            Boolean(
+                                subscription.setupFeePaid
+                            ),
+                        orderId:
+                            subscription.orderId ||
+                            paidOrder._id,
+                        razorpayOrderId:
+                            subscription.razorpayOrderId ||
+                            paidOrder.razorpayOrderId ||
+                            "",
+                        paymentId:
+                            subscription.paymentId ||
+                            paidOrder.razorpayPaymentId ||
+                            "",
+                    },
                     order: {
-                        _id: paidOrder._id,
+                        _id:
+                            paidOrder._id,
+                        orderType:
+                            paidOrder.orderType,
                         paymentStatus:
                             paidOrder.paymentStatus,
-                        planId: paidOrder.planId,
-                        planName: paidOrder.planName,
+                        planId:
+                            paidOrder.planId,
+                        planName:
+                            paidOrder.planName,
+                        amount:
+                            paidOrder.amount,
+                        planAmount:
+                            paidOrder.planAmount,
+                        setupFee:
+                            paidOrder.setupFee,
+                        tax:
+                            paidOrder.tax,
+                        currency:
+                            paidOrder.currency,
+                        period:
+                            paidOrder.period,
+                        periodLabel:
+                            paidOrder.periodLabel,
                     },
                 });
             }
 
-            console.log(
-                "================================="
-            );
-
-            console.log(
-                "PAYMENT STATUS CHECK"
-            );
-
-            console.log(
-                "USER ID:",
-                userId
-            );
-
-            console.log(
-                "USER EMAIL:",
-                user.email
-            );
-
-            console.log(
-                "NO PAID ORDER FOUND"
-            );
-
-            console.log(
-                "================================="
-            );
-
             return res.status(200).json({
                 success: true,
-
                 payment_completed:
                     false,
-
                 payment_status:
                     "pending",
-
                 status:
                     "pending",
+                subscription: {
+                    planId:
+                        user.subscription?.planId ||
+                        "",
+                    planName:
+                        user.subscription?.planName ||
+                        "",
+                    status:
+                        user.subscription?.status ||
+                        "none",
+                    billingCycle:
+                        user.subscription?.billingCycle ||
+                        "",
+                    startedAt:
+                        user.subscription?.startedAt ||
+                        null,
+                    expiresAt:
+                        user.subscription?.expiresAt ||
+                        null,
+                    nextBillingAt:
+                        user.subscription?.nextBillingAt ||
+                        null,
+                    amount:
+                        Number(
+                            user.subscription?.amount ||
+                            0
+                        ),
+                    currency:
+                        user.subscription?.currency ||
+                        "INR",
+                    setupFeePaid:
+                        Boolean(
+                            user.subscription?.setupFeePaid
+                        ),
+                },
             });
-
         } catch (error) {
-
             console.error(
                 "GET PAYMENT STATUS ERROR:",
                 error
@@ -331,16 +1025,12 @@ exports.getPaymentStatus =
 
             return res.status(500).json({
                 success: false,
-
                 message:
                     "Unable to check payment status",
-
                 payment_completed:
                     false,
-
                 payment_status:
                     "error",
-
                 status:
                     "error",
             });
@@ -388,100 +1078,299 @@ exports.createOrder =
             }
 
             const {
-                amount,
+                orderType = "subscription",
                 currency = "INR",
                 planId,
-                planName,
                 period = 1,
                 periodLabel = "",
                 country = "",
-                planAmount = 0,
-                setupFee = 0,
-                tax = 0,
+                addonType = "",
             } = req.body;
 
-            const totalAmount =
-                getNumber(amount);
-
-            const finalPlanAmount =
-                getNumber(planAmount);
-
-            const finalSetupFee =
-                getNumber(setupFee);
-
-            const finalTax =
-                getNumber(tax);
+            const curr =
+                String(currency)
+                    .toUpperCase() ===
+                "USD"
+                    ? "USD"
+                    : "INR";
 
             if (
-                !Number.isFinite(
-                    totalAmount
+                orderType ===
+                "addon"
+            ) {
+                if (
+                    curr !== "INR"
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Add-ons are currently available in INR only.",
+                    });
+                }
+
+                if (
+                    user.subscription?.status !==
+                    "active"
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Please activate a CRM plan before purchasing an add-on.",
+                    });
+                }
+
+                const addonCalculation =
+                    calculateAddon(
+                        addonType,
+                        period,
+                        curr
+                    );
+
+                if (!addonCalculation) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Invalid add-on or duration selected.",
+                    });
+                }
+
+                const subtotal =
+                    addonCalculation.amount;
+
+                const tax =
+                    calculateTax(
+                        subtotal,
+                        curr
+                    );
+
+                const totalAmount =
+                    Math.round(
+                        (subtotal + tax) *
+                            100
+                    ) / 100;
+
+                const razorpayAmount =
+                    Math.round(
+                        totalAmount * 100
+                    );
+
+                const addonDates =
+                    getAddonDates(
+                        addonCalculation.months
+                    );
+
+                const razorpayOrder =
+                    await razorpay.orders.create({
+                        amount:
+                            razorpayAmount,
+                        currency:
+                            curr,
+                        receipt:
+                            `salevitals_addon_${Date.now()}`,
+                        notes: {
+                            orderType:
+                                "addon",
+                            addonType:
+                                addonCalculation.addonType,
+                            addonName:
+                                addonCalculation.addonName,
+                            addonMonths:
+                                String(
+                                    addonCalculation.months
+                                ),
+                            addonQuota:
+                                String(
+                                    addonCalculation.quota
+                                ),
+                            addonUnitPrice:
+                                String(
+                                    addonCalculation.unitPrice
+                                ),
+                            addonStartsAt:
+                                addonDates.startedAt.toISOString(),
+                            addonExpiresAt:
+                                addonDates.expiresAt.toISOString(),
+                            subtotal:
+                                String(
+                                    subtotal
+                                ),
+                            tax:
+                                String(
+                                    tax
+                                ),
+                            totalAmount:
+                                String(
+                                    totalAmount
+                                ),
+                            userId:
+                                String(
+                                    userId
+                                ),
+                        },
+                    });
+
+                const dbOrder =
+                    await Order.create({
+                        userId,
+                        orderType:
+                            "addon",
+                        planId:
+                            addonCalculation.addonType,
+                        planName:
+                            user.subscription
+                                ?.planName ||
+                            "",
+                        addonType:
+                            addonCalculation.addonType,
+                        addonName:
+                            addonCalculation.addonName,
+                        addonMonths:
+                            addonCalculation.months,
+                        addonUnitPrice:
+                            addonCalculation.unitPrice,
+                        addonQuota:
+                            addonCalculation.quota,
+                        addonQuotaUsed:
+                            0,
+                        addonStartsAt:
+                            addonDates.startedAt,
+                        addonExpiresAt:
+                            addonDates.expiresAt,
+                        amount:
+                            totalAmount,
+                        planAmount:
+                            subtotal,
+                        setupFee:
+                            0,
+                        tax,
+                        currency:
+                            curr,
+                        period:
+                            addonCalculation.months,
+                        periodLabel:
+                            `${addonCalculation.months} month${
+                                addonCalculation.months >
+                                1
+                                    ? "s"
+                                    : ""
+                            }`,
+                        paymentStatus:
+                            "pending",
+                        razorpayOrderId:
+                            razorpayOrder.id,
+                        country:
+                            country || "",
+                    });
+
+                return res.status(200).json({
+                    success: true,
+                    order: {
+                        id:
+                            razorpayOrder.id,
+                        amount:
+                            razorpayOrder.amount,
+                        currency:
+                            razorpayOrder.currency,
+                        receipt:
+                            razorpayOrder.receipt,
+                        dbOrderId:
+                            dbOrder._id.toString(),
+                        orderType:
+                            "addon",
+                        addonType:
+                            addonCalculation.addonType,
+                        addonName:
+                            addonCalculation.addonName,
+                        addonMonths:
+                            addonCalculation.months,
+                        addonQuota:
+                            addonCalculation.quota,
+                        addonUnitPrice:
+                            addonCalculation.unitPrice,
+                        subtotal,
+                        tax,
+                        totalAmount,
+                        addonStartsAt:
+                            addonDates.startedAt,
+                        addonExpiresAt:
+                            addonDates.expiresAt,
+                    },
+                });
+            }
+
+            const normalizedPlanId =
+                normalizePlanId(
+                    planId
+                );
+
+            const plan =
+                getPlan(
+                    normalizedPlanId
+                );
+
+            if (!plan) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Invalid plan selected",
+                });
+            }
+
+            const months =
+                Number(period);
+
+            if (
+                !Number.isInteger(
+                    months
                 ) ||
-                totalAmount <= 0
+                !Object.prototype.hasOwnProperty.call(
+                    DISCOUNTS,
+                    months
+                )
             ) {
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Invalid payment amount",
+                        "Invalid subscription period",
                 });
             }
 
-            const curr =
-                String(currency)
-                    .toUpperCase() === "USD"
-                    ? "USD"
-                    : "INR";
+            const calculation =
+                calculateSubscription(
+                    normalizedPlanId,
+                    months,
+                    curr
+                );
 
-            console.log(
-                "\n================================"
-            );
+            if (!calculation) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Unable to calculate plan amount",
+                });
+            }
 
-            console.log(
-                "CART PAYMENT RECEIVED"
-            );
+            const setupFee =
+                calculateSetupFee(
+                    user,
+                    curr
+                );
 
-            console.log(
-                "Plan:",
-                planId
-            );
+            const subtotal =
+                calculation.discountedAmount +
+                setupFee;
 
-            console.log(
-                "Plan Name:",
-                planName
-            );
+            const tax =
+                calculateTax(
+                    subtotal,
+                    curr
+                );
 
-            console.log(
-                "Period:",
-                period
-            );
-
-            console.log(
-                "Currency:",
-                curr
-            );
-
-            console.log(
-                "Plan Amount:",
-                finalPlanAmount
-            );
-
-            console.log(
-                "Setup Fee:",
-                finalSetupFee
-            );
-
-            console.log(
-                "Tax:",
-                finalTax
-            );
-
-            console.log(
-                "Total Amount:",
-                totalAmount
-            );
-
-            console.log(
-                "================================\n"
-            );
+            const totalAmount =
+                Math.round(
+                    (subtotal + tax) *
+                        100
+                ) / 100;
 
             const razorpayAmount =
                 Math.round(
@@ -492,54 +1381,56 @@ exports.createOrder =
                 await razorpay.orders.create({
                     amount:
                         razorpayAmount,
-
                     currency:
                         curr,
-
                     receipt:
                         `salevitals_${Date.now()}`,
-
                     notes: {
+                        orderType:
+                            "subscription",
                         planId:
-                            String(
-                                planId || ""
-                            ),
-
+                            normalizedPlanId,
                         planName:
-                            String(
-                                planName || ""
-                            ),
-
+                            plan.name,
                         period:
                             String(
-                                period
+                                months
                             ),
-
                         periodLabel:
-                            String(
-                                periodLabel || ""
-                            ),
-
+                            periodLabel ||
+                            `${months} month${
+                                months > 1
+                                    ? "s"
+                                    : ""
+                            }`,
                         planAmount:
                             String(
-                                finalPlanAmount
+                                calculation.discountedAmount
                             ),
-
+                        originalPlanAmount:
+                            String(
+                                calculation.originalAmount
+                            ),
+                        discountPercentage:
+                            String(
+                                calculation.discountPercentage
+                            ),
+                        discountAmount:
+                            String(
+                                calculation.discountAmount
+                            ),
                         setupFee:
                             String(
-                                finalSetupFee
+                                setupFee
                             ),
-
                         tax:
                             String(
-                                finalTax
+                                tax
                             ),
-
                         cartTotal:
                             String(
                                 totalAmount
                             ),
-
                         userId:
                             String(
                                 userId
@@ -550,78 +1441,66 @@ exports.createOrder =
             const dbOrder =
                 await Order.create({
                     userId,
-
+                    orderType:
+                        "subscription",
                     planId:
-                        planId || "",
-
+                        normalizedPlanId,
                     planName:
-                        planName || "",
-
+                        plan.name,
                     amount:
                         totalAmount,
-
                     planAmount:
-                        finalPlanAmount,
-
-                    setupFee:
-                        finalSetupFee,
-
-                    tax:
-                        finalTax,
-
+                        calculation.discountedAmount,
+                    setupFee,
+                    tax,
                     currency:
                         curr,
-
                     period:
-                        Number(period) || 1,
-
+                        months,
                     periodLabel:
-                        periodLabel || "",
-
+                        periodLabel ||
+                        `${months} month${
+                            months > 1
+                                ? "s"
+                                : ""
+                        }`,
                     paymentStatus:
                         "pending",
-
                     razorpayOrderId:
                         razorpayOrder.id,
-
                     country:
                         country || "",
                 });
 
             return res.status(200).json({
                 success: true,
-
                 order: {
                     id:
                         razorpayOrder.id,
-
                     amount:
                         razorpayOrder.amount,
-
                     currency:
                         razorpayOrder.currency,
-
                     receipt:
                         razorpayOrder.receipt,
-
                     dbOrderId:
                         dbOrder._id.toString(),
-
+                    orderType:
+                        "subscription",
                     totalAmount,
-
                     planAmount:
-                        finalPlanAmount,
-
-                    setupFee:
-                        finalSetupFee,
-
-                    tax:
-                        finalTax,
+                        calculation.discountedAmount,
+                    setupFee,
+                    tax,
+                    originalPlanAmount:
+                        calculation.originalAmount,
+                    discountPercentage:
+                        calculation.discountPercentage,
+                    discountAmount:
+                        calculation.discountAmount,
                 },
             });
-
         } catch (error) {
-
             console.error(
                 "CREATE ORDER ERROR:",
                 error
@@ -629,7 +1508,6 @@ exports.createOrder =
 
             return res.status(500).json({
                 success: false,
-
                 message:
                     error?.error?.description ||
                     error?.message ||
@@ -711,7 +1589,6 @@ exports.verifyPayment =
                     await Order.countDocuments({
                         paymentStatus:
                             "paid",
-
                         invoiceNumber: {
                             $regex:
                                 `^SV_${currentYear}_`,
@@ -741,85 +1618,119 @@ exports.verifyPayment =
 
             await order.save();
 
-            const user =
+            let user =
                 await User.findById(
                     order.userId
                 );
 
-            console.log(
-                "================================="
-            );
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "User not found",
+                });
+            }
 
-            console.log(
-                "INVOICE USER DEBUG"
-            );
+            user =
+                await activatePaidOrder(
+                    order
+                );
 
-            console.log(
-                "ORDER ID:",
-                order._id
+            await sendInvoiceIfNeeded(
+                order
             );
-
-            console.log(
-                "ORDER USER ID:",
-                order.userId
-            );
-
-            console.log(
-                "USER FOUND:",
-                user
-                    ? user._id
-                    : "NOT FOUND"
-            );
-
-            console.log(
-                "USER EMAIL:",
-                user
-                    ? user.email
-                    : "NO EMAIL"
-            );
-
-            console.log(
-                "INVOICE NUMBER:",
-                order.invoiceNumber
-            );
-
-            console.log(
-                "PLAN AMOUNT:",
-                order.planAmount
-            );
-
-            console.log(
-                "SETUP FEE:",
-                order.setupFee
-            );
-
-            console.log(
-                "TAX:",
-                order.tax
-            );
-
-            console.log(
-                "TOTAL:",
-                order.amount
-            );
-
-            console.log(
-                "================================="
-            );
-
-            await sendInvoiceIfNeeded(order);
 
             return res.status(200).json({
                 success: true,
-
                 message:
-                    "Payment verified successfully",
-
+                    order.orderType ===
+                    "addon"
+                        ? "Add-on payment verified successfully"
+                        : "Payment verified successfully",
                 order,
+                orderType:
+                    order.orderType,
+                addon:
+                    order.orderType ===
+                    "addon"
+                        ? {
+                            type:
+                                order.addonType,
+                            name:
+                                order.addonName,
+                            months:
+                                order.addonMonths,
+                            quota:
+                                order.addonQuota,
+                            used:
+                                user
+                                    ?.addons?.[
+                                    order.addonType
+                                ]?.used || 0,
+                            startsAt:
+                                user
+                                    ?.addons?.[
+                                    order.addonType
+                                ]?.startsAt ||
+                                order.addonStartsAt,
+                            expiresAt:
+                                user
+                                    ?.addons?.[
+                                    order.addonType
+                                ]?.expiresAt ||
+                                order.addonExpiresAt,
+                        }
+                        : null,
+                subscription:
+                    user.subscription
+                        ? {
+                            planId:
+                                user.subscription
+                                    .planId ||
+                                "",
+                            planName:
+                                user.subscription
+                                    .planName ||
+                                "",
+                            status:
+                                user.subscription
+                                    .status ||
+                                "active",
+                            billingCycle:
+                                user.subscription
+                                    .billingCycle ||
+                                "",
+                            startedAt:
+                                user.subscription
+                                    .startedAt ||
+                                null,
+                            expiresAt:
+                                user.subscription
+                                    .expiresAt ||
+                                null,
+                            nextBillingAt:
+                                user.subscription
+                                    .nextBillingAt ||
+                                null,
+                            amount:
+                                Number(
+                                    user.subscription
+                                        .amount ||
+                                    0
+                                ),
+                            currency:
+                                user.subscription
+                                    .currency ||
+                                "INR",
+                            setupFeePaid:
+                                Boolean(
+                                    user.subscription
+                                        .setupFeePaid
+                                ),
+                        }
+                        : null,
             });
-
         } catch (error) {
-
             console.error(
                 "VERIFY PAYMENT ERROR:",
                 error
@@ -827,7 +1738,6 @@ exports.verifyPayment =
 
             return res.status(500).json({
                 success: false,
-
                 message:
                     error.message ||
                     "Unable to verify payment",

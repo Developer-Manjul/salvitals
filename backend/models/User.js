@@ -1,5 +1,65 @@
 const mongoose = require("mongoose");
 
+const addonSchema = new mongoose.Schema(
+    {
+        enabled: {
+            type: Boolean,
+            default: false,
+        },
+
+        quota: {
+            type: Number,
+            default: 0,
+        },
+
+        used: {
+            type: Number,
+            default: 0,
+        },
+
+        months: {
+            type: Number,
+            default: 0,
+        },
+
+        unitPrice: {
+            type: Number,
+            default: 0,
+        },
+
+        startsAt: {
+            type: Date,
+            default: null,
+        },
+
+        expiresAt: {
+            type: Date,
+            default: null,
+        },
+
+        orderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Order",
+            default: null,
+        },
+
+        razorpayOrderId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        paymentId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+    },
+    {
+        _id: false,
+    }
+);
+
 const userSchema = new mongoose.Schema(
     {
         name: {
@@ -104,10 +164,6 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
-        // =========================================
-        // BANK DETAILS
-        // =========================================
-
         bankName: {
             type: String,
             trim: true,
@@ -139,10 +195,6 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
-        // =========================================
-        // ACCOUNT SETUP
-        // =========================================
-
         accountSetupCompleted: {
             type: Boolean,
             default: false,
@@ -162,6 +214,99 @@ const userSchema = new mongoose.Schema(
         contactQuotaVersion: {
             type: Number,
             default: 0,
+        },
+
+        subscription: {
+            planId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            planName: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            status: {
+                type: String,
+                enum: [
+                    "none",
+                    "active",
+                    "expired",
+                    "cancelled",
+                ],
+                default: "none",
+            },
+
+            billingCycle: {
+                type: String,
+                trim: true,
+                default: "monthly",
+            },
+
+            startedAt: {
+                type: Date,
+                default: null,
+            },
+
+            expiresAt: {
+                type: Date,
+                default: null,
+            },
+
+            nextBillingAt: {
+                type: Date,
+                default: null,
+            },
+
+            amount: {
+                type: Number,
+                default: 0,
+            },
+
+            currency: {
+                type: String,
+                trim: true,
+                uppercase: true,
+                default: "INR",
+            },
+
+            orderId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Order",
+                default: null,
+            },
+
+            razorpayOrderId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            paymentId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            setupFeePaid: {
+                type: Boolean,
+                default: false,
+            },
+        },
+
+        addons: {
+            contacts: {
+                type: addonSchema,
+                default: () => ({}),
+            },
+
+            ai_chat: {
+                type: addonSchema,
+                default: () => ({}),
+            },
         },
     },
     {

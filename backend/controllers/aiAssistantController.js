@@ -1,272 +1,363 @@
 const jwt = require("jsonwebtoken");
 const AIAssistant = require("../models/AIAssistant");
 const AIUsage = require("../models/AIUsage");
+
 const {
-  getAIPlan,
-  getMonthKey,
+    getAIPlan,
+    getMonthKey,
 } = require("../utils/aiLimits");
 
 function getUserId(req) {
-  const authorization =
-    req.headers.authorization || "";
+    const authorization =
+        req.headers.authorization || "";
 
-  if (!authorization.startsWith("Bearer ")) {
-    return null;
-  }
+    if (
+        !authorization.startsWith(
+            "Bearer "
+        )
+    ) {
+        return null;
+    }
 
-  try {
-    const decoded = jwt.verify(
-      authorization.slice(7),
-      process.env.JWT_SECRET
-    );
+    try {
+        const decoded =
+            jwt.verify(
+                authorization.slice(7),
+                process.env.JWT_SECRET
+            );
 
-    return (
-      decoded.id ||
-      decoded._id ||
-      decoded.userId ||
-      null
-    );
-  } catch (_) {
-    return null;
-  }
+        return (
+            decoded.id ||
+            decoded._id ||
+            decoded.userId ||
+            null
+        );
+    } catch (_) {
+        return null;
+    }
 }
 
-function cleanString(value, max = 10000) {
-  return String(value ?? "")
-    .trim()
-    .slice(0, max);
+function cleanString(
+    value,
+    max = 10000
+) {
+    return String(
+        value ?? ""
+    )
+        .trim()
+        .slice(0, max);
 }
 
 function cleanColor(value) {
-  const color = String(value || "").trim();
+    const color =
+        String(value || "")
+            .trim();
 
-  if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
-    return color.toUpperCase();
-  }
+    if (
+        /^#[0-9A-Fa-f]{6}$/.test(
+            color
+        )
+    ) {
+        return color.toUpperCase();
+    }
 
-  return "#00656A";
+    return "#00656A";
 }
 
-exports.getAssistant = async (req, res) => {
-  try {
-    const ownerId = getUserId(req);
+function buildUsage(
+    plan,
+    used,
+    monthKey
+) {
+    const planLimit =
+        Number(
+            plan?.planLimit || 0
+        );
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
+    const addonLimit =
+        Number(
+            plan?.addonLimit || 0
+        );
 
-    const assistant =
-      await AIAssistant.findOneAndUpdate(
-        { ownerId },
-        {
-          $setOnInsert: {
-            ownerId,
-          },
-        },
-        {
-          new: true,
-          upsert: true,
-          setDefaultsOnInsert: true,
-        }
-      );
+    const totalLimit =
+        Number(
+            plan?.totalLimit ??
+            plan?.limit ??
+            0
+        );
 
-    const plan = await getAIPlan(ownerId);
+    const safeUsed =
+        Math.max(
+            Number(used || 0),
+            0
+        );
 
-    const monthKey = getMonthKey();
-
-    const usage =
-      await AIUsage.findOne({
-        ownerId,
-        monthKey,
-      }).lean();
-
-    return res.json({
-      success: true,
-
-      assistant,
-
-      usage: {
-        used: usage?.count || 0,
-        limit: plan.limit,
-        remaining: Math.max(
-          (plan.limit || 0) -
-            (usage?.count || 0),
-          0
-        ),
+    return {
+        used: safeUsed,
+        planLimit,
+        addonLimit,
+        totalLimit,
+        limit: totalLimit,
+        remaining:
+            Math.max(
+                totalLimit -
+                    safeUsed,
+                0
+            ),
         month: monthKey,
-      },
+    };
+}
 
-      plan,
-    });
-  } catch (error) {
-    console.error(
-      "GET AI ASSISTANT ERROR:",
-      error
-    );
+exports.getAssistant =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const ownerId =
+                getUserId(req);
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Unable to load AI Assistant settings",
-    });
-  }
-};
+            if (!ownerId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication required",
+                });
+            }
 
-exports.updateAssistant = async (
-  req,
-  res
-) => {
-  try {
-    const ownerId = getUserId(req);
+            const assistant =
+                await AIAssistant.findOneAndUpdate(
+                    { ownerId },
+                    {
+                        $setOnInsert: {
+                            ownerId,
+                        },
+                    },
+                    {
+                        new: true,
+                        upsert: true,
+                        setDefaultsOnInsert:
+                            true,
+                    }
+                );
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
+            const plan =
+                await getAIPlan(
+                    ownerId
+                );
 
-    const assistant =
-      await AIAssistant.findOneAndUpdate(
-        { ownerId },
+            const monthKey =
+                getMonthKey();
 
-        {
-          $set: {
-            enabled:
-              req.body?.enabled !== false,
+            const usage =
+                await AIUsage.findOne({
+                    ownerId,
+                    monthKey,
+                }).lean();
 
-            assistantName:
-              cleanString(
-                req.body?.assistantName,
-                120
-              ) || "AI Assistant",
+            const used =
+                Number(
+                    usage?.count || 0
+                );
 
-            logoUrl:
-              cleanString(
-                req.body?.logoUrl,
-                1000
-              ),
+            return res.json({
+                success: true,
+                assistant,
+                usage:
+                    buildUsage(
+                        plan,
+                        used,
+                        monthKey
+                    ),
+                plan,
+            });
+        } catch (error) {
+            console.error(
+                "GET AI ASSISTANT ERROR:",
+                error
+            );
 
-            primaryColor:
-              cleanColor(
-                req.body?.primaryColor
-              ),
-
-            websiteUrl:
-              cleanString(
-                req.body?.websiteUrl,
-                500
-              ),
-
-            welcomeMessage:
-              cleanString(
-                req.body?.welcomeMessage,
-                1000
-              ) ||
-              "Hello 👋 Welcome! How can I help you today?",
-
-            customInstructions:
-              cleanString(
-                req.body?.customInstructions,
-                10000
-              ),
-
-            status:
-              req.body?.enabled === false
-                ? "disabled"
-                : "active",
-          },
-
-          $setOnInsert: {
-            ownerId,
-          },
-        },
-
-        {
-          new: true,
-          upsert: true,
-          setDefaultsOnInsert: true,
-          runValidators: true,
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Unable to load AI Assistant settings",
+            });
         }
-      );
+    };
 
-    return res.json({
-      success: true,
-      message:
-        "AI Assistant settings saved",
-      assistant,
-    });
-  } catch (error) {
-    console.error(
-      "UPDATE AI ASSISTANT ERROR:",
-      error
-    );
+exports.updateAssistant =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const ownerId =
+                getUserId(req);
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Unable to save AI Assistant settings",
-    });
-  }
-};
+            if (!ownerId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication required",
+                });
+            }
 
-exports.getUsage = async (
-  req,
-  res
-) => {
-  try {
-    const ownerId = getUserId(req);
+            const assistant =
+                await AIAssistant.findOneAndUpdate(
+                    { ownerId },
+                    {
+                        $set: {
+                            enabled:
+                                req.body?.enabled !==
+                                false,
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
+                            assistantName:
+                                cleanString(
+                                    req.body
+                                        ?.assistantName,
+                                    120
+                                ) ||
+                                "AI Assistant",
 
-    const plan =
-      await getAIPlan(ownerId);
+                            fromName:
+                                cleanString(
+                                    req.body
+                                        ?.fromName,
+                                    200
+                                ),
 
-    const monthKey =
-      getMonthKey();
+                            logoUrl:
+                                cleanString(
+                                    req.body
+                                        ?.logoUrl,
+                                    1000
+                                ),
 
-    const usage =
-      await AIUsage.findOne({
-        ownerId,
-        monthKey,
-      }).lean();
+                            primaryColor:
+                                cleanColor(
+                                    req.body
+                                        ?.primaryColor
+                                ),
 
-    const used =
-      usage?.count || 0;
+                            websiteUrl:
+                                cleanString(
+                                    req.body
+                                        ?.websiteUrl,
+                                    500
+                                ),
 
-    return res.json({
-      success: true,
+                            welcomeMessage:
+                                cleanString(
+                                    req.body
+                                        ?.welcomeMessage,
+                                    1000
+                                ) ||
+                                "Hello 👋 Welcome! How can I help you today?",
 
-      plan,
+                            customInstructions:
+                                cleanString(
+                                    req.body
+                                        ?.customInstructions,
+                                    10000
+                                ),
 
-      usage: {
-        used,
-        limit: plan.limit,
-        remaining: Math.max(
-          plan.limit - used,
-          0
-        ),
-        month: monthKey,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "GET AI USAGE ERROR:",
-      error
-    );
+                            status:
+                                req.body
+                                    ?.enabled ===
+                                false
+                                    ? "disabled"
+                                    : "active",
+                        },
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Unable to load AI usage",
-    });
-  }
-};
+                        $setOnInsert: {
+                            ownerId,
+                        },
+                    },
+                    {
+                        new: true,
+                        upsert: true,
+                        setDefaultsOnInsert:
+                            true,
+                        runValidators: true,
+                    }
+                );
+
+            return res.json({
+                success: true,
+                message:
+                    "AI Assistant settings saved",
+                assistant,
+            });
+        } catch (error) {
+            console.error(
+                "UPDATE AI ASSISTANT ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Unable to save AI Assistant settings",
+            });
+        }
+    };
+
+exports.getUsage =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const ownerId =
+                getUserId(req);
+
+            if (!ownerId) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication required",
+                });
+            }
+
+            const plan =
+                await getAIPlan(
+                    ownerId
+                );
+
+            const monthKey =
+                getMonthKey();
+
+            const usage =
+                await AIUsage.findOne({
+                    ownerId,
+                    monthKey,
+                }).lean();
+
+            const used =
+                Number(
+                    usage?.count || 0
+                );
+
+            return res.json({
+                success: true,
+                plan,
+                usage:
+                    buildUsage(
+                        plan,
+                        used,
+                        monthKey
+                    ),
+            });
+        } catch (error) {
+            console.error(
+                "GET AI USAGE ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Unable to load AI usage",
+            });
+        }
+    };

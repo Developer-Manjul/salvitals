@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
+const User = require("../models/User");
 const AIAssistant = require("../models/AIAssistant");
 const AIConversation = require("../models/AIConversation");
 const AIMessage = require("../models/AIMessage");
@@ -22,6 +23,12 @@ const {
 const {
   syncAILead,
 } = require("../services/aiLeadService");
+
+/*
+|--------------------------------------------------------------------------
+| Auth
+|--------------------------------------------------------------------------
+*/
 
 function getUserId(req) {
   const authorization =
@@ -48,20 +55,44 @@ function getUserId(req) {
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 function safeText(value, max = 5000) {
   return String(value || "")
     .trim()
     .slice(0, max);
 }
 
-function isGreeting(text) {
-  const value = String(text || "")
+function normalizePhone(value) {
+  return String(value || "")
+    .replace(/[^\d+]/g, "")
+    .trim();
+}
+
+function normalizeMessage(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[!?,.]+/g, "")
+    .replace(/\s+/g, " ")
     .trim();
+}
 
-  const greetings = new Set([
+/*
+|--------------------------------------------------------------------------
+| Greeting
+|--------------------------------------------------------------------------
+*/
+
+function isGreeting(text) {
+  const value =
+    normalizeMessage(text);
+
+  return new Set([
     "hi",
     "hello",
     "hey",
@@ -77,28 +108,482 @@ function isGreeting(text) {
     "hi there",
     "hello there",
     "hey there",
-  ]);
-
-  return greetings.has(value);
+  ]).has(value);
 }
+
+/*
+|--------------------------------------------------------------------------
+| Appointment Yes / No
+|--------------------------------------------------------------------------
+*/
+
+function isYes(text) {
+  const value =
+    normalizeMessage(text);
+
+  return new Set([
+    "yes",
+    "y",
+    "yeah",
+    "yep",
+    "yup",
+    "haan",
+    "han",
+    "ha",
+    "haa",
+    "ji",
+    "ji haan",
+    "bilkul",
+    "sure",
+    "okay",
+    "ok",
+    "yes please",
+    "haan ji",
+    "of course",
+  ]).has(value);
+}
+
+function isNo(text) {
+  const value =
+    normalizeMessage(text);
+
+  return new Set([
+    "no",
+    "n",
+    "nope",
+    "nah",
+    "nahi",
+    "nahin",
+    "na",
+    "not now",
+    "no thanks",
+    "no thank you",
+    "nahi chahiye",
+    "abhi nahi",
+  ]).has(value);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Greeting Message
+|--------------------------------------------------------------------------
+|
+| fromName is optional.
+|
+| assistantName = Sona
+| fromName      = Konark Aesthetics
+|
+| Result:
+| Hi 👋 I'm Sona from Konark Aesthetics. How can I help you today?
+|
+| If fromName is empty:
+| Hi 👋 I'm Sona. How can I help you today?
+|
+| Saved welcomeMessage is handled separately in publicStart().
+|--------------------------------------------------------------------------
+*/
 
 function getGreeting(assistant) {
-  const name =
+  const assistantName = String(
     assistant?.assistantName ||
-    "AI Assistant";
+      "AI Assistant"
+  ).trim();
 
-  return `Hello! 👋 I'm ${name}. How can I help you today?`;
+  const fromName = String(
+    assistant?.fromName ||
+      ""
+  ).trim();
+
+  if (fromName) {
+    return `Hi 👋 I'm ${assistantName} from ${fromName}. How can I help you today?`;
+  }
+
+  return `Hi 👋 I'm ${assistantName}. How can I help you today?`;
 }
 
-function getHumanHandoverMessage() {
-  return "I don't have enough verified information to answer that accurately. Our team can help you with this.";
+/*
+|--------------------------------------------------------------------------
+| Appointment Messages
+|--------------------------------------------------------------------------
+*/
+
+function getAppointmentOfferMessage() {
+  return "Would you like me to help arrange an appointment with our team?";
 }
+
+function getAskNameMessage() {
+  return "Sure. Please share your name.";
+}
+
+function getAskPhoneMessage() {
+  return "Thanks. Please share your mobile number.";
+}
+
+function getAppointmentConfirmationMessage() {
+  return "Thanks. Our team will contact you shortly to confirm the appointment.";
+}
+
+function getNoAppointmentMessage(phone) {
+  if (phone) {
+    return `No problem. You can contact our team directly on ${phone} for a call or WhatsApp.`;
+  }
+
+  return "No problem. You can contact our team through the contact details available on the website.";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Phone Helpers
+|--------------------------------------------------------------------------
+*/
+
+function extractPhoneNumbers(text) {
+  const source =
+    String(text || "");
+
+  const matches =
+    source.match(
+      /(?:\+?\d[\d\s().-]{7,}\d)/g
+    ) || [];
+
+  const numbers = [];
+
+  matches.forEach((match) => {
+    const cleaned =
+      match.replace(/\D/g, "");
+
+    if (
+      cleaned.length >= 8 &&
+      cleaned.length <= 15 &&
+      !numbers.includes(cleaned)
+    ) {
+      numbers.push(cleaned);
+    }
+  });
+
+  return numbers;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Knowledge Helpers
+|--------------------------------------------------------------------------
+*/
+
+function hasUsefulKnowledge(items) {
+  if (
+    !Array.isArray(items) ||
+    !items.length
+  ) {
+    return false;
+  }
+
+  return items.some(
+    (item) =>
+      String(
+        item?.content || ""
+      ).trim().length > 0
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Appointment State Helpers
+|--------------------------------------------------------------------------
+*/
+
+function hasAppointmentOffer(messages) {
+  if (
+    !Array.isArray(messages) ||
+    !messages.length
+  ) {
+    return false;
+  }
+
+  return messages.some(
+    (message) => {
+      if (
+        message?.sender !== "ai"
+      ) {
+        return false;
+      }
+
+      const text =
+        String(
+          message?.message || ""
+        ).trim();
+
+      return (
+        /would you like/i.test(text) &&
+        /appointment/i.test(text)
+      );
+    }
+  );
+}
+
+function getLastAIMessage(messages) {
+  if (
+    !Array.isArray(messages)
+  ) {
+    return null;
+  }
+
+  return (
+    [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message?.sender === "ai"
+      ) || null
+  );
+}
+
+function hasNameRequest(messages) {
+  const lastAI =
+    getLastAIMessage(messages);
+
+  if (!lastAI) {
+    return false;
+  }
+
+  return /share your name|your name/i.test(
+    String(
+      lastAI.message || ""
+    )
+  );
+}
+
+function hasPhoneRequest(messages) {
+  const lastAI =
+    getLastAIMessage(messages);
+
+  if (!lastAI) {
+    return false;
+  }
+
+  return /mobile number|phone number|mobile|phone/i.test(
+    String(
+      lastAI.message || ""
+    )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Visitor Name Validation
+|--------------------------------------------------------------------------
+*/
+
+function looksLikeName(text) {
+  const value =
+    String(text || "")
+      .trim();
+
+  if (!value) {
+    return false;
+  }
+
+  if (value.length > 100) {
+    return false;
+  }
+
+  if (/\d/.test(value)) {
+    return false;
+  }
+
+  if (
+    /https?:\/\//i.test(value)
+  ) {
+    return false;
+  }
+
+  if (
+    /[?!]/.test(value)
+  ) {
+    return false;
+  }
+
+  const words =
+    value
+      .split(/\s+/)
+      .filter(Boolean);
+
+  if (
+    words.length < 1 ||
+    words.length > 5
+  ) {
+    return false;
+  }
+
+  const invalidNameWords =
+    new Set([
+      "yes",
+      "no",
+      "okay",
+      "ok",
+      "thanks",
+      "thank",
+      "hello",
+      "hi",
+      "hey",
+      "number",
+      "phone",
+      "mobile",
+    ]);
+
+  if (
+    words.some(
+      (word) =>
+        invalidNameWords.has(
+          word.toLowerCase()
+        )
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Owner Profile
+|--------------------------------------------------------------------------
+*/
+
+async function getOwnerProfile(ownerId) {
+  try {
+    return await User.findById(
+      ownerId
+    )
+      .select(
+        "clinicName businessName name phone mobile whatsappNumber"
+      )
+      .lean();
+  } catch (_) {
+    return null;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Client Name
+|--------------------------------------------------------------------------
+|
+| Kept for CRM data/context.
+| It is NOT used in the default greeting.
+|--------------------------------------------------------------------------
+*/
+
+async function getClientName(
+  assistant,
+  ownerProfile
+) {
+  return String(
+    assistant?.clientName ||
+      assistant?.businessName ||
+      assistant?.clinicName ||
+      ownerProfile?.clinicName ||
+      ownerProfile?.businessName ||
+      ""
+  ).trim();
+}
+
+/*
+|--------------------------------------------------------------------------
+| Find Client Contact Number
+|--------------------------------------------------------------------------
+*/
+
+async function findClientContactNumber({
+  assistant,
+  ownerProfile,
+}) {
+  const directCandidates = [
+    assistant?.whatsappNumber,
+    assistant?.contactPhone,
+    assistant?.phone,
+    assistant?.mobile,
+    ownerProfile?.whatsappNumber,
+    ownerProfile?.phone,
+    ownerProfile?.mobile,
+  ];
+
+  for (
+    const candidate of directCandidates
+  ) {
+    const numbers =
+      extractPhoneNumbers(
+        candidate
+      );
+
+    if (numbers.length) {
+      return numbers[0];
+    }
+
+    const normalized =
+      normalizePhone(candidate);
+
+    if (
+      normalized.replace(/\D/g, "")
+        .length >= 8
+    ) {
+      return normalized;
+    }
+  }
+
+  let knowledge = [];
+
+  try {
+    knowledge =
+      await searchKnowledge({
+        ownerId:
+          assistant.ownerId,
+
+        assistantId:
+          assistant._id,
+
+        query:
+          "contact phone number mobile WhatsApp call us contact details",
+
+        limit: 8,
+      });
+  } catch (_) {
+    knowledge = [];
+  }
+
+  const text =
+    knowledge
+      .map(
+        (item) =>
+          `${item?.title || ""}\n${item?.content || ""}\n${item?.sourceUrl || ""}`
+      )
+      .join("\n");
+
+  const numbers =
+    extractPhoneNumbers(text);
+
+  return numbers.length
+    ? numbers[0]
+    : "";
+}
+
+/*
+|--------------------------------------------------------------------------
+| AI Usage
+|--------------------------------------------------------------------------
+*/
 
 async function reserveUsage(ownerId) {
-  const plan =
-    await getAIPlan(ownerId);
+  const plan = await getAIPlan(ownerId);
 
-  if (!plan.limit) {
+  const totalLimit = Number(
+    plan.totalLimit ??
+      plan.limit ??
+      0
+  );
+
+  if (!totalLimit) {
     return {
       allowed: false,
       plan,
@@ -108,44 +593,46 @@ async function reserveUsage(ownerId) {
     };
   }
 
-  const monthKey =
-    getMonthKey();
+  const monthKey = getMonthKey();
 
-  let usage =
-    await AIUsage.findOne({
-      ownerId,
-      monthKey,
-    });
+  let usage = await AIUsage.findOne({
+    ownerId,
+    monthKey,
+  });
 
   if (!usage) {
     try {
-      usage =
-        await AIUsage.create({
-          ownerId,
-          monthKey,
-          count: 0,
-          limit: plan.limit,
-        });
+      usage = await AIUsage.create({
+        ownerId,
+        monthKey,
+        count: 0,
+        limit: totalLimit,
+      });
     } catch (error) {
       if (error?.code === 11000) {
-        usage =
-          await AIUsage.findOne({
-            ownerId,
-            monthKey,
-          });
+        usage = await AIUsage.findOne({
+          ownerId,
+          monthKey,
+        });
       } else {
         throw error;
       }
     }
   }
 
-  usage.limit =
-    plan.limit;
+  if (!usage) {
+    return {
+      allowed: false,
+      plan,
+      used: 0,
+      remaining: 0,
+      monthKey,
+    };
+  }
 
-  if (
-    usage.count >=
-    plan.limit
-  ) {
+  usage.limit = totalLimit;
+
+  if (usage.count >= totalLimit) {
     await usage.save();
 
     return {
@@ -162,7 +649,7 @@ async function reserveUsage(ownerId) {
       {
         _id: usage._id,
         count: {
-          $lt: plan.limit,
+          $lt: totalLimit,
         },
       },
       {
@@ -170,7 +657,7 @@ async function reserveUsage(ownerId) {
           count: 1,
         },
         $set: {
-          limit: plan.limit,
+          limit: totalLimit,
         },
       },
       {
@@ -182,7 +669,7 @@ async function reserveUsage(ownerId) {
     return {
       allowed: false,
       plan,
-      used: plan.limit,
+      used: totalLimit,
       remaining: 0,
       monthKey,
     };
@@ -193,12 +680,17 @@ async function reserveUsage(ownerId) {
     plan,
     used: updated.count,
     remaining: Math.max(
-      plan.limit - updated.count,
+      totalLimit - updated.count,
       0
     ),
     monthKey,
   };
 }
+/*
+|--------------------------------------------------------------------------
+| Public Conversation
+|--------------------------------------------------------------------------
+*/
 
 async function getOrCreatePublicConversation({
   assistant,
@@ -209,7 +701,9 @@ async function getOrCreatePublicConversation({
     await AIConversation.findOne({
       assistantId:
         assistant._id,
+
       sessionId,
+
       status: {
         $ne: "closed",
       },
@@ -222,39 +716,49 @@ async function getOrCreatePublicConversation({
       await AIConversation.create({
         ownerId:
           assistant.ownerId,
+
         assistantId:
           assistant._id,
+
         visitorId:
           safeText(
             visitor?.visitorId,
             120
           ),
+
         sessionId:
           safeText(
             sessionId,
             200
           ),
+
         visitorName:
           safeText(
             visitor?.name,
             120
           ),
+
         visitorPhone:
           safeText(
             visitor?.phone,
             50
           ),
+
         visitorEmail:
           safeText(
             visitor?.email,
             160
           ),
+
         status:
           "active",
+
         mode:
           "ai",
+
         source:
           "Website",
+
         unreadForTeam:
           false,
       });
@@ -286,13 +790,15 @@ async function getOrCreatePublicConversation({
     }
 
     if (
-      Object.keys(updates).length
+      Object.keys(updates)
+        .length
     ) {
       conversation =
         await AIConversation.findByIdAndUpdate(
           conversation._id,
           {
-            $set: updates,
+            $set:
+              updates,
           },
           {
             new: true,
@@ -304,46 +810,11 @@ async function getOrCreatePublicConversation({
   return conversation;
 }
 
-async function createHumanHandover({
-  assistant,
-  conversation,
-}) {
-  const messageText =
-    getHumanHandoverMessage();
-
-  const message =
-    await AIMessage.create({
-      ownerId:
-        assistant.ownerId,
-      assistantId:
-        assistant._id,
-      conversationId:
-        conversation._id,
-      sender:
-        "system",
-      message:
-        messageText,
-    });
-
-  conversation.mode =
-    "human";
-
-  conversation.status =
-    "waiting_human";
-
-  conversation.lastMessage =
-    messageText;
-
-  conversation.lastMessageAt =
-    new Date();
-
-  conversation.unreadForTeam =
-    true;
-
-  await conversation.save();
-
-  return message;
-}
+/*
+|--------------------------------------------------------------------------
+| Conversation History
+|--------------------------------------------------------------------------
+*/
 
 async function getConversationHistory(
   conversationId
@@ -354,9 +825,64 @@ async function getConversationHistory(
     .sort({
       createdAt: 1,
     })
-    .limit(20)
+    .limit(30)
     .lean();
 }
+
+/*
+|--------------------------------------------------------------------------
+| Save AI Reply
+|--------------------------------------------------------------------------
+*/
+
+async function saveAIReply({
+  assistant,
+  conversation,
+  text,
+}) {
+  const reply =
+    await AIMessage.create({
+      ownerId:
+        assistant.ownerId,
+
+      assistantId:
+        assistant._id,
+
+      conversationId:
+        conversation._id,
+
+      sender:
+        "ai",
+
+      message:
+        text,
+    });
+
+  conversation.mode =
+    "ai";
+
+  conversation.status =
+    "active";
+
+  conversation.lastMessage =
+    text;
+
+  conversation.lastMessageAt =
+    new Date();
+
+  conversation.unreadForTeam =
+    false;
+
+  await conversation.save();
+
+  return reply;
+}
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC START
+|--------------------------------------------------------------------------
+*/
 
 exports.publicStart =
   async (req, res) => {
@@ -406,6 +932,17 @@ exports.publicStart =
         });
       }
 
+      const ownerProfile =
+        await getOwnerProfile(
+          assistant.ownerId
+        );
+
+      const clientName =
+        await getClientName(
+          assistant,
+          ownerProfile
+        );
+
       const conversation =
         await getOrCreatePublicConversation({
           assistant,
@@ -426,48 +963,34 @@ exports.publicStart =
           .limit(100)
           .lean();
 
-      const plan =
-        await getAIPlan(
-          assistant.ownerId
-        );
-
-      const usage =
-        await AIUsage.findOne({
-          ownerId:
-            assistant.ownerId,
-          monthKey:
-            getMonthKey(),
-        }).lean();
-
       return res.json({
         success: true,
+
         assistant: {
           id:
             assistant._id,
+
           assistantName:
             assistant.assistantName ||
             "AI Assistant",
+
+          fromName:
+            assistant.fromName ||
+            "",
+
+          clientName,
+
           welcomeMessage:
             assistant.welcomeMessage ||
-            "Hello 👋 Welcome! How can I help you today?",
+            getGreeting(assistant),
+
           enabled:
             assistant.enabled,
         },
+
         conversation,
+
         messages,
-        usage: {
-          used:
-            usage?.count ||
-            0,
-          limit:
-            plan.limit,
-          remaining:
-            Math.max(
-              plan.limit -
-                (usage?.count || 0),
-              0
-            ),
-        },
       });
     } catch (error) {
       console.error(
@@ -482,6 +1005,12 @@ exports.publicStart =
       });
     }
   };
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC MESSAGE
+|--------------------------------------------------------------------------
+*/
 
 exports.publicMessage =
   async (req, res) => {
@@ -557,6 +1086,15 @@ exports.publicMessage =
         });
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | Reserve CRM AI usage
+      |--------------------------------------------------------------------------
+      |
+      | Every visitor message counts as one SaleVitals AI message.
+      |
+      */
+
       const usage =
         await reserveUsage(
           assistant.ownerId
@@ -565,47 +1103,59 @@ exports.publicMessage =
       if (!usage.allowed) {
         return res.status(429).json({
           success: false,
+
           code:
             usage.plan.limit
               ? "MONTHLY_LIMIT_REACHED"
               : "NO_ACTIVE_PLAN",
+
           message:
             usage.plan.limit
               ? `Your monthly AI chatbot limit of ${usage.plan.limit} messages has been reached.`
               : "An active Starter, Growth or Scale plan is required to use the AI chatbot.",
-          usage: {
-            used:
-              usage.used,
-            limit:
-              usage.plan.limit,
-            remaining:
-              usage.remaining,
-          },
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Save Visitor Message
+      |--------------------------------------------------------------------------
+      */
 
       const visitorMessage =
         await AIMessage.create({
           ownerId:
             assistant.ownerId,
+
           assistantId:
             assistant._id,
+
           conversationId:
             conversation._id,
+
           sender:
             "visitor",
+
           message:
             messageText,
         });
+
+      /*
+      |--------------------------------------------------------------------------
+      | Sync Lead
+      |--------------------------------------------------------------------------
+      */
 
       if (req.body?.visitor) {
         await syncAILead({
           ownerId:
             assistant.ownerId,
+
           conversation: {
             ...conversation.toObject(),
             ...req.body.visitor,
           },
+
           service:
             safeText(
               req.body?.service,
@@ -613,6 +1163,12 @@ exports.publicMessage =
             ),
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | HUMAN MODE
+      |--------------------------------------------------------------------------
+      */
 
       if (
         conversation.mode ===
@@ -627,12 +1183,16 @@ exports.publicMessage =
           await AIMessage.create({
             ownerId:
               assistant.ownerId,
+
             assistantId:
               assistant._id,
+
             conversationId:
               conversation._id,
+
             sender:
               "system",
+
             message:
               replyText,
           });
@@ -659,17 +1219,52 @@ exports.publicMessage =
             reply,
           conversation:
             updatedConversation,
-          usage: {
-            used:
-              usage.used,
-            limit:
-              usage.plan.limit,
-            remaining:
-              usage.remaining,
-          },
           visitorMessage,
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Owner Profile
+      |--------------------------------------------------------------------------
+      */
+
+      const ownerProfile =
+        await getOwnerProfile(
+          assistant.ownerId
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Conversation History
+      |--------------------------------------------------------------------------
+      */
+
+      const history =
+        await getConversationHistory(
+          conversation._id
+        );
+
+      const previousMessages =
+        history.filter(
+          (message) =>
+            String(
+              message?._id
+            ) !==
+            String(
+              visitorMessage._id
+            )
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | GREETING
+      |--------------------------------------------------------------------------
+      |
+      | Local response.
+      | No OpenAI call.
+      |--------------------------------------------------------------------------
+      */
 
       if (
         isGreeting(
@@ -682,35 +1277,12 @@ exports.publicMessage =
           );
 
         const reply =
-          await AIMessage.create({
-            ownerId:
-              assistant.ownerId,
-            assistantId:
-              assistant._id,
-            conversationId:
-              conversation._id,
-            sender:
-              "ai",
-            message:
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
               replyText,
           });
-
-        conversation.lastMessage =
-          replyText;
-
-        conversation.lastMessageAt =
-          new Date();
-
-        conversation.mode =
-          "ai";
-
-        conversation.status =
-          "active";
-
-        conversation.unreadForTeam =
-          false;
-
-        await conversation.save();
 
         const updatedConversation =
           await AIConversation.findById(
@@ -723,17 +1295,227 @@ exports.publicMessage =
             reply,
           conversation:
             updatedConversation,
-          usage: {
-            used:
-              usage.used,
-            limit:
-              usage.plan.limit,
-            remaining:
-              usage.remaining,
-          },
           visitorMessage,
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | APPOINTMENT OFFER RESPONSE
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        hasAppointmentOffer(
+          previousMessages
+        )
+      ) {
+        /*
+        |--------------------------------------------------------------------------
+        | YES
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          isYes(
+            messageText
+          )
+        ) {
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getAskNameMessage(),
+            });
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message:
+              reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NO
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          isNo(
+            messageText
+          )
+        ) {
+          const contactNumber =
+            await findClientContactNumber({
+              assistant,
+              ownerProfile,
+            });
+
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getNoAppointmentMessage(
+                  contactNumber
+                ),
+            });
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message:
+              reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | APPOINTMENT NAME
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        hasNameRequest(
+          previousMessages
+        ) &&
+        looksLikeName(
+          messageText
+        )
+      ) {
+        conversation.visitorName =
+          safeText(
+            messageText,
+            120
+          );
+
+        await conversation.save();
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
+              getAskPhoneMessage(),
+          });
+
+        await syncAILead({
+          ownerId:
+            assistant.ownerId,
+
+          conversation:
+            conversation.toObject(),
+
+          service:
+            safeText(
+              req.body?.service,
+              160
+            ),
+        });
+
+        const updatedConversation =
+          await AIConversation.findById(
+            conversation._id
+          ).lean();
+
+        return res.json({
+          success: true,
+          message:
+            reply,
+          conversation:
+            updatedConversation,
+          visitorMessage,
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | APPOINTMENT PHONE
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        hasPhoneRequest(
+          previousMessages
+        )
+      ) {
+        const phoneNumbers =
+          extractPhoneNumbers(
+            messageText
+          );
+
+        if (
+          phoneNumbers.length
+        ) {
+          conversation.visitorPhone =
+            phoneNumbers[0];
+
+          await conversation.save();
+
+          await syncAILead({
+            ownerId:
+              assistant.ownerId,
+
+            conversation:
+              conversation.toObject(),
+
+            service:
+              safeText(
+                req.body?.service,
+                160
+              ),
+          });
+
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getAppointmentConfirmationMessage(),
+            });
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message:
+              reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | KNOWLEDGE SEARCH
+      |--------------------------------------------------------------------------
+      |
+      | Reduced from 5 to 3 to reduce OpenAI token usage.
+      |--------------------------------------------------------------------------
+      */
 
       let knowledge = [];
 
@@ -742,11 +1524,14 @@ exports.publicMessage =
           await searchKnowledge({
             ownerId:
               assistant.ownerId,
+
             assistantId:
               assistant._id,
+
             query:
               messageText,
-            limit: 5,
+
+            limit: 3,
           });
       } catch (knowledgeError) {
         console.error(
@@ -757,83 +1542,196 @@ exports.publicMessage =
         knowledge = [];
       }
 
-      const history =
-        await getConversationHistory(
-          conversation._id
-        );
+      /*
+      |--------------------------------------------------------------------------
+      | No Useful Knowledge
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        !hasUsefulKnowledge(
+          knowledge
+        )
+      ) {
+        return res.json({
+          success: true,
+          message: null,
+          conversation,
+          visitorMessage,
+          silent: true,
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | AI RESPONSE
+      |--------------------------------------------------------------------------
+      */
 
       const aiResult =
         await generateAIReply({
           assistant,
-          history,
+
+          history:
+            previousMessages,
+
           userMessage:
             messageText,
+
           knowledge,
         });
 
       if (
-        aiResult?.needsHuman ||
+        !aiResult?.shouldReply ||
         !aiResult?.text
       ) {
-        const reply =
-          await createHumanHandover({
-            assistant,
-            conversation,
-          });
-
-        const updatedConversation =
-          await AIConversation.findById(
-            conversation._id
-          ).lean();
-
         return res.json({
           success: true,
-          message:
-            reply,
-          conversation:
-            updatedConversation,
-          usage: {
-            used:
-              usage.used,
-            limit:
-              usage.plan.limit,
-            remaining:
-              usage.remaining,
-          },
+          message: null,
+          conversation,
           visitorMessage,
+          silent: true,
         });
       }
 
-      const reply =
-        await AIMessage.create({
-          ownerId:
-            assistant.ownerId,
-          assistantId:
-            assistant._id,
-          conversationId:
-            conversation._id,
-          sender:
-            "ai",
-          message:
-            aiResult.text,
+      let replyText =
+        String(
+          aiResult.text
+        ).trim();
+
+      if (!replyText) {
+        return res.json({
+          success: true,
+          message: null,
+          conversation,
+          visitorMessage,
+          silent: true,
         });
+      }
 
-      conversation.mode =
-        "ai";
+      /*
+      |--------------------------------------------------------------------------
+      | Appointment Offer
+      |--------------------------------------------------------------------------
+      |
+      | IMPORTANT:
+      |
+      | Appointment offer is shown only AFTER
+      | at least TWO useful AI answers.
+      |
+      | Example:
+      |
+      | Question 1
+      | -> Answer 1
+      |
+      | Question 2
+      | -> Answer 2
+      | -> Appointment offer
+      |--------------------------------------------------------------------------
+      */
 
-      conversation.status =
-        "active";
+      const answeredQuestionCount =
+        previousMessages.filter(
+          (message) => {
+            if (
+              message?.sender !==
+              "ai"
+            ) {
+              return false;
+            }
 
-      conversation.lastMessage =
-        aiResult.text;
+            const text =
+              String(
+                message?.message ||
+                  ""
+              ).trim();
 
-      conversation.lastMessageAt =
-        new Date();
+            if (!text) {
+              return false;
+            }
 
-      conversation.unreadForTeam =
-        false;
+            /*
+            |--------------------------------------------------------------------------
+            | Don't count appointment flow messages
+            |--------------------------------------------------------------------------
+            */
 
-      await conversation.save();
+            if (
+              /would you like/i.test(
+                text
+              ) &&
+              /appointment/i.test(
+                text
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              /share your name/i.test(
+                text
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              /mobile number/i.test(
+                text
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              /contact our team directly/i.test(
+                text
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              /contact our team through/i.test(
+                text
+              )
+            ) {
+              return false;
+            }
+
+            return true;
+          }
+        ).length;
+
+      /*
+      |--------------------------------------------------------------------------
+      | Only after 2 useful answers
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        answeredQuestionCount >= 2 &&
+        !hasAppointmentOffer(
+          previousMessages
+        )
+      ) {
+        replyText =
+          `${replyText}\n\n${getAppointmentOfferMessage()}`;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Save AI Reply
+      |--------------------------------------------------------------------------
+      */
+
+      const reply =
+        await saveAIReply({
+          assistant,
+          conversation,
+          text:
+            replyText,
+        });
 
       const updatedConversation =
         await AIConversation.findById(
@@ -846,14 +1744,6 @@ exports.publicMessage =
           reply,
         conversation:
           updatedConversation,
-        usage: {
-          used:
-            usage.used,
-          limit:
-            usage.plan.limit,
-          remaining:
-            usage.remaining,
-        },
         visitorMessage,
       });
     } catch (error) {
@@ -871,6 +1761,12 @@ exports.publicMessage =
       });
     }
   };
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC MESSAGES
+|--------------------------------------------------------------------------
+*/
 
 exports.publicMessages =
   async (req, res) => {
@@ -950,6 +1846,12 @@ exports.publicMessages =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| LIST CONVERSATIONS
+|--------------------------------------------------------------------------
+*/
+
 exports.listConversations =
   async (req, res) => {
     try {
@@ -992,6 +1894,12 @@ exports.listConversations =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| GET CONVERSATION
+|--------------------------------------------------------------------------
+*/
+
 exports.getConversation =
   async (req, res) => {
     try {
@@ -1010,6 +1918,7 @@ exports.getConversation =
         await AIConversation.findOne({
           _id:
             req.params.id,
+
           ownerId,
         }).lean();
 
@@ -1032,10 +1941,17 @@ exports.getConversation =
           .limit(500)
           .lean();
 
+      /*
+      |--------------------------------------------------------------------------
+      | Mark as read when team opens conversation
+      |--------------------------------------------------------------------------
+      */
+
       await AIConversation.updateOne(
         {
           _id:
             conversation._id,
+
           ownerId,
         },
         {
@@ -1065,6 +1981,12 @@ exports.getConversation =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| UNREAD COUNT
+|--------------------------------------------------------------------------
+*/
+
 exports.unreadCount =
   async (req, res) => {
     try {
@@ -1082,8 +2004,10 @@ exports.unreadCount =
       const count =
         await AIConversation.countDocuments({
           ownerId,
+
           unreadForTeam:
             true,
+
           status: {
             $ne: "closed",
           },
@@ -1107,6 +2031,12 @@ exports.unreadCount =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| TAKE OVER
+|--------------------------------------------------------------------------
+*/
+
 exports.takeOver =
   async (req, res) => {
     try {
@@ -1126,7 +2056,9 @@ exports.takeOver =
           {
             _id:
               req.params.id,
+
             ownerId,
+
             status: {
               $ne: "closed",
             },
@@ -1135,8 +2067,10 @@ exports.takeOver =
             $set: {
               mode:
                 "human",
+
               status:
                 "waiting_human",
+
               unreadForTeam:
                 false,
             },
@@ -1172,6 +2106,12 @@ exports.takeOver =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| HUMAN REPLY
+|--------------------------------------------------------------------------
+*/
+
 exports.humanReply =
   async (req, res) => {
     try {
@@ -1204,7 +2144,9 @@ exports.humanReply =
         await AIConversation.findOne({
           _id:
             req.params.id,
+
           ownerId,
+
           status: {
             $ne: "closed",
           },
@@ -1238,12 +2180,16 @@ exports.humanReply =
       const message =
         await AIMessage.create({
           ownerId,
+
           assistantId:
             conversation.assistantId,
+
           conversationId:
             conversation._id,
+
           sender:
             "human",
+
           message:
             text,
         });
@@ -1267,6 +2213,12 @@ exports.humanReply =
     }
   };
 
+/*
+|--------------------------------------------------------------------------
+| CLOSE CONVERSATION
+|--------------------------------------------------------------------------
+*/
+
 exports.closeConversation =
   async (req, res) => {
     try {
@@ -1286,14 +2238,17 @@ exports.closeConversation =
           {
             _id:
               req.params.id,
+
             ownerId,
           },
           {
             $set: {
               status:
                 "closed",
+
               mode:
                 "human",
+
               unreadForTeam:
                 false,
             },

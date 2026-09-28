@@ -22,6 +22,17 @@ const aiAssistantSchema = new mongoose.Schema(
     },
 
     /*
+     * Business / Clinic / Company name shown in greeting
+     * Example:
+     * Hi 👋 I'm Sona from Konark Aesthetics. How can I help you today?
+     */
+    fromName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    /*
      * Client / clinic logo URL
      */
     logoUrl: {
@@ -48,8 +59,7 @@ const aiAssistantSchema = new mongoose.Schema(
     welcomeMessage: {
       type: String,
       trim: true,
-      default:
-        "Hello 👋 Welcome! How can I help you today?",
+      default: "Hello 👋 Welcome! How can I help you today?",
     },
 
     customInstructions: {
