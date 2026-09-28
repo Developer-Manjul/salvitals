@@ -85,6 +85,30 @@ function getDisplayName(value = "") {
   return normalizeLeadName(value);
 }
 
+function getLeadName(lead) {
+  if (!lead) return "Unknown";
+
+  return getDisplayName(
+    lead.name ||
+      lead.visitorName ||
+      lead.visitor?.name ||
+      lead.contactName ||
+      ""
+  );
+}
+
+function getLeadPhone(lead) {
+  if (!lead) return "";
+
+  return String(
+    lead.phone ||
+      lead.visitorPhone ||
+      lead.visitor?.phone ||
+      lead.contactPhone ||
+      ""
+  ).trim();
+}
+
 function normalizeSource(value = "") {
   const source = String(value || "")
     .trim()
@@ -670,16 +694,14 @@ export default function Leads({
 
     return leads.filter((lead) => {
       const displayName =
-        getDisplayName(
-          lead.name
-        );
+        getLeadName(lead);
 
       const displaySource =
         getLeadSource(lead);
 
       const searchText = [
         displayName,
-        lead.phone,
+        getLeadPhone(lead),
         lead.email,
         lead.service,
         lead.owner,
@@ -802,15 +824,13 @@ export default function Leads({
         lead._id || "",
 
       name:
-        getDisplayName(
-          lead.name
-        ),
+        getLeadName(lead),
 
       email:
         lead.email || "",
 
       phone:
-        lead.phone || "",
+        getLeadPhone(lead) || "",
 
       source:
         getLeadSource(lead),
@@ -1280,16 +1300,14 @@ export default function Leads({
               body:
                 JSON.stringify({
                   name:
-                    getDisplayName(
-                      lead.name
-                    ),
+                    getLeadName(lead),
 
                   email:
                     lead.email ||
                     "",
 
                   phone:
-                    lead.phone ||
+                    getLeadPhone(lead) ||
                     "",
 
                   source:
@@ -1987,9 +2005,7 @@ export default function Leads({
                   filteredLeads.map(
                     (lead) => {
                       const displayName =
-                        getDisplayName(
-                          lead.name
-                        );
+                        getLeadName(lead);
 
                       const displaySource =
                         getLeadSource(lead);
@@ -2057,7 +2073,7 @@ export default function Leads({
                           </td>
 
                           <td>
-                            {lead.phone ||
+                            {getLeadPhone(lead) ||
                               "—"}
                           </td>
 
@@ -2303,9 +2319,7 @@ export default function Leads({
                             <div className="lead-kanban-card-top">
 
                               <strong>
-                                {getDisplayName(
-                                  lead.name
-                                )}
+                                {getLeadName(lead)}
                               </strong>
 
                               <span
@@ -2374,9 +2388,7 @@ export default function Leads({
               filteredLeads.map(
                 (lead) => {
                   const displayName =
-                    getDisplayName(
-                      lead.name
-                    );
+                    getLeadName(lead);
 
                   const displaySource =
                     getLeadSource(lead);
@@ -2417,7 +2429,7 @@ export default function Leads({
                       <div className="lead-grid-meta">
 
                         <span>
-                          {lead.phone ||
+                          {getLeadPhone(lead) ||
                             "—"}
                         </span>
 
@@ -2858,9 +2870,7 @@ export default function Leads({
                   </p>
 
                   <h3>
-                    {getDisplayName(
-                      selectedLead.name
-                    )}
+                    {getLeadName(selectedLead)}
                   </h3>
 
                 </div>
@@ -2887,9 +2897,7 @@ export default function Leads({
                   </span>
 
                   <strong>
-                    {getDisplayName(
-                      selectedLead.name
-                    )}
+                    {getLeadName(selectedLead)}
                   </strong>
                 </div>
 
@@ -2910,7 +2918,7 @@ export default function Leads({
                   </span>
 
                   <strong>
-                    {selectedLead.phone ||
+                    {getLeadPhone(selectedLead) ||
                       "—"}
                   </strong>
                 </div>

@@ -1,11 +1,4 @@
-import {
-  getApiBaseUrl
-} from "./api";
-
-
-/* =========================================
-   PLANS
-========================================= */
+import { getApiBaseUrl } from "./api";
 
 export const PLANS = {
   starter: {
@@ -14,7 +7,7 @@ export const PLANS = {
     inr: 1489,
     usd: 63,
     description:
-      "For small businesses and teams getting started with CRM."
+      "For small businesses and teams getting started with CRM.",
   },
 
   growth: {
@@ -23,7 +16,7 @@ export const PLANS = {
     inr: 2289,
     usd: 93,
     description:
-      "For growing teams that need more capacity and collaboration."
+      "For growing teams that need more capacity and collaboration.",
   },
 
   scale: {
@@ -32,7 +25,7 @@ export const PLANS = {
     inr: 3189,
     usd: 113,
     description:
-      "For larger teams managing more leads, customers and workflows."
+      "For larger teams managing more leads, customers and workflows.",
   },
 
   enterprise: {
@@ -41,589 +34,307 @@ export const PLANS = {
     inr: null,
     usd: null,
     description:
-      "For larger organizations with advanced requirements."
-  }
+      "For larger organizations with advanced requirements.",
+  },
 };
-
-
-/* =========================================
-   SUBSCRIPTION PERIODS
-========================================= */
 
 export const SUBSCRIPTION_PERIODS = [
   {
     id: "1",
     months: 1,
-    discount: 0
+    discount: 0,
   },
-
   {
     id: "3",
     months: 3,
-    discount: 5
+    discount: 5,
   },
-
   {
     id: "6",
     months: 6,
-    discount: 7
+    discount: 7,
   },
-
   {
     id: "9",
     months: 9,
-    discount: 9
+    discount: 9,
   },
-
   {
     id: "12",
     months: 12,
-    discount: 12
-  }
+    discount: 12,
+  },
 ];
 
-
-/* =========================================
-   CURRENCY
-========================================= */
-
-export const getCurrency = (countryCode) =>
-  countryCode === "IN"
+export const getCurrency = (countryCode) => {
+  return String(countryCode || "").toUpperCase() === "IN"
     ? "INR"
     : "USD";
+};
 
-
-/* =========================================
-   PLAN PRICE
-========================================= */
-
-export const getPlanPrice = (
-  plan,
-  currency
-) => {
-
+export const getPlanPrice = (plan, currency) => {
   if (!plan) {
     return null;
   }
 
-  return currency === "INR"
+  return String(currency || "").toUpperCase() === "INR"
     ? plan.inr
     : plan.usd;
-
 };
 
-
-/* =========================================
-   FORMAT PRICE
-========================================= */
-
-export const formatPlanPrice = (
-  plan,
-  currency
-) => {
-
-  const value =
-    getPlanPrice(
-      plan,
-      currency
-    );
+export const formatPlanPrice = (plan, currency) => {
+  const value = getPlanPrice(plan, currency);
 
   if (value == null) {
     return "Custom";
   }
 
+  const normalizedCurrency =
+    String(currency || "").toUpperCase() === "INR"
+      ? "INR"
+      : "USD";
+
   return new Intl.NumberFormat(
-    currency === "INR"
-      ? "en-IN"
-      : "en-US",
+    normalizedCurrency === "INR" ? "en-IN" : "en-US",
     {
       style: "currency",
-      currency,
-      maximumFractionDigits: 0
+      currency: normalizedCurrency,
+      maximumFractionDigits: 0,
     }
   ).format(value);
-
 };
-
-
-/* =========================================
-   SAVE SELECTED PLAN
-========================================= */
 
 export const saveSelectedPlan = ({
   planId,
   months = 1,
-  currency = "INR"
+  currency = "INR",
 }) => {
-
-  const plan =
-    PLANS[planId];
+  const plan = PLANS[planId];
 
   if (!plan) {
-
-    console.error(
-      "Invalid plan:",
-      planId
-    );
-
     return false;
   }
 
-  const period =
-    SUBSCRIPTION_PERIODS.find(
-      (item) =>
-        item.months === Number(months)
-    );
+  const selectedMonths = Number(months);
+
+  const period = SUBSCRIPTION_PERIODS.find(
+    (item) => item.months === selectedMonths
+  );
+
+  if (!period) {
+    return false;
+  }
 
   const selectedPlan = {
-
-    planId:
-      plan.id,
-
-    planName:
-      plan.name,
-
-    months:
-      Number(months),
-
-    discount:
-      period
-        ? period.discount
-        : 0,
-
-    currency,
-
-    savedAt:
-      new Date().toISOString()
-
+    planId: plan.id,
+    planName: plan.name,
+    months: selectedMonths,
+    discount: period.discount,
+    currency: String(currency || "INR").toUpperCase(),
+    savedAt: new Date().toISOString(),
   };
-
 
   localStorage.setItem(
     "selectedPlan",
-    JSON.stringify(
-      selectedPlan
-    )
+    JSON.stringify(selectedPlan)
   );
-
-
-  console.log(
-    "Selected plan saved:",
-    selectedPlan
-  );
-
 
   return true;
-
 };
-
-
-/* =========================================
-   GET SELECTED PLAN
-========================================= */
 
 export const getSelectedPlan = () => {
+  const defaultPlan = {
+    planId: "starter",
+    planName: "Starter",
+    months: 1,
+    discount: 0,
+    currency: "INR",
+  };
 
   try {
-
-    const savedPlan =
-      localStorage.getItem(
-        "selectedPlan"
-      );
-
+    const savedPlan = localStorage.getItem("selectedPlan");
 
     if (!savedPlan) {
-
-      return {
-
-        planId:
-          "starter",
-
-        planName:
-          "Starter",
-
-        months:
-          1,
-
-        discount:
-          0,
-
-        currency:
-          "INR"
-
-      };
-
+      return defaultPlan;
     }
 
-
-    const selectedPlan =
-      JSON.parse(
-        savedPlan
-      );
-
+    const selectedPlan = JSON.parse(savedPlan);
 
     if (
+      !selectedPlan ||
       !selectedPlan.planId ||
-      !PLANS[
-        selectedPlan.planId
-      ]
+      !PLANS[selectedPlan.planId]
     ) {
-
-      throw new Error(
-        "Invalid saved plan"
-      );
-
+      return defaultPlan;
     }
 
+    const months = Number(selectedPlan.months || 1);
 
-    return selectedPlan;
-
-  } catch (error) {
-
-    console.error(
-      "Selected plan read error:",
-      error
+    const period = SUBSCRIPTION_PERIODS.find(
+      (item) => item.months === months
     );
 
-
     return {
-
-      planId:
-        "starter",
-
-      planName:
-        "Starter",
-
-      months:
-        1,
-
-      discount:
-        0,
-
-      currency:
-        "INR"
-
+      ...selectedPlan,
+      months,
+      discount: period
+        ? period.discount
+        : Number(selectedPlan.discount || 0),
+      currency: String(
+        selectedPlan.currency || "INR"
+      ).toUpperCase(),
     };
-
+  } catch {
+    return defaultPlan;
   }
-
 };
-
-
-/* =========================================
-   CLEAR SELECTED PLAN
-========================================= */
 
 export const clearSelectedPlan = () => {
-
-  localStorage.removeItem(
-    "selectedPlan"
-  );
-
+  localStorage.removeItem("selectedPlan");
 };
-
-
-/* =========================================
-   CALCULATE PLAN AMOUNT
-========================================= */
 
 export const calculatePlanAmount = ({
   planId,
   months = 1,
-  currency = "INR"
+  currency = "INR",
 }) => {
-
-  const plan =
-    PLANS[planId];
-
+  const plan = PLANS[planId];
 
   if (!plan) {
-
     return {
       originalAmount: 0,
       discountAmount: 0,
       finalAmount: 0,
-      discount: 0
+      discount: 0,
     };
-
   }
 
+  const monthlyPrice = getPlanPrice(
+    plan,
+    currency
+  );
 
-  const monthlyPrice =
-    getPlanPrice(
-      plan,
-      currency
-    );
-
-
-  if (
-    monthlyPrice == null
-  ) {
-
+  if (monthlyPrice == null) {
     return {
       originalAmount: null,
       discountAmount: null,
       finalAmount: null,
-      discount: 0
+      discount: 0,
     };
-
   }
 
+  const period = SUBSCRIPTION_PERIODS.find(
+    (item) => item.months === Number(months)
+  );
 
-  const period =
-    SUBSCRIPTION_PERIODS.find(
-      (item) =>
-        item.months === Number(months)
-    );
-
-
-  const discount =
-    period
-      ? period.discount
-      : 0;
-
+  const discount = period
+    ? period.discount
+    : 0;
 
   const originalAmount =
-    monthlyPrice *
-    Number(months);
+    monthlyPrice * Number(months);
 
-
-  const discountAmount =
-    Math.round(
-      originalAmount *
-      (discount / 100)
-    );
-
+  const discountAmount = Math.round(
+    originalAmount * (discount / 100)
+  );
 
   const finalAmount =
-    originalAmount -
-    discountAmount;
-
+    originalAmount - discountAmount;
 
   return {
-
     originalAmount,
-
     discountAmount,
-
     finalAmount,
-
-    discount
-
+    discount,
   };
-
 };
-
-
-/* =========================================
-   FORMAT AMOUNT
-========================================= */
 
 export const formatAmount = (
   amount,
   currency = "INR"
 ) => {
-
   if (
     amount === null ||
     amount === undefined
   ) {
-
     return "Custom";
-
   }
 
+  const normalizedCurrency =
+    String(currency || "INR").toUpperCase() === "INR"
+      ? "INR"
+      : "USD";
 
   return new Intl.NumberFormat(
-    currency === "INR"
+    normalizedCurrency === "INR"
       ? "en-IN"
       : "en-US",
     {
-
-      style:
-        "currency",
-
-      currency,
-
-      maximumFractionDigits:
-        0
-
+      style: "currency",
+      currency: normalizedCurrency,
+      maximumFractionDigits: 0,
     }
-  ).format(
-    amount
-  );
-
+  ).format(amount);
 };
 
+export const detectVisitorCountry = async () => {
+  try {
+    const api = getApiBaseUrl();
 
-/* =========================================
-   DETECT VISITOR COUNTRY
-========================================= */
+    const res = await fetch(
+      `${api}/api/location`,
+      {
+        cache: "no-store",
+      }
+    );
 
-export const detectVisitorCountry =
-  async () => {
-    try {
+    if (res.ok) {
+      const data = await res.json();
 
-      const api =
-        getApiBaseUrl();
-
-
-      const res =
-        await fetch(
-          `${api}/api/location`,
-          {
-            cache:
-              "no-store"
-          }
-        );
-
-
-      const data =
-        await res.json();
-
-
-      console.log(
-        "Location API response:",
-        data
-      );
-
-
-      if (
-        data.countryCode
-      ) {
-
-        const countryCode =
+      if (data.countryCode) {
+        return String(
           data.countryCode
-            .toUpperCase()
-            .trim();
-
-
-        console.log(
-          "Country detected from backend:",
-          countryCode
-        );
-
-
-        return countryCode;
-
+        )
+          .toUpperCase()
+          .trim();
       }
-
-    } catch (
-      error
-    ) {
-
-      console.log(
-        "Backend country detection failed:",
-        error
-      );
-
     }
+  } catch {}
 
+  try {
+    const ipRes = await fetch(
+      "https://ipapi.co/json/",
+      {
+        cache: "no-store",
+      }
+    );
 
-    try {
+    if (ipRes.ok) {
+      const ipData = await ipRes.json();
 
-      const ipRes =
-        await fetch(
-          "https://ipapi.co/json/",
-          {
-            cache:
-              "no-store"
-          }
-        );
-
-
-      const ipData =
-        await ipRes.json();
-
-
-      console.log(
-        "Public IP location:",
-        ipData
-      );
-
-
-      if (
-        ipData.country_code
-      ) {
-
-        const countryCode =
+      if (ipData.country_code) {
+        return String(
           ipData.country_code
-            .toUpperCase()
-            .trim();
-
-
-        console.log(
-          "Country detected from public IP:",
-          countryCode
-        );
-
-
-        return countryCode;
-
+        )
+          .toUpperCase()
+          .trim();
       }
-
-    } catch (
-      error
-    ) {
-
-      console.log(
-        "Public IP country detection failed:",
-        error
-      );
-
     }
+  } catch {}
 
+  try {
+    const timeZone =
+      Intl.DateTimeFormat()
+        .resolvedOptions()
+        .timeZone;
 
-    /*
-    =========================================
-    STEP 3
-    TIMEZONE FALLBACK
-    =========================================
-    */
-
-    try {
-
-      const timeZone =
-        Intl.DateTimeFormat()
-          .resolvedOptions()
-          .timeZone;
-
-
-      console.log(
-        "Detected timezone:",
-        timeZone
-      );
-
-
-      if (
-        timeZone ===
-          "Asia/Kolkata" ||
-        timeZone ===
-          "Asia/Calcutta"
-      ) {
-
-        return "IN";
-
-      }
-
-    } catch (
-      error
+    if (
+      timeZone === "Asia/Kolkata" ||
+      timeZone === "Asia/Calcutta"
     ) {
-
-      console.log(
-        "Timezone detection failed:",
-        error
-      );
-
+      return "IN";
     }
+  } catch {}
 
-
-    /*
-    =========================================
-    FINAL FALLBACK
-    =========================================
-    */
-
-    return "US";
-
-  };
+  return "US";
+};

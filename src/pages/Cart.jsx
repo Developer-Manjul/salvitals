@@ -1,977 +1,1831 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    PLANS,
-    detectVisitorCountry,
-    getCurrency,
-    getPlanPrice,
+  PLANS,
+  SUBSCRIPTION_PERIODS,
+  detectVisitorCountry,
+  getCurrency,
+  getPlanPrice,
 } from "../config/pricing";
-import "./../styles/cart.scss";
+import "../styles/cart.scss";
 import { getApiBaseUrl } from "../config/api";
 
+const ADDONS = {
+  contacts: {
+    id: "contacts",
+    name: "Extra Contacts",
+    price: 500,
+    quota: 1000,
+    unit: "contacts",
+  },
+  ai_chat: {
+    id: "ai_chat",
+    name: "AI Chatbot",
+    price: 500,
+    quota: 1200,
+    unit: "conversations",
+  },
+};
+
+const ADDON_PERIODS = [1, 2, 3, 6, 12];
+
 const goTo = (url) => {
-    const nextUrl = url.startsWith("/") ? url : `/${url}`;
-    window.history.pushState({}, "", nextUrl);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+  const nextUrl = url.startsWith("/") ? url : `/${url}`;
+  window.history.pushState({}, "", nextUrl);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+};
+
+const getToken = () => {
+  return (
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("token") ||
+    ""
+  );
+};
+
+const getCheckoutType = () => {
+  const params = new URLSearchParams(window.location.search);
+  const addonType = params.get("addon");
+
+  if (addonType && ADDONS[addonType]) {
+    return "addon";
+  }
+
+  return "subscription";
+};
+
+const getInitialPlanId = () => {
+  const params = new URLSearchParams(window.location.search);
+  const queryPlanId = params.get("plan");
+
+  if (queryPlanId && PLANS[queryPlanId]) {
+    return queryPlanId;
+  }
+
+  try {
+    const savedPlan = JSON.parse(
+      localStorage.getItem("selectedPlan") || "null"
+    );
+
+    const savedPlanId =
+      savedPlan?.planId ||
+      savedPlan?.id;
+
+    if (savedPlanId && PLANS[savedPlanId]) {
+      return savedPlanId;
+    }
+
+    const savedPlanName = String(
+      savedPlan?.planName ||
+        savedPlan?.name ||
+        ""
+    ).toLowerCase();
+
+    const matchingPlan = Object.values(PLANS).find(
+      (plan) =>
+        plan.name.toLowerCase() === savedPlanName
+    );
+
+    return matchingPlan?.id || "starter";
+  } catch {
+    return "starter";
+  }
+};
+
+const getInitialAddonType = () => {
+  const params = new URLSearchParams(window.location.search);
+  const queryAddon = params.get("addon");
+
+  if (queryAddon && ADDONS[queryAddon]) {
+    return queryAddon;
+  }
+
+  try {
+    const savedAddon = JSON.parse(
+      localStorage.getItem("selectedAddon") || "null"
+    );
+
+    if (
+      savedAddon?.addonType &&
+      ADDONS[savedAddon.addonType]
+    ) {
+      return savedAddon.addonType;
+    }
+  } catch {}
+
+  return "contacts";
+};
+
+const getInitialAddonMonths = () => {
+  const params = new URLSearchParams(window.location.search);
+  const queryMonths = Number(
+    params.get("months")
+  );
+
+  if (ADDON_PERIODS.includes(queryMonths)) {
+    return queryMonths;
+  }
+
+  try {
+    const savedAddon = JSON.parse(
+      localStorage.getItem("selectedAddon") || "null"
+    );
+
+    const savedMonths = Number(
+      savedAddon?.months || 1
+    );
+
+    if (ADDON_PERIODS.includes(savedMonths)) {
+      return savedMonths;
+    }
+  } catch {}
+
+  return 1;
 };
 
 const Cart = () => {
-    const [planId] = useState(() => {
-        const params = new URLSearchParams(window.location.search);
-        const queryPlanId = params.get("plan");
+  const [checkoutType] = useState(
+    getCheckoutType
+  );
 
-        if (queryPlanId && PLANS[queryPlanId]) {
-            return queryPlanId;
-        }
+  const [planId] = useState(
+    getInitialPlanId
+  );
 
-        try {
-            const savedPlan = JSON.parse(
-                localStorage.getItem("selectedPlan") || "null"
-            );
-            const savedPlanId = savedPlan?.id || savedPlan?.planId;
+  const [addonType] = useState(
+    getInitialAddonType
+  );
 
-            if (savedPlanId && PLANS[savedPlanId]) {
-                return savedPlanId;
-            }
+  const [selectedMonths, setSelectedMonths] =
+    useState(() =>
+      checkoutType === "addon"
+        ? getInitialAddonMonths()
+        : 1
+    );
 
-            const savedPlanName = (
-                savedPlan?.name || savedPlan?.planName || ""
-            ).toLowerCase();
-            const matchingPlan = Object.values(PLANS).find(
-                (plan) => plan.name.toLowerCase() === savedPlanName
-            );
+  const [country, setCountry] =
+    useState("");
 
-            return matchingPlan?.id || "starter";
-        } catch (error) {
-            console.error("Selected plan read error:", error);
-            return "starter";
-        }
-    });
+  const [currency, setCurrency] =
+    useState("INR");
 
-    const [selectedMonths, setSelectedMonths] = useState(1);
-    const [country, setCountry] = useState("");
-    const [currency, setCurrency] = useState("INR");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(false);
 
-    const selectedPlan = useMemo(() => {
-        return PLANS?.[planId] || PLANS?.starter || {};
-    }, [planId]);
+  const [error, setError] =
+    useState("");
 
-    useEffect(() => {
-        const loadCountry = async () => {
-            try {
-                const detectedCountry = await detectVisitorCountry();
-                const finalCountry = detectedCountry || "IN";
+  const [billingLoading, setBillingLoading] =
+    useState(true);
 
-                setCountry(finalCountry);
+  const [billing, setBilling] =
+    useState(null);
 
-                const detectedCurrency = getCurrency(finalCountry);
+  const selectedPlan = useMemo(() => {
+    return (
+      PLANS?.[planId] ||
+      PLANS?.starter ||
+      {}
+    );
+  }, [planId]);
 
-                setCurrency(detectedCurrency || "INR");
-            } catch (error) {
-                console.error("Country detection error:", error);
-                setCountry("IN");
-                setCurrency("INR");
-            }
-        };
+  const selectedAddon = useMemo(() => {
+    return ADDONS?.[addonType] || ADDONS.contacts;
+  }, [addonType]);
 
-        loadCountry();
-    }, []);
+  useEffect(() => {
+    const loadCountry = async () => {
+      try {
+        const detectedCountry =
+          await detectVisitorCountry();
 
-    const monthlyPrice = useMemo(() => {
-        if (!selectedPlan) {
-            return null;
-        }
+        const finalCountry =
+          detectedCountry || "IN";
 
-        const price = getPlanPrice(selectedPlan, currency);
-
-        if (price === null || price === undefined) {
-            return null;
-        }
-
-        return Number(price);
-    }, [selectedPlan, currency]);
-
-    const isCustomPlan =
-        monthlyPrice === null ||
-        Number.isNaN(Number(monthlyPrice));
-
-    const setupCharge = useMemo(() => {
-        if (isCustomPlan) {
-            return null;
-        }
-
-        if (selectedPlan?.setupCharge) {
-            const setup = selectedPlan.setupCharge;
-
-            if (typeof setup === "object") {
-                return Number(
-                    currency === "INR"
-                        ? setup.inr || setup.INR || 0
-                        : setup.usd || setup.USD || 0
-                );
-            }
-
-            return Number(setup);
-        }
-
-        return currency === "INR" ? 699 : 180;
-    }, [selectedPlan, currency, isCustomPlan]);
-
-    const getDiscountPercentage = (months) => {
-        const discounts = {
-            1: 0,
-            3: 5,
-            6: 7,
-            9: 9,
-            12: 12,
-            24: 15,
-        };
-
-        return discounts[months] || 0;
+        setCountry(finalCountry);
+        setCurrency(
+          getCurrency(finalCountry)
+        );
+      } catch {
+        setCountry("IN");
+        setCurrency("INR");
+      }
     };
 
-    const discountPercentage = useMemo(() => {
-        return getDiscountPercentage(selectedMonths);
-    }, [selectedMonths]);
+    loadCountry();
+  }, []);
 
-    const subscriptionPrice =
-        isCustomPlan
-            ? null
-            : monthlyPrice * selectedMonths;
+  useEffect(() => {
+    const loadBilling = async () => {
+      const token = getToken();
 
-    const subscriptionDiscount =
-        isCustomPlan
-            ? null
-            : (subscriptionPrice * discountPercentage) / 100;
+      if (!token) {
+        setBillingLoading(false);
+        return;
+      }
 
-    const discountedSubscriptionPrice =
-        isCustomPlan
-            ? null
-            : subscriptionPrice - subscriptionDiscount;
+      try {
+        const apiBase =
+          getApiBaseUrl();
 
-    const subtotal =
-        isCustomPlan
-            ? null
-            : discountedSubscriptionPrice + setupCharge;
-
-    const tax =
-        isCustomPlan
-            ? null
-            : currency === "INR"
-                ? subtotal * 0.18
-                : 0;
-
-    const total =
-        isCustomPlan
-            ? null
-            : subtotal + tax;
-
-    const planName =
-        selectedPlan?.name ||
-        selectedPlan?.title ||
-        (
-            planId
-                ? planId.charAt(0).toUpperCase() +
-                planId.slice(1)
-                : "Starter"
+        const response = await fetch(
+          `${apiBase}/api/billing/current`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
         );
 
-    const formatPrice = (amount) => {
-        if (
-            amount === null ||
-            amount === undefined ||
-            Number.isNaN(Number(amount))
-        ) {
-            return "Custom";
-        }
+        const data =
+          await response.json();
 
-        return new Intl.NumberFormat(
-            currency === "INR" ? "en-IN" : "en-US",
-            {
-                style: "currency",
-                currency: currency === "INR" ? "INR" : "USD",
-                maximumFractionDigits: 0,
-            }
-        ).format(Number(amount));
+        if (
+          response.ok &&
+          data.success
+        ) {
+          setBilling(data);
+        }
+      } catch {
+      } finally {
+        setBillingLoading(false);
+      }
     };
 
-    const formatSavePrice = (amount) => {
-        if (
-            amount === null ||
-            amount === undefined ||
-            Number.isNaN(Number(amount))
-        ) {
-            return "";
+    loadBilling();
+  }, []);
+
+  const monthlyPrice = useMemo(() => {
+    const price =
+      getPlanPrice(
+        selectedPlan,
+        currency
+      );
+
+    if (
+      price === null ||
+      price === undefined
+    ) {
+      return null;
+    }
+
+    return Number(price);
+  }, [
+    selectedPlan,
+    currency,
+  ]);
+
+  const isCustomPlan =
+    monthlyPrice === null ||
+    Number.isNaN(monthlyPrice);
+
+  const periods = useMemo(() => {
+    return SUBSCRIPTION_PERIODS;
+  }, []);
+
+  const selectedPeriod =
+    periods.find(
+      (period) =>
+        period.months ===
+        Number(selectedMonths)
+    ) || periods[0];
+
+  const discountPercentage =
+    selectedPeriod?.discount || 0;
+
+  const subscriptionPrice =
+    isCustomPlan
+      ? null
+      : monthlyPrice *
+        Number(selectedMonths);
+
+  const subscriptionDiscount =
+    isCustomPlan
+      ? null
+      : Math.round(
+          subscriptionPrice *
+            (discountPercentage / 100)
+        );
+
+  const discountedSubscriptionPrice =
+    isCustomPlan
+      ? null
+      : subscriptionPrice -
+        subscriptionDiscount;
+
+  const setupCharge =
+    isCustomPlan
+      ? null
+      : billing?.subscription
+          ?.setupFeePaid
+        ? 0
+        : currency === "INR"
+          ? 699
+          : 180;
+
+  const subscriptionSubtotal =
+    isCustomPlan
+      ? null
+      : discountedSubscriptionPrice +
+        setupCharge;
+
+  const subscriptionTax =
+    isCustomPlan
+      ? null
+      : currency === "INR"
+        ? Math.round(
+            subscriptionSubtotal * 0.18
+          )
+        : 0;
+
+  const subscriptionTotal =
+    isCustomPlan
+      ? null
+      : subscriptionSubtotal +
+        subscriptionTax;
+
+  const addonSubtotal =
+    checkoutType === "addon"
+      ? selectedAddon.price *
+        Number(selectedMonths)
+      : null;
+
+  const addonTax =
+    checkoutType === "addon"
+      ? currency === "INR"
+        ? Math.round(
+            addonSubtotal * 0.18
+          )
+        : 0
+      : null;
+
+  const addonTotal =
+    checkoutType === "addon"
+      ? addonSubtotal + addonTax
+      : null;
+
+  const planName =
+    selectedPlan?.name ||
+    "Starter";
+
+  const addonName =
+    selectedAddon?.name ||
+    "Extra Contacts";
+
+  const addonQuota =
+    selectedAddon?.quota ||
+    0;
+
+  const totalAddonQuota =
+    addonQuota *
+    Number(selectedMonths);
+
+  const formatPrice = (amount) => {
+    if (
+      amount === null ||
+      amount === undefined ||
+      Number.isNaN(Number(amount))
+    ) {
+      return "Custom";
+    }
+
+    return new Intl.NumberFormat(
+      currency === "INR"
+        ? "en-IN"
+        : "en-US",
+      {
+        style: "currency",
+        currency:
+          currency === "INR"
+            ? "INR"
+            : "USD",
+        maximumFractionDigits: 0,
+      }
+    ).format(Number(amount));
+  };
+
+  const formatSavePrice = (amount) => {
+    if (
+      amount === null ||
+      amount === undefined ||
+      Number.isNaN(Number(amount))
+    ) {
+      return "";
+    }
+
+    return formatPrice(amount);
+  };
+
+  const isCurrentPlan =
+    billing?.subscription?.planId ===
+    planId;
+
+  const isUpgrade =
+    Boolean(
+      billing?.subscription?.planId
+    ) &&
+    !isCurrentPlan;
+
+  const handleSubscriptionPayment =
+    async () => {
+      try {
+        setError("");
+
+        if (isCustomPlan) {
+          setError(
+            "Please contact our sales team for a custom plan."
+          );
+          return;
         }
 
-        return new Intl.NumberFormat(
-            currency === "INR" ? "en-IN" : "en-US",
-            {
-                style: "currency",
-                currency: currency === "INR" ? "INR" : "USD",
-                maximumFractionDigits: 0,
-            }
-        ).format(Number(amount));
-    };
+        const token = getToken();
 
-    const periods = [
-        {
-            months: 1,
-            label: "1 month",
-            discount: 0,
-            note: "Standard billing",
-        },
-        {
-            months: 3,
-            label: "3 months",
-            discount: 5,
-            note: "5% discount",
-        },
-        {
-            months: 6,
-            label: "6 months",
-            discount: 7,
-            note: "7% discount",
-        },
-        {
-            months: 9,
-            label: "9 months",
-            discount: 9,
-            note: "9% discount",
-        },
-        {
-            months: 12,
-            label: "12 months",
-            discount: 12,
-            note: "12% discount",
-        },
-        {
-            months: 24,
-            label: "24 months",
-            discount: 15,
-            note: "15% discount",
-        },
-    ];
+        if (!token) {
+          setError(
+            "Please sign in before payment"
+          );
 
-    const loadRazorpayScript = () => {
-        return new Promise((resolve) => {
-            if (window.Razorpay) {
-                resolve(true);
-                return;
-            }
-
-            const existingScript = document.querySelector(
-                'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+          setTimeout(() => {
+            goTo(
+              `/signin?redirect=${encodeURIComponent(
+                window.location.pathname +
+                  window.location.search
+              )}`
             );
+          }, 1000);
 
-            if (existingScript) {
-                existingScript.onload = () => resolve(true);
-                return;
+          return;
+        }
+
+        setLoading(true);
+
+        const apiBase =
+          getApiBaseUrl();
+
+        const response =
+          await fetch(
+            `${apiBase}/api/payment/create-order`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                planId,
+                currency,
+                period:
+                  selectedMonths,
+                country,
+                orderType:
+                  "subscription",
+              }),
             }
+          );
 
-            const script = document.createElement("script");
+        const data =
+          await response.json();
 
-            script.src =
-                "https://checkout.razorpay.com/v1/checkout.js";
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              "Unable to create payment order"
+          );
+        }
 
-            script.onload = () => resolve(true);
+        const razorpayLoaded =
+          await loadRazorpayScript();
 
-            script.onerror = () => resolve(false);
+        if (!razorpayLoaded) {
+          throw new Error(
+            "Unable to load Razorpay"
+          );
+        }
 
-            document.body.appendChild(script);
-        });
-    };
+        const order =
+          data.order;
 
-    const handlePayment = async () => {
-        try {
-            setError("");
+        const options = {
+          key:
+            import.meta.env
+              .VITE_RAZORPAY_KEY_ID,
 
-            if (isCustomPlan) {
-                setError(
-                    "Please contact our sales team for a custom plan."
-                );
-                return;
-            }
+          amount:
+            order.amount,
 
-            if (!total || Number(total) <= 0) {
-                setError("Invalid payment amount");
-                return;
-            }
+          currency:
+            order.currency,
 
-            setLoading(true);
+          name:
+            "SaleVitals",
 
-            const token =
-                localStorage.getItem("token") ||
-                localStorage.getItem("vitalsToken") ||
-                localStorage.getItem("authToken") ||
-                sessionStorage.getItem("token");
+          description:
+            `${planName} Plan - ${selectedMonths} month${
+              selectedMonths > 1
+                ? "s"
+                : ""
+            }`,
 
-            if (!token) {
-                setError("Please sign in before payment");
+          order_id:
+            order.id,
 
-                setTimeout(() => {
-                    goTo(
-                        `/signin?redirect=${encodeURIComponent(
-                            window.location.pathname +
-                            window.location.search
-                        )}`
-                    );
-                }, 1200);
-
-                return;
-            }
-
-            const apiBase = getApiBaseUrl();
-
-            const createOrderUrl =
-                `${apiBase}/api/payment/create-order`;
-
-            const response = await fetch(
-                createOrderUrl,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        amount: Number(total.toFixed(2)),
-                        totalAmount: Number(total.toFixed(2)),
-                        planId: planId,
-                        planName: planName,
-                        currency: currency,
-                        period: selectedMonths,
-                        periodLabel: `${selectedMonths} month${selectedMonths > 1 ? "s" : ""
-                            }`,
-                        country: country,
-                        planAmount: Number(
-                            subscriptionPrice.toFixed(2)
+          handler:
+            async (
+              paymentResponse
+            ) => {
+              try {
+                const verifyResponse =
+                  await fetch(
+                    `${apiBase}/api/payment/verify`,
+                    {
+                      method:
+                        "POST",
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+                        Authorization:
+                          `Bearer ${token}`,
+                      },
+                      body:
+                        JSON.stringify(
+                          {
+                            razorpay_order_id:
+                              paymentResponse.razorpay_order_id,
+                            razorpay_payment_id:
+                              paymentResponse.razorpay_payment_id,
+                            razorpay_signature:
+                              paymentResponse.razorpay_signature,
+                          }
                         ),
-                        discountPercentage:
-                            discountPercentage,
-                        discountAmount: Number(
-                            subscriptionDiscount.toFixed(2)
-                        ),
-                        discountedPlanAmount: Number(
-                            discountedSubscriptionPrice.toFixed(2)
-                        ),
-                        setupFee: Number(
-                            setupCharge.toFixed(2)
-                        ),
-                        tax: Number(
-                            tax.toFixed(2)
-                        ),
-                        subtotal: Number(
-                            subtotal.toFixed(2)
-                        ),
-                    }),
+                    }
+                  );
+
+                const verifyData =
+                  await verifyResponse.json();
+
+                if (
+                  !verifyResponse.ok ||
+                  !verifyData.success
+                ) {
+                  throw new Error(
+                    verifyData.message ||
+                      "Payment verification failed"
+                  );
                 }
-            );
 
-            const data = await response.json();
-
-            console.log(
-                "CART TOTAL:",
-                Number(total.toFixed(2))
-            );
-
-            console.log(
-                "RAZORPAY ORDER RESPONSE:",
-                data
-            );
-
-            if (!response.ok || !data.success) {
-                throw new Error(
-                    data.message ||
-                    "Unable to create payment order"
+                localStorage.removeItem(
+                  "selectedPlan"
                 );
-            }
 
-            const razorpayLoaded =
-                await loadRazorpayScript();
-
-            if (!razorpayLoaded) {
-                throw new Error(
-                    "Unable to load Razorpay"
+                goTo(
+                  "/dashboard"
                 );
-            }
+              } catch (
+                verifyError
+              ) {
+                setError(
+                  verifyError.message ||
+                    "Payment verification failed"
+                );
+              }
+            },
 
-            const options = {
-                key:
-                    import.meta.env
-                        .VITE_RAZORPAY_KEY_ID,
+          theme: {
+            color:
+              "#236c73",
+          },
+        };
 
-                amount:
-                    data.order.amount,
+        const razorpay =
+          new window.Razorpay(
+            options
+          );
 
-                currency:
-                    data.order.currency,
-
-                name:
-                    "SaleVitals",
-
-                description:
-                    `${planName} Plan - ${selectedMonths} month${selectedMonths > 1
-                        ? "s"
-                        : ""
-                    }`,
-
-                order_id:
-                    data.order.id,
-
-                handler:
-                    async (paymentResponse) => {
-                        try {
-                            const verifyUrl =
-                                `${apiBase}/api/payment/verify`;
-
-                            const verifyResponse =
-                                await fetch(
-                                    verifyUrl,
-                                    {
-                                        method: "POST",
-                                        headers: {
-                                            "Content-Type":
-                                                "application/json",
-                                            Authorization:
-                                                `Bearer ${token}`,
-                                        },
-                                        body:
-                                            JSON.stringify({
-                                                razorpay_order_id:
-                                                    paymentResponse
-                                                        .razorpay_order_id,
-                                                razorpay_payment_id:
-                                                    paymentResponse
-                                                        .razorpay_payment_id,
-                                                razorpay_signature:
-                                                    paymentResponse
-                                                        .razorpay_signature,
-                                            }),
-                                    }
-                                );
-
-                            const verifyData =
-                                await verifyResponse.json();
-
-                            if (
-                                !verifyResponse.ok ||
-                                !verifyData.success
-                            ) {
-                                throw new Error(
-                                    verifyData.message ||
-                                    "Payment verification failed"
-                                );
-                            }
-
-                            goTo("/dashboard");
-                        } catch (verifyError) {
-                            console.error(
-                                "Verify payment error:",
-                                verifyError
-                            );
-
-                            setError(
-                                verifyError.message ||
-                                "Payment verification failed"
-                            );
-                        }
-                    },
-
-                theme: {
-                    color: "#236c73",
-                },
-            };
-
-            const razorpay =
-                new window.Razorpay(options);
-
-            razorpay.open();
-        } catch (paymentError) {
-            console.error(
-                "Payment error:",
-                paymentError
-            );
-
+        razorpay.on(
+          "payment.failed",
+          (response) => {
             setError(
-                paymentError.message ||
-                "Unable to start payment"
+              response?.error
+                ?.description ||
+                "Payment failed"
             );
-        } finally {
-            setLoading(false);
-        }
+          }
+        );
+
+        razorpay.open();
+      } catch (paymentError) {
+        setError(
+          paymentError.message ||
+            "Unable to start payment"
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
+  const handleAddonPayment =
+    async () => {
+      try {
+        setError("");
+
+        const token = getToken();
+
+        if (!token) {
+          setError(
+            "Please sign in before payment"
+          );
+
+          setTimeout(() => {
+            goTo(
+              `/signin?redirect=${encodeURIComponent(
+                window.location.pathname +
+                  window.location.search
+              )}`
+            );
+          }, 1000);
+
+          return;
+        }
+
+        if (
+          !billing?.subscription?.planId ||
+          billing?.subscription?.status !==
+            "active"
+        ) {
+          setError(
+            "Please activate a CRM plan before purchasing an add-on."
+          );
+          return;
+        }
+
+        setLoading(true);
+
+        const apiBase =
+          getApiBaseUrl();
+
+        const response =
+          await fetch(
+            `${apiBase}/api/payment/create-order`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                orderType: "addon",
+                addonType,
+                months:
+                  Number(selectedMonths),
+                addonMonths:
+                  Number(selectedMonths),
+                currency,
+                country,
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              "Unable to create add-on payment order"
+          );
+        }
+
+        const razorpayLoaded =
+          await loadRazorpayScript();
+
+        if (!razorpayLoaded) {
+          throw new Error(
+            "Unable to load Razorpay"
+          );
+        }
+
+        const order =
+          data.order;
+
+        const options = {
+          key:
+            import.meta.env
+              .VITE_RAZORPAY_KEY_ID,
+
+          amount:
+            order.amount,
+
+          currency:
+            order.currency,
+
+          name:
+            "SaleVitals",
+
+          description:
+            `${addonName} - ${selectedMonths} month${
+              selectedMonths > 1
+                ? "s"
+                : ""
+            }`,
+
+          order_id:
+            order.id,
+
+          handler:
+            async (
+              paymentResponse
+            ) => {
+              try {
+                const verifyResponse =
+                  await fetch(
+                    `${apiBase}/api/payment/verify`,
+                    {
+                      method:
+                        "POST",
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+                        Authorization:
+                          `Bearer ${token}`,
+                      },
+                      body:
+                        JSON.stringify(
+                          {
+                            razorpay_order_id:
+                              paymentResponse.razorpay_order_id,
+                            razorpay_payment_id:
+                              paymentResponse.razorpay_payment_id,
+                            razorpay_signature:
+                              paymentResponse.razorpay_signature,
+                          }
+                        ),
+                    }
+                  );
+
+                const verifyData =
+                  await verifyResponse.json();
+
+                if (
+                  !verifyResponse.ok ||
+                  !verifyData.success
+                ) {
+                  throw new Error(
+                    verifyData.message ||
+                      "Payment verification failed"
+                  );
+                }
+
+                localStorage.removeItem(
+                  "selectedAddon"
+                );
+
+                goTo(
+                  "/dashboard"
+                );
+              } catch (
+                verifyError
+              ) {
+                setError(
+                  verifyError.message ||
+                    "Payment verification failed"
+                );
+              }
+            },
+
+          theme: {
+            color:
+              "#236c73",
+          },
+        };
+
+        const razorpay =
+          new window.Razorpay(
+            options
+          );
+
+        razorpay.on(
+          "payment.failed",
+          (response) => {
+            setError(
+              response?.error
+                ?.description ||
+                "Payment failed"
+            );
+          }
+        );
+
+        razorpay.open();
+      } catch (paymentError) {
+        setError(
+          paymentError.message ||
+            "Unable to start add-on payment"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const handlePayment = () => {
+    if (checkoutType === "addon") {
+      return handleAddonPayment();
+    }
+
+    return handleSubscriptionPayment();
+  };
+
+  const loadRazorpayScript = () => {
+    return new Promise(
+      (resolve) => {
+        if (window.Razorpay) {
+          resolve(true);
+          return;
+        }
+
+        const existingScript =
+          document.querySelector(
+            'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+          );
+
+        if (existingScript) {
+          existingScript.onload =
+            () => resolve(true);
+
+          existingScript.onerror =
+            () => resolve(false);
+
+          return;
+        }
+
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src =
+          "https://checkout.razorpay.com/v1/checkout.js";
+
+        script.onload =
+          () => resolve(true);
+
+        script.onerror =
+          () => resolve(false);
+
+        document.body.appendChild(
+          script
+        );
+      }
+    );
+  };
+
+  if (checkoutType === "addon") {
     return (
-        <div className="cart-page">
-            <header className="cart-header">
-                <div className="cart-header-inner">
-                    <div
-                        className="cart-logo"
-                        onClick={() => goTo("/")}
-                    >
-                        <img
-                            src="/logo.png"
-                            alt="SaleVitals"
-                            className="cart-logo-image"
-                        />
-                    </div>
+      <div className="cart-page">
+        <header className="cart-header">
+          <div className="cart-header-inner">
+            <div
+              className="cart-logo"
+              onClick={() => goTo("/")}
+            >
+              <img
+                src="/logo.png"
+                alt="SaleVitals"
+                className="cart-logo-image"
+              />
+            </div>
 
-                    <div className="secure-header">
-                        <span>♧</span>
-                        Secure checkout
-                    </div>
+            <div className="secure-header">
+              <span>♧</span>
+              Secure checkout
+            </div>
+          </div>
+        </header>
+
+        <main className="cart-main">
+          <div className="cart-top-row">
+            <div>
+              <div className="cart-eyebrow">
+                ADD-ON
+              </div>
+
+              <h1>
+                Add-on checkout
+              </h1>
+            </div>
+
+            <button
+              type="button"
+              className="back-plans-btn"
+              onClick={() =>
+                goTo("/settings?tab=Plan%20%26%20Billing")
+              }
+            >
+              ← Back to Plan & Billing
+            </button>
+          </div>
+
+          <div className="cart-layout">
+            <section className="cart-plan-card">
+              <div className="selected-plan-header">
+                <div className="plan-icon">
+                  {addonType === "ai_chat"
+                    ? "✦"
+                    : "▤"}
                 </div>
-            </header>
 
-            <main className="cart-main">
-                <div className="cart-top-row">
-                    <div>
-                        <div className="cart-eyebrow">
-                            SUBSCRIPTION
-                        </div>
+                <div>
+                  <h2>
+                    {addonName}
+                  </h2>
 
-                        <h1>Your plan</h1>
-                    </div>
+                  <p>
+                    Sale Vitals CRM
+                  </p>
+                </div>
+              </div>
 
-                    <button
+              <div className="card-divider" />
+
+              <div className="selected-plan-row">
+                <div>
+                  <span className="small-label">
+                    Selected add-on
+                  </span>
+
+                  <h3>
+                    {addonName}
+                  </h3>
+                </div>
+
+                <strong>
+                  ₹
+                  {selectedAddon.price.toLocaleString(
+                    "en-IN"
+                  )}
+                  /month
+                </strong>
+              </div>
+
+              <div className="setup-section">
+                <div className="setup-check">
+                  ✓
+                </div>
+
+                <div className="setup-content">
+                  <h3>
+                    Additional capacity
+                  </h3>
+
+                  <p>
+                    {addonQuota.toLocaleString(
+                      "en-IN"
+                    )}{" "}
+                    additional{" "}
+                    {selectedAddon.unit}{" "}
+                    per month.
+                  </p>
+
+                  <span>
+                    {totalAddonQuota.toLocaleString(
+                      "en-IN"
+                    )}{" "}
+                    {selectedAddon.unit}{" "}
+                    for the selected period.
+                  </span>
+                </div>
+
+                <div className="setup-price">
+                  <strong>
+                    ₹
+                    {selectedAddon.price.toLocaleString(
+                      "en-IN"
+                    )}
+                  </strong>
+
+                  <small>
+                    /month
+                  </small>
+                </div>
+              </div>
+
+              <div className="card-divider" />
+
+              <div className="subscription-title">
+                Choose add-on period
+              </div>
+
+              <div className="period-list">
+                {ADDON_PERIODS.map(
+                  (months) => {
+                    const amount =
+                      selectedAddon.price *
+                      months;
+
+                    return (
+                      <button
                         type="button"
-                        className="back-plans-btn"
-                        onClick={() => goTo("/pricing")}
-                    >
-                        ← Back to plans
-                    </button>
+                        key={months}
+                        className={
+                          `period-option ${
+                            selectedMonths ===
+                            months
+                              ? "active"
+                              : ""
+                          }`
+                        }
+                        onClick={() =>
+                          setSelectedMonths(
+                            months
+                          )
+                        }
+                      >
+                        <span className="radio-circle">
+                          {selectedMonths ===
+                            months && (
+                            <span className="radio-dot" />
+                          )}
+                        </span>
+
+                        <span className="period-info">
+                          <strong>
+                            {months}{" "}
+                            month
+                            {months > 1
+                              ? "s"
+                              : ""}
+                          </strong>
+
+                          <small>
+                            {(
+                              addonQuota *
+                              months
+                            ).toLocaleString(
+                              "en-IN"
+                            )}{" "}
+                            {selectedAddon.unit}
+                          </small>
+                        </span>
+
+                        <span className="period-price">
+                          <strong>
+                            {formatPrice(
+                              amount
+                            )}
+                          </strong>
+                        </span>
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+
+              <div className="features-included">
+                <span>✓</span>
+
+                Add-on will be activated on
+                your existing active plan.
+              </div>
+            </section>
+
+            <aside className="cart-sidebar">
+              <div className="order-summary-card">
+                <h2>
+                  Order summary
+                </h2>
+
+                <div className="summary-plan-row">
+                  <strong>
+                    {addonName}
+                  </strong>
+
+                  <strong>
+                    {formatPrice(
+                      addonSubtotal
+                    )}
+                  </strong>
                 </div>
 
-                <div className="cart-layout">
-                    <section className="cart-plan-card">
-                        <div className="selected-plan-header">
-                            <div className="plan-icon">
-                                ▤
-                            </div>
+                <div className="summary-period">
+                  {selectedMonths}{" "}
+                  month period
+                </div>
 
-                            <div>
-                                <h2>{planName}</h2>
-                                <p>Sale Vitals CRM</p>
-                            </div>
-                        </div>
+                <div className="summary-plan-row">
+                  <div>
+                    <strong>
+                      Capacity
+                    </strong>
 
-                        <div className="card-divider" />
+                    <small>
+                      {totalAddonQuota.toLocaleString(
+                        "en-IN"
+                      )}{" "}
+                      {selectedAddon.unit}
+                    </small>
+                  </div>
 
-                        <div className="selected-plan-row">
-                            <div>
-                                <span className="small-label">
-                                    Selected plan
-                                </span>
+                  <strong>
+                    {totalAddonQuota.toLocaleString(
+                      "en-IN"
+                    )}
+                  </strong>
+                </div>
 
-                                <h3>{planName}</h3>
-                            </div>
+                <div className="summary-divider" />
 
-                            <button
-                                type="button"
-                                className="change-plan-btn"
-                                onClick={() =>
-                                    goTo("/pricing")
-                                }
+                <div className="summary-row">
+                  <span>
+                    Subtotal
+                  </span>
+
+                  <strong>
+                    {formatPrice(
+                      addonSubtotal
+                    )}
+                  </strong>
+                </div>
+
+                <div className="summary-row">
+                  <span>
+                    Tax (
+                    {currency ===
+                    "INR"
+                      ? "18%"
+                      : "0%"}
+                    )
+                  </span>
+
+                  <strong>
+                    {formatPrice(
+                      addonTax
+                    )}
+                  </strong>
+                </div>
+
+                <div className="summary-divider" />
+
+                <div className="total-row">
+                  <div>
+                    <strong>
+                      Total
+                    </strong>
+
+                    <small>
+                      Includes applicable
+                      tax
+                    </small>
+                  </div>
+
+                  <strong className="total-price">
+                    {formatPrice(
+                      addonTotal
+                    )}
+                  </strong>
+                </div>
+
+                {error && (
+                  <div className="payment-error">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="payment-btn"
+                  disabled={
+                    loading ||
+                    billingLoading
+                  }
+                  onClick={
+                    handlePayment
+                  }
+                >
+                  {loading
+                    ? "Processing..."
+                    : "Continue to payment"}
+
+                  <span>
+                    →
+                  </span>
+                </button>
+
+                <div className="razorpay-text">
+                  🔒 Secure payment
+                  powered by
+                  Razorpay
+                </div>
+              </div>
+
+              <div className="security-card">
+                <div className="security-item">
+                  <div className="security-icon">
+                    ♧
+                  </div>
+
+                  <div>
+                    <strong>
+                      Secure checkout
+                    </strong>
+
+                    <span>
+                      Your payment
+                      information is
+                      protected.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="security-item">
+                  <div className="security-icon">
+                    ✓
+                  </div>
+
+                  <div>
+                    <strong>
+                      Invoice
+                    </strong>
+
+                    <span>
+                      Invoice generated
+                      after successful
+                      payment.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cart-page">
+      <header className="cart-header">
+        <div className="cart-header-inner">
+          <div
+            className="cart-logo"
+            onClick={() => goTo("/")}
+          >
+            <img
+              src="/logo.png"
+              alt="SaleVitals"
+              className="cart-logo-image"
+            />
+          </div>
+
+          <div className="secure-header">
+            <span>♧</span>
+            Secure checkout
+          </div>
+        </div>
+      </header>
+
+      <main className="cart-main">
+        <div className="cart-top-row">
+          <div>
+            <div className="cart-eyebrow">
+              SUBSCRIPTION
+            </div>
+
+            <h1>
+              {isUpgrade
+                ? "Upgrade your plan"
+                : "Your plan"}
+            </h1>
+          </div>
+
+          <button
+            type="button"
+            className="back-plans-btn"
+            onClick={() =>
+              goTo("/pricing")
+            }
+          >
+            ← Back to plans
+          </button>
+        </div>
+
+        <div className="cart-layout">
+          <section className="cart-plan-card">
+            <div className="selected-plan-header">
+              <div className="plan-icon">
+                ▤
+              </div>
+
+              <div>
+                <h2>
+                  {planName}
+                </h2>
+
+                <p>
+                  Sale Vitals CRM
+                </p>
+              </div>
+            </div>
+
+            <div className="card-divider" />
+
+            <div className="selected-plan-row">
+              <div>
+                <span className="small-label">
+                  Selected plan
+                </span>
+
+                <h3>
+                  {planName}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                className="change-plan-btn"
+                onClick={() =>
+                  goTo("/pricing")
+                }
+              >
+                Change plan
+                <span>⌄</span>
+              </button>
+            </div>
+
+            {isCurrentPlan && (
+              <div
+                style={{
+                  marginBottom:
+                    "20px",
+                  padding:
+                    "12px 14px",
+                  borderRadius:
+                    "10px",
+                  background:
+                    "#e9f8f1",
+                  color:
+                    "#16835c",
+                  fontSize:
+                    "14px",
+                  fontWeight:
+                    600,
+                }}
+              >
+                This is your current
+                active plan.
+              </div>
+            )}
+
+            <div className="subscription-title">
+              Choose subscription
+              period
+            </div>
+
+            <div className="period-list">
+              {periods.map(
+                (period) => {
+                  let original =
+                    null;
+
+                  let save =
+                    null;
+
+                  let final =
+                    null;
+
+                  if (
+                    !isCustomPlan
+                  ) {
+                    original =
+                      monthlyPrice *
+                      period.months;
+
+                    save =
+                      Math.round(
+                        original *
+                          (period.discount /
+                            100)
+                      );
+
+                    final =
+                      original -
+                      save;
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      key={
+                        period.months
+                      }
+                      className={
+                        `period-option ${
+                          selectedMonths ===
+                          period.months
+                            ? "active"
+                            : ""
+                        }`
+                      }
+                      onClick={() =>
+                        setSelectedMonths(
+                          period.months
+                        )
+                      }
+                    >
+                      <span className="radio-circle">
+                        {selectedMonths ===
+                          period.months && (
+                          <span className="radio-dot" />
+                        )}
+                      </span>
+
+                      <span className="period-info">
+                        <strong>
+                          {
+                            period.months
+                          }{" "}
+                          month
+                          {period.months >
+                          1
+                            ? "s"
+                            : ""}
+                        </strong>
+
+                        <small>
+                          {period.discount >
+                          0
+                            ? `${period.discount}% discount`
+                            : "Standard billing"}
+                        </small>
+                      </span>
+
+                      <span className="period-price">
+                        {period.discount >
+                        0 ? (
+                          <>
+                            <span
+                              style={{
+                                display:
+                                  "block",
+                                fontSize:
+                                  "13px",
+                                opacity:
+                                  0.6,
+                                textDecoration:
+                                  "line-through",
+                                marginBottom:
+                                  "3px",
+                              }}
                             >
-                                Change plan
-                                <span>⌄</span>
-                            </button>
-                        </div>
-
-                        <div className="subscription-title">
-                            Choose subscription period
-                        </div>
-
-                        <div className="period-list">
-                            {periods.map((period) => {
-                                let originalPeriodPrice =
-                                    null;
-
-                                let discountAmount =
-                                    null;
-
-                                let finalPeriodPrice =
-                                    null;
-
-                                if (!isCustomPlan) {
-                                    originalPeriodPrice =
-                                        monthlyPrice *
-                                        period.months;
-
-                                    discountAmount =
-                                        (
-                                            originalPeriodPrice *
-                                            period.discount
-                                        ) / 100;
-
-                                    finalPeriodPrice =
-                                        originalPeriodPrice -
-                                        discountAmount;
-                                }
-
-                                return (
-                                    <button
-                                        type="button"
-                                        key={
-                                            period.months
-                                        }
-                                        className={
-                                            `period-option ${selectedMonths ===
-                                                period.months
-                                                ? "active"
-                                                : ""
-                                            }`
-                                        }
-                                        onClick={() =>
-                                            setSelectedMonths(
-                                                period.months
-                                            )
-                                        }
-                                    >
-                                        <span className="radio-circle">
-                                            {selectedMonths ===
-                                                period.months && (
-                                                    <span className="radio-dot" />
-                                                )}
-                                        </span>
-
-                                        <span className="period-info">
-                                            <strong>
-                                                {period.label}
-                                            </strong>
-
-                                            <small>
-                                                {period.note}
-                                            </small>
-                                        </span>
-
-                                        <span className="period-price">
-                                            {period.discount > 0 ? (
-                                                <>
-                                                    <span
-                                                        style={{
-                                                            display:
-                                                                "block",
-                                                            fontSize:
-                                                                "13px",
-                                                            opacity:
-                                                                0.6,
-                                                            textDecoration:
-                                                                "line-through",
-                                                            marginBottom:
-                                                                "3px",
-                                                        }}
-                                                    >
-                                                        {formatPrice(
-                                                            originalPeriodPrice
-                                                        )}
-                                                    </span>
-
-                                                    <strong>
-                                                        {formatPrice(
-                                                            finalPeriodPrice
-                                                        )}
-                                                    </strong>
-
-                                                    <small
-                                                        style={{
-                                                            display:
-                                                                "block",
-                                                            fontSize:
-                                                                "12px",
-                                                            marginTop:
-                                                                "4px",
-                                                            color:
-                                                                "#16835c",
-                                                        }}
-                                                    >
-                                                        Save{" "}
-                                                        {formatSavePrice(
-                                                            discountAmount
-                                                        )}
-                                                    </small>
-                                                </>
-                                            ) : (
-                                                <strong>
-                                                    {formatPrice(
-                                                        originalPeriodPrice
-                                                    )}
-                                                </strong>
-                                            )}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="setup-section">
-                            <div className="setup-check">
-                                ✓
-                            </div>
-
-                            <div className="setup-content">
-                                <h3>
-                                    One-time Setup &amp;
-                                    Integration
-                                </h3>
-
-                                <p>
-                                    Website, CRM and supported
-                                    business integrations setup.
-                                    Charged only once.
-                                </p>
-
-                                <span>
-                                    Your plan is billed for{" "}
-                                    <strong>
-                                        {selectedMonths} month
-                                        {selectedMonths > 1
-                                            ? "s"
-                                            : ""}
-                                    </strong>{" "}
-                                    upfront.
-                                </span>
-                            </div>
-
-                            <div className="setup-price">
-                                <strong>
-                                    {formatPrice(
-                                        setupCharge
-                                    )}
-                                </strong>
-
-                                <small>
-                                    One-time
-                                </small>
-                            </div>
-                        </div>
-
-                        <div className="card-divider" />
-
-                        <div className="features-included">
-                            <span>✓</span>
-
-                            All features included with your{" "}
+                              {formatPrice(
+                                original
+                              )}
+                            </span>
 
                             <strong>
-                                {planName} plan
+                              {formatPrice(
+                                final
+                              )}
                             </strong>
-                        </div>
-                    </section>
 
-                    <aside className="cart-sidebar">
-                        <div className="order-summary-card">
-                            <h2>Order summary</h2>
-
-                            <div className="summary-plan-row">
-                                <strong>
-                                    {planName}
-                                </strong>
-
-                                <div
-                                    style={{
-                                        textAlign:
-                                            "right",
-                                    }}
-                                >
-                                    {discountPercentage > 0 && (
-                                        <small
-                                            style={{
-                                                display:
-                                                    "block",
-                                                textDecoration:
-                                                    "line-through",
-                                                opacity:
-                                                    0.55,
-                                                marginBottom:
-                                                    "3px",
-                                            }}
-                                        >
-                                            {formatPrice(
-                                                subscriptionPrice
-                                            )}
-                                        </small>
-                                    )}
-
-                                    <strong>
-                                        {formatPrice(
-                                            discountedSubscriptionPrice
-                                        )}
-                                    </strong>
-                                </div>
-                            </div>
-
-                            <div className="summary-period">
-                                {selectedMonths} month period
-                                {discountPercentage > 0 &&
-                                    ` • ${discountPercentage}% discount`}
-                            </div>
-
-                            {discountPercentage > 0 && (
-                                <div
-                                    style={{
-                                        display:
-                                            "flex",
-                                        justifyContent:
-                                            "space-between",
-                                        marginTop:
-                                            "8px",
-                                        fontSize:
-                                            "14px",
-                                    }}
-                                >
-                                    <span>
-                                        You save
-                                    </span>
-
-                                    <strong
-                                        style={{
-                                            color:
-                                                "#16835c",
-                                        }}
-                                    >
-                                        {formatPrice(
-                                            subscriptionDiscount
-                                        )}
-                                    </strong>
-                                </div>
-                            )}
-
-                            <div className="summary-plan-row setup-summary">
-                                <div>
-                                    <strong>
-                                        One-time Setup &amp;
-                                        Integration
-                                    </strong>
-
-                                    <small>
-                                        Charged once
-                                    </small>
-                                </div>
-
-                                <strong>
-                                    {formatPrice(
-                                        setupCharge
-                                    )}
-                                </strong>
-                            </div>
-
-                            <div className="summary-divider" />
-
-                            <div className="summary-row">
-                                <span>Subtotal</span>
-
-                                <strong>
-                                    {formatPrice(
-                                        subtotal
-                                    )}
-                                </strong>
-                            </div>
-
-                                <div className="summary-row">
-                                    <span>
-                                        Tax ({currency === "INR" ? "18%" : "0%"})
-                                    </span>
-
-                                    <strong>
-                                        {formatPrice(
-                                            tax
-                                        )}
-                                    </strong>
-                                </div>
-
-                            <div className="summary-divider" />
-
-                            <div className="total-row">
-                                <div>
-                                    <strong>
-                                        Total
-                                    </strong>
-
-                                    <small>
-                                        Includes applicable tax
-                                    </small>
-                                </div>
-
-                                <strong className="total-price">
-                                    {formatPrice(
-                                        total
-                                    )}
-                                </strong>
-                            </div>
-
-                            {error && (
-                                <div className="payment-error">
-                                    {error}
-                                </div>
-                            )}
-
-                            <button
-                                type="button"
-                                className="payment-btn"
-                                disabled={
-                                    loading ||
-                                    isCustomPlan
-                                }
-                                onClick={
-                                    handlePayment
-                                }
+                            <small
+                              style={{
+                                display:
+                                  "block",
+                                fontSize:
+                                  "12px",
+                                marginTop:
+                                  "4px",
+                                color:
+                                  "#16835c",
+                              }}
                             >
-                                {loading
-                                    ? "Processing..."
-                                    : isCustomPlan
-                                        ? "Contact sales"
-                                        : "Continue to payment"}
+                              Save{" "}
+                              {formatSavePrice(
+                                save
+                              )}
+                            </small>
+                          </>
+                        ) : (
+                          <strong>
+                            {formatPrice(
+                              original
+                            )}
+                          </strong>
+                        )}
+                      </span>
+                    </button>
+                  );
+                }
+              )}
+            </div>
 
-                                <span>→</span>
-                            </button>
+            <div className="setup-section">
+              <div className="setup-check">
+                ✓
+              </div>
 
-                            <div className="razorpay-text">
-                                🔒 Secure payment powered by
-                                Razorpay
-                            </div>
-                        </div>
+              <div className="setup-content">
+                <h3>
+                  One-time Setup &
+                  Integration
+                </h3>
 
-                        <div className="security-card">
-                            <div className="security-item">
-                                <div className="security-icon">
-                                    ♧
-                                </div>
+                <p>
+                  Website, CRM and
+                  supported business
+                  integrations setup.
+                  Charged only once.
+                </p>
 
-                                <div>
-                                    <strong>
-                                        Secure checkout
-                                    </strong>
+                <span>
+                  {billing?.subscription
+                    ?.setupFeePaid
+                    ? "Setup fee already paid."
+                    : "One-time setup fee applies to your first purchase."}
+                </span>
+              </div>
 
-                                    <span>
-                                        Your payment information
-                                        is protected.
-                                    </span>
-                                </div>
-                            </div>
+              <div className="setup-price">
+                <strong>
+                  {setupCharge ===
+                  0
+                    ? "Paid"
+                    : formatPrice(
+                        setupCharge
+                      )}
+                </strong>
 
-                            <div className="security-item">
-                                <div className="security-icon">
-                                    ✓
-                                </div>
-                                <div>
-                                    <strong>
-                                        Invoice
-                                    </strong>
-                                    <span>
-                                        Invoice generated after
-                                        successful payment.
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </aside>
+                <small>
+                  {setupCharge ===
+                  0
+                    ? "Already paid"
+                    : "One-time"}
+                </small>
+              </div>
+            </div>
+
+            <div className="card-divider" />
+
+            <div className="features-included">
+              <span>✓</span>
+              All features included
+              with your{" "}
+              <strong>
+                {planName} plan
+              </strong>
+            </div>
+          </section>
+
+          <aside className="cart-sidebar">
+            <div className="order-summary-card">
+              <h2>
+                Order summary
+              </h2>
+
+              <div className="summary-plan-row">
+                <strong>
+                  {planName}
+                </strong>
+
+                <div
+                  style={{
+                    textAlign:
+                      "right",
+                  }}
+                >
+                  {discountPercentage >
+                    0 && (
+                    <small
+                      style={{
+                        display:
+                          "block",
+                        textDecoration:
+                          "line-through",
+                        opacity:
+                          0.55,
+                        marginBottom:
+                          "3px",
+                      }}
+                    >
+                      {formatPrice(
+                        subscriptionPrice
+                      )}
+                    </small>
+                  )}
+
+                  <strong>
+                    {formatPrice(
+                      discountedSubscriptionPrice
+                    )}
+                  </strong>
                 </div>
-            </main>
+              </div>
+
+              <div className="summary-period">
+                {selectedMonths}{" "}
+                month period
+                {discountPercentage >
+                  0 &&
+                  ` • ${discountPercentage}% discount`}
+              </div>
+
+              {discountPercentage >
+                0 && (
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    justifyContent:
+                      "space-between",
+                    marginTop:
+                      "8px",
+                    fontSize:
+                      "14px",
+                  }}
+                >
+                  <span>
+                    You save
+                  </span>
+
+                  <strong
+                    style={{
+                      color:
+                        "#16835c",
+                    }}
+                  >
+                    {formatPrice(
+                      subscriptionDiscount
+                    )}
+                  </strong>
+                </div>
+              )}
+
+              <div className="summary-plan-row setup-summary">
+                <div>
+                  <strong>
+                    One-time Setup &
+                    Integration
+                  </strong>
+
+                  <small>
+                    {setupCharge ===
+                    0
+                      ? "Already paid"
+                      : "Charged once"}
+                  </small>
+                </div>
+
+                <strong>
+                  {setupCharge ===
+                  0
+                    ? "Paid"
+                    : formatPrice(
+                        setupCharge
+                      )}
+                </strong>
+              </div>
+
+              <div className="summary-divider" />
+
+              <div className="summary-row">
+                <span>
+                  Subtotal
+                </span>
+
+                <strong>
+                  {formatPrice(
+                    subscriptionSubtotal
+                  )}
+                </strong>
+              </div>
+
+              <div className="summary-row">
+                <span>
+                  Tax (
+                  {currency ===
+                  "INR"
+                    ? "18%"
+                    : "0%"}
+                  )
+                </span>
+
+                <strong>
+                  {formatPrice(
+                    subscriptionTax
+                  )}
+                </strong>
+              </div>
+
+              <div className="summary-divider" />
+
+              <div className="total-row">
+                <div>
+                  <strong>
+                    Total
+                  </strong>
+
+                  <small>
+                    Includes applicable
+                    tax
+                  </small>
+                </div>
+
+                <strong className="total-price">
+                  {formatPrice(
+                    subscriptionTotal
+                  )}
+                </strong>
+              </div>
+
+              {error && (
+                <div className="payment-error">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="payment-btn"
+                disabled={
+                  loading ||
+                  isCustomPlan ||
+                  billingLoading
+                }
+                onClick={
+                  handlePayment
+                }
+              >
+                {loading
+                  ? "Processing..."
+                  : isCustomPlan
+                    ? "Contact sales"
+                    : isUpgrade
+                      ? "Upgrade plan"
+                      : "Continue to payment"}
+
+                <span>→</span>
+              </button>
+
+              <div className="razorpay-text">
+                🔒 Secure payment
+                powered by
+                Razorpay
+              </div>
+            </div>
+
+            <div className="security-card">
+              <div className="security-item">
+                <div className="security-icon">
+                  ♧
+                </div>
+
+                <div>
+                  <strong>
+                    Secure checkout
+                  </strong>
+
+                  <span>
+                    Your payment
+                    information is
+                    protected.
+                  </span>
+                </div>
+              </div>
+
+              <div className="security-item">
+                <div className="security-icon">
+                  ✓
+                </div>
+
+                <div>
+                  <strong>
+                    Invoice
+                  </strong>
+
+                  <span>
+                    Invoice generated
+                    after successful
+                    payment.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
-    );
+      </main>
+    </div>
+  );
 };
 
 export default Cart;

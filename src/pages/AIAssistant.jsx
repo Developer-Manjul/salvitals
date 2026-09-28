@@ -95,8 +95,8 @@ function normalizeColor(value) {
   return "#00656A";
 }
 
-export default function AIAssistant() {
-  const [tab, setTab] = useState("settings");
+export default function AIAssistant({ initialConversationId = "", initialTab = "settings" }) {
+  const [tab, setTab] = useState(initialTab === "conversations" ? "conversations" : "settings");
 
   const [assistant, setAssistant] = useState(null);
 
@@ -459,6 +459,41 @@ export default function AIAssistant() {
   };
 
   
+
+  useEffect(() => {
+    if (
+      !initialConversationId ||
+      !conversations.length
+    ) {
+      return undefined;
+    }
+
+    setTab("conversations");
+
+    const target = conversations.find(
+      (item) =>
+        String(item?._id || "") ===
+        String(initialConversationId)
+    );
+
+    if (!target) {
+      return undefined;
+    }
+
+    if (
+      String(selectedConversation?._id || "") ===
+      String(target._id)
+    ) {
+      return undefined;
+    }
+
+    openConversation(target);
+    return undefined;
+  }, [
+    initialConversationId,
+    conversations,
+    selectedConversation?._id,
+  ]);
 
   const takeOver = async () => {
     if (!selectedConversation) {

@@ -212,7 +212,7 @@
 }
 
 .dash-plan-top strong {
-  font-size: 12px;
+  font-size: 19px;
 }
 
 .dash-plan-top span {
@@ -616,7 +616,7 @@
 
 .dash-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0,1fr));
+  grid-template-columns: repeat(3, minmax(0,1fr));
   gap: 14px;
   margin-bottom: 15px;
 }
@@ -3973,7 +3973,7 @@
 }
 
 .settings-sidebar {
-  width: 178px;
+  width: 240px;
   background: #ffffff;
   border: 1px solid #dfe6ef;
   border-radius: 11px;
@@ -4123,7 +4123,7 @@
 .settings-tab {
   position: relative;
   width: 100%;
-  min-height: 27px !important;
+  min-height: 40px !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4134,7 +4134,7 @@
   background: transparent;
   color: #536175 !important;
   font-family: inherit;
-  font-size: 12px !important;
+  font-size: 15px !important;
   font-weight: 500;
   text-align: left;
   cursor: pointer;

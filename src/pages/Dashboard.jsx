@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "../styles/dashboard.scss";
+import "../styles/dashboard-layout.scss";
 import "../styles/followup-alert.scss";
 import { buildApiUrl } from "../config/api";
 import Settings from "./Settings";
@@ -18,6 +19,7 @@ const navGroups = [
     items: [
       ["Leads", "users"],
       ["Follow-ups", "calendar"],
+      ["Chat", "chat"],
     ],
   },
   {
@@ -25,13 +27,13 @@ const navGroups = [
     items: [
       ["Contacts", "contact"],
       ["Calendar", "calendar"],
+      ["AI Assistant", "spark"],
     ],
   },
   {
     label: "Engage",
     items: [
       ["WhatsApp", "whatsapp"],
-      ["AI Assistant", "spark"],
     ],
   },
   {
@@ -49,82 +51,147 @@ const navGroups = [
   },
 ];
 
-const kpis = [
-  {
-    label: "Leads captured",
-    value: "2,145",
-    change: "+12.8%",
-    tone: "blue",
-    icon: "users",
-  },
-  {
-    label: "Qualified leads",
-    value: "1,142",
-    change: "+8.4%",
-    tone: "purple",
-    icon: "check",
-  },
-  {
-    label: "Consultations",
-    value: "524",
-    change: "+15.2%",
-    tone: "green",
-    icon: "calendar",
-  },
-  {
-    label: "Conversion rate",
-    value: "31.8%",
-    change: "+4.6%",
-    tone: "orange",
-    icon: "trend",
-  },
-];
+function normalizeSource(source = "") {
+  const value = String(source || "").trim().toLowerCase();
+  if (!value) return "Other";
+  if (value.includes("instagram") || value === "ig") return "Instagram";
+  if (value.includes("facebook") || value === "fb" || value === "facbook") return "Facebook";
+  if (value.includes("google") || value.includes("gads") || value.includes("google ads")) return "Google";
+  if (value.includes("whatsapp") || value === "wa") return "WhatsApp";
+  if (value.includes("website") || value.includes("web")) return "Website";
+  if (value.includes("referral")) return "Referral";
+  if (value.includes("walk") || value.includes("walk-in") || value.includes("walkin")) return "Walk-in";
+  if (value.includes("manual")) return "Manual";
+  if (value.includes("campaign")) return "Campaign";
+  return String(source).trim() || "Other";
+}
 
-const sources = [
-  ["Google", "412", "25.0%", "blue"],
-  ["Instagram", "338", "20.5%", "pink"],
-  ["Website", "296", "18.0%", "sky"],
-  ["WhatsApp", "214", "13.0%", "green"],
-  ["Referral", "158", "9.6%", "purple"],
-  ["Facebook", "104", "6.3%", "indigo"],
-  ["Walk-in", "82", "5.0%", "teal"],
-  ["Other", "41", "2.5%", "slate"],
-];
+function sourceTone(source) {
+  const map = {
+    Google: "blue",
+    Instagram: "pink",
+    Website: "sky",
+    WhatsApp: "green",
+    Referral: "purple",
+    Facebook: "indigo",
+    "Walk-in": "teal",
+    Campaign: "orange",
+    Manual: "slate",
+    Other: "slate",
+  };
+  return map[source] || "slate";
+}
 
-const pipeline = [
-  ["New", 19, "slate"],
-  ["Contacted", 12, "sky"],
-  ["Qualified", 9, "blue"],
-  ["Consultation Scheduled", 6, "purple"],
-  ["Consultation Done", 3, "indigo"],
-  ["Treatment Proposed", 6, "orange"],
-  ["Won", 6, "green"],
-  ["Lost", 3, "red"],
-];
+function normalizeStage(stage = "") {
+  const value = String(stage || "").trim().toLowerCase();
+  if (!value) return "New";
+  const map = {
+    new: "New",
+    contacted: "Contacted",
+    qualified: "Qualified",
+    "consultation scheduled": "Consultation Scheduled",
+    "consultation done": "Consultation Done",
+    proposal: "Treatment Proposed",
+    "treatment proposed": "Treatment Proposed",
+    converted: "Won",
+    won: "Won",
+    lost: "Lost",
+  };
+  return map[value] || String(stage).trim();
+}
 
-const followUps = [
-  [
-    "Priya Sharma",
-    "Treatment discussion",
-    "Today · 2:30 PM",
-    "PS",
-    "high",
-  ],
-  [
-    "Rohan Kapoor",
-    "Send consultation details",
-    "Today · 4:00 PM",
-    "RM",
-    "medium",
-  ],
-  [
-    "Meera Joshi",
-    "Check treatment decision",
-    "Tomorrow · 11:00 AM",
-    "AS",
-    "low",
-  ],
-];
+function stageTone(stage) {
+  const map = {
+    New: "slate",
+    Contacted: "sky",
+    Qualified: "blue",
+    "Consultation Scheduled": "purple",
+    "Consultation Done": "indigo",
+    "Treatment Proposed": "orange",
+    Won: "green",
+    Lost: "red",
+  };
+  return map[stage] || "slate";
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function getDays() {
+  const days = [];
+  for (let index = 6; index >= 0; index -= 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - index);
+    days.push(date);
+  }
+  return days;
+}
+
+function getLeadDate(lead) {
+  const value = lead?.createdAt || lead?.created_at || lead?.date;
+  const date = new Date(value || "");
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function buildDashboardData(leads = []) {
+  const safeLeads = Array.isArray(leads) ? leads : [];
+  const normalized = safeLeads.map((lead) => ({
+    ...lead,
+    source: normalizeSource(lead?.source),
+    stage: normalizeStage(lead?.stage),
+  }));
+  const total = normalized.length;
+  const qualified = normalized.filter((lead) =>
+    ["Qualified", "Consultation Scheduled", "Consultation Done", "Treatment Proposed", "Won"].includes(lead.stage)
+  ).length;
+  const won = normalized.filter((lead) => lead.stage === "Won").length;
+  const conversion = total ? (won / total) * 100 : 0;
+  const sourceCounts = normalized.reduce((acc, lead) => {
+    const source = lead.source || "Other";
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, {});
+  const sources = Object.entries(sourceCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => [name, count, total ? (count / total) * 100 : 0, sourceTone(name)]);
+  const stageOrder = [
+    "New",
+    "Contacted",
+    "Qualified",
+    "Consultation Scheduled",
+    "Consultation Done",
+    "Treatment Proposed",
+    "Won",
+    "Lost",
+  ];
+  const pipeline = stageOrder.map((stage) => [
+    stage,
+    normalized.filter((lead) => lead.stage === stage).length,
+    stageTone(stage),
+  ]);
+  const days = getDays();
+  const performance = days.map((day) => {
+    const dayLeads = normalized.filter((lead) => {
+      const date = getLeadDate(lead);
+      return date && date.getFullYear() === day.getFullYear() && date.getMonth() === day.getMonth() && date.getDate() === day.getDate();
+    });
+    const dayQualified = dayLeads.filter((lead) =>
+      ["Qualified", "Consultation Scheduled", "Consultation Done", "Treatment Proposed", "Won"].includes(lead.stage)
+    ).length;
+    return [
+      new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(day),
+      dayLeads.length,
+      dayQualified,
+    ];
+  });
+  const maxPerformance = Math.max(1, ...performance.map(([, captured]) => captured));
+  return { total, qualified, won, conversion, sources, pipeline, performance, maxPerformance };
+}
 
 function getRelativeTime(value) {
   const timestamp = new Date(value).getTime();
@@ -166,93 +233,6 @@ function getRelativeTime(value) {
     year: "numeric",
   }).format(new Date(timestamp));
 }
-
-const plans = [
-  {
-    id: "starter",
-    name: "Starter",
-    description:
-      "Single-doctor practices getting their enquiries out of WhatsApp and into one place.",
-    price: "$59",
-    monthly: "/month",
-    yearly: "$708 billed yearly",
-    saving: "",
-    icon: "patient",
-    features: [
-      "Leads, enquiries and pipeline",
-      "Shared WhatsApp inbox",
-      "GST invoices and payment links",
-      "1 lead capture form",
-    ],
-    contacts: "1,000",
-    doctors: "3 / 1",
-    whatsapp: "1,000 / mo",
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    popular: true,
-    description:
-      "The plan most clinics run on — campaigns, AI replies and team accountability.",
-    price: "$79",
-    monthly: "/month",
-    yearly: "$948 billed yearly",
-    saving: "",
-    icon: "trend",
-    features: [
-      "Everything in Starter, plus",
-      "WhatsApp campaigns and templates",
-      "WhatsApp AI assistant",
-      "Team performance and full reports",
-      "Google and Meta lead-ad sync",
-    ],
-    contacts: "5,000",
-    doctors: "10 / 5",
-    whatsapp: "20,000 / mo",
-  },
-  {
-    id: "scale",
-    name: "Scale",
-    description:
-      "Multi-branch and multi-speciality groups that need routing, roles and an API.",
-    price: "$99",
-    monthly: "/month",
-    yearly: "$1,188 billed yearly",
-    saving: "",
-    icon: "integration",
-    features: [
-      "Everything in Growth, plus",
-      "Website AI chat widget",
-      "Branch routing and branch reports",
-      "Custom roles and permissions",
-      "Tally / Zoho sync, API and webhooks",
-    ],
-    contacts: "25,000",
-    doctors: "30 / 20",
-    whatsapp: "75,000 / mo",
-  },
-  {
-    id: "enterprise",
-    name: "Custom",
-    description:
-      "Hospital groups with procurement, compliance and integration requirements.",
-    price: "Custom",
-    monthly: "",
-    yearly: "Priced on locations and volume",
-    saving: "",
-    icon: "settings",
-    features: [
-      "Everything in Scale, plus",
-      "SSO / SAML and audit log",
-      "Data residency and signed DPA",
-      "99.9% uptime SLA",
-      "White-label and custom integrations",
-    ],
-    contacts: "Unlimited",
-    doctors: "Unlimited",
-    whatsapp: "Custom",
-  },
-];
 
 function Icon({ name, size = 18 }) {
   const common = {
@@ -489,787 +469,114 @@ function getInitials(name = "") {
   );
 }
 
-function ChoosePlan({
-  user,
-  selectedPlan,
-  onContinue,
-}) {
-  const fullName = user?.name
-    ? user.name.trim()
-    : "there";
-
-  const planName =
-    selectedPlan?.name ||
-    "Your Sale Vitals CRM";
-
-  return (
-    <div className="choose-plan-page">
-      <div className="crm-activation-wrap">
-
-        <div className="crm-activation-status">
-          <span className="crm-status-dot" />
-
-          <span>
-            CRM ACTIVATION IN PROGRESS
-          </span>
-        </div>
-
-        <div className="crm-activation-card">
-
-          <div className="crm-activation-icon">
-            <Icon
-              name="check"
-              size={30}
-            />
-          </div>
-
-          <div className="crm-activation-content">
-
-            <p className="dash-breadcrumb">
-              Welcome to Vitals
-            </p>
-
-            <h1>
-              Welcome, {fullName}.
-            </h1>
-
-            <p className="crm-main-message">
-              Your CRM workspace is currently
-              being prepared and activated for you.
-            </p>
-
-            <p className="crm-sub-message">
-              Our team is setting up your workspace
-              so everything is ready for your clinic.
-              One of our onboarding specialists will
-              contact you soon to complete the activation
-              and help you get started.
-            </p>
-
-            <div className="crm-selected-plan">
-
-              <div className="crm-selected-plan-left">
-
-                <span className="crm-plan-small-label">
-                  YOUR CRM PLAN
-                </span>
-
-                <strong>
-                  {planName}
-                </strong>
-
-              </div>
-
-              <div className="crm-plan-active">
-                <span />
-                Activation pending
-              </div>
-
-            </div>
-
-            <div className="crm-steps">
-
-              <div className="crm-step completed">
-
-                <div className="crm-step-icon">
-                  ✓
-                </div>
-
-                <div>
-                  <strong>
-                    Account created
-                  </strong>
-
-                  <span>
-                    Your Vitals account has been created
-                    successfully.
-                  </span>
-                </div>
-
-              </div>
-
-              <div className="crm-step active">
-
-                <div className="crm-step-icon">
-                  <span />
-                </div>
-
-                <div>
-                  <strong>
-                    Workspace setup
-                  </strong>
-
-                  <span>
-                    We are preparing your CRM workspace
-                    and account configuration.
-                  </span>
-                </div>
-
-              </div>
-
-              <div className="crm-step">
-
-                <div className="crm-step-icon">
-                  3
-                </div>
-
-                <div>
-                  <strong>
-                    Onboarding & activation
-                  </strong>
-
-                  <span>
-                    Our team will contact you within
-                    24 hours to complete your setup.
-                  </span>
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="crm-info-box">
-
-              <div className="crm-info-icon">
-                <Icon
-                  name="help"
-                  size={18}
-                />
-              </div>
-
-              <p>
-                Please keep an eye on your registered
-                email and phone number. Our team will
-                contact you shortly to help you get
-                your CRM up and running.
-              </p>
-
-            </div>
-
-            <p className="crm-support-text">
-              Need help?
-
-              <button type="button">
-                Contact our support team
-              </button>
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-function ActualDashboardContent({
-  user,
-  dashboardLeads,
-}) {
-  const firstName = user?.name
-    ? user.name.trim().split(/\s+/)[0]
-    : "there";
+function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFollowUps, onNavigate, onAddLead }) {
+  const firstName = user?.name ? user.name.trim() : "there";
+  const greeting = getGreeting();
+  const data = dashboardData || buildDashboardData([]);
+  const maxPipeline = Math.max(1, ...data.pipeline.map(([, count]) => count));
+  const recentLeads = dashboardLeads.slice(0, 15);
+  const visibleFollowUps = todayFollowUps.slice(0, 5);
 
   return (
     <>
       <div className="dash-page-head">
-
         <div>
-
-          <p className="dash-breadcrumb">
-            Overview
-          </p>
-
-          <h1>
-            Good morning, {firstName}.
-          </h1>
-
-          <p className="dash-subtitle">
-            Here’s what’s happening with your clinic today.
-          </p>
-
+          <p className="dash-breadcrumb">Overview</p>
+          <h1>{greeting}, {firstName}.</h1>
         </div>
-
         <div className="dash-head-actions">
-
-          <button className="dash-btn">
-
-            <Icon
-              name="calendar"
-              size={16}
-            />
-
-            Aug 31 – Sep 6
-
-            <Icon
-              name="chevron"
-              size={14}
-            />
-
-          </button>
-
-          <button className="dash-btn primary">
-
-            <Icon
-              name="plus"
-              size={16}
-            />
-
-            Add lead
-
-          </button>
-
+       
         </div>
-
       </div>
 
       <div className="dash-kpis">
-
-        {kpis.map((kpi) => (
-
-          <div
-            className="dash-kpi"
-            key={kpi.label}
-          >
-
-            <div
-              className={`dash-kpi-icon ${kpi.tone}`}
-            >
-
-              <Icon
-                name={kpi.icon}
-                size={17}
-              />
-
-            </div>
-
-            <div className="dash-kpi-label">
-              {kpi.label}
-            </div>
-
-            <div className="dash-kpi-value">
-              {kpi.value}
-            </div>
-
-            <span className="dash-kpi-change">
-              ↑ {kpi.change}
-            </span>
-
-            <span className="dash-kpi-period">
-              vs last 7 days
-            </span>
-
+        {[
+          { label: "Leads captured", value: data.total, change: "Live", tone: "blue", icon: "users" },
+          { label: "Qualified leads", value: data.qualified, change: "Live", tone: "purple", icon: "check" },
+          { label: "Consultations", value: data.pipeline.find(([name]) => name === "Consultation Scheduled")?.[1] || 0, change: "Live", tone: "green", icon: "calendar" },
+        ].map((kpi) => (
+          <div className="dash-kpi" key={kpi.label}>
+            <div className={`dash-kpi-icon ${kpi.tone}`}><Icon name={kpi.icon} size={17} /></div>
+            <div className="dash-kpi-label">{kpi.label}</div>
+            <div className="dash-kpi-value">{kpi.value}</div>
+            <span className="dash-kpi-change">{kpi.change}</span>
+            <span className="dash-kpi-period">current workspace</span>
           </div>
-
         ))}
-
       </div>
 
       <div className="dash-grid-two">
-
         <section className="dash-card performance-card">
-
           <div className="dash-card-head">
-
             <div>
-
-              <h2>
-                Lead performance
-              </h2>
-
-              <p>
-                Captured vs qualified over the last 7 days
-              </p>
-
+              <h2>Lead performance</h2>
+              <p>Captured vs qualified over the last 7 days</p>
             </div>
-
-            <button className="dash-card-action">
-
-              Last 7 days
-
-              <Icon
-                name="chevron"
-                size={14}
-              />
-
-            </button>
-
+            <span className="dash-card-action">Last 7 days</span>
           </div>
-
           <div className="dash-chart">
-
-            <div className="dash-y-labels">
-              <span>400</span>
-              <span>300</span>
-              <span>200</span>
-              <span>100</span>
-              <span>0</span>
-            </div>
-
+            <div className="dash-y-labels"><span>{data.maxPerformance}</span><span>{Math.ceil(data.maxPerformance * .75)}</span><span>{Math.ceil(data.maxPerformance * .5)}</span><span>{Math.ceil(data.maxPerformance * .25)}</span><span>0</span></div>
             <div className="dash-chart-area">
-
-              {[0, 1, 2, 3, 4].map(
-                (i) => (
-                  <i
-                    className="dash-grid-line"
-                    style={{
-                      top: `${i * 25}%`,
-                    }}
-                    key={i}
-                  />
-                )
-              )}
-
+              {[0, 1, 2, 3, 4].map((i) => <i className="dash-grid-line" style={{ top: `${i * 25}%` }} key={i} />)}
               <div className="dash-bars">
-
-                {[
-                  ["Mon", 210, 126],
-                  ["Tue", 285, 174],
-                  ["Wed", 248, 155],
-                  ["Thu", 332, 188],
-                  ["Fri", 304, 201],
-                  ["Sat", 356, 224],
-                  ["Sun", 294, 198],
-                ].map(
-                  ([day, a, b]) => (
-                    <div
-                      className="dash-bar-day"
-                      key={day}
-                    >
-
-                      <div className="dash-bar-stack">
-
-                        <span
-                          style={{
-                            height: `${a / 4}px`,
-                          }}
-                        />
-
-                        <span
-                          style={{
-                            height: `${b / 4}px`,
-                          }}
-                        />
-
-                      </div>
-
-                      <small>
-                        {day}
-                      </small>
-
+                {data.performance.map(([day, captured, qualified]) => (
+                  <div className="dash-bar-day" key={day}>
+                    <div className="dash-bar-stack">
+                      <span style={{ height: `${(captured / data.maxPerformance) * 180}px` }} />
+                      <span style={{ height: `${(qualified / data.maxPerformance) * 180}px` }} />
                     </div>
-                  )
-                )}
-
+                    <small>{day}</small>
+                  </div>
+                ))}
               </div>
-
             </div>
-
           </div>
-
-          <div className="dash-legend">
-
-            <span>
-              <i className="blue" />
-              Leads captured
-            </span>
-
-            <span>
-              <i className="purple" />
-              Qualified
-            </span>
-
-          </div>
-
+          <div className="dash-legend"><span><i className="blue" />Leads captured</span><span><i className="purple" />Qualified</span></div>
         </section>
 
         <section className="dash-card">
-
           <div className="dash-card-head">
-
-            <div>
-
-              <h2>
-                Lead sources
-              </h2>
-
-              <p>
-                Where your enquiries are coming from
-              </p>
-
-            </div>
-
-            <button className="dash-card-action">
-
-              View report
-
-              <Icon
-                name="arrow"
-                size={14}
-              />
-
-            </button>
-
+            <div><h2>Lead sources</h2><p>Where your enquiries are coming from</p></div>
+            <button className="dash-card-action" type="button" onClick={() => onNavigate("Leads")}>View leads <Icon name="arrow" size={14} /></button>
           </div>
-
           <div className="dash-source-list">
-
-            {sources.map(
-              ([name, count, pct, tone]) => (
-
-                <div
-                  className="dash-source-row"
-                  key={name}
-                >
-
-                  <span
-                    className={`dash-source-dot ${tone}`}
-                  />
-
-                  <span className="dash-source-name">
-                    {name}
-                  </span>
-
-                  <strong>
-                    {count}
-                  </strong>
-
-                  <small>
-                    {pct}
-                  </small>
-
-                </div>
-
-              )
-            )}
-
+            {data.sources.length === 0 ? <p className="dash-notification-empty">No leads yet</p> : data.sources.map(([name, count, pct, tone]) => (
+              <div className="dash-source-row" key={name}><span className={`dash-source-dot ${tone}`} /><span className="dash-source-name">{name}</span><strong>{count}</strong><small>{pct.toFixed(1)}%</small></div>
+            ))}
           </div>
-
         </section>
-
       </div>
 
-      <section className="dash-card dash-pipeline-card">
-
-        <div className="dash-card-head">
-
-          <div>
-
-            <h2>
-              Pipeline overview
-            </h2>
-
-            <p>
-              64 leads across 8 stages
-            </p>
-
-          </div>
-
-          <button className="dash-btn">
-
-            <Icon
-              name="pipeline"
-              size={16}
-            />
-
-            Open pipeline
-
-          </button>
-
-        </div>
-
-        <div className="dash-pipeline-scroll">
-
-          <div className="dash-pipeline">
-
-            {pipeline.map(
-              ([name, count, tone]) => (
-
-                <div
-                  className="dash-pipeline-stage"
-                  key={name}
-                >
-
-                  <div className="dash-stage-title">
-
-                    <i className={tone} />
-
-                    {name}
-
-                  </div>
-
-                  <strong>
-                    {count}
-                  </strong>
-
-                  <div className="dash-stage-meter">
-
-                    <i
-                      className={tone}
-                      style={{
-                        width: `${Math.max(
-                          22,
-                          (count / 19) * 100
-                        )}%`,
-                      }}
-                    />
-
-                  </div>
-
-                </div>
-              )
-            )}
-
-          </div>
-
-        </div>
-
-      </section>
-
+    
       <div className="dash-grid-two lower">
-
         <section className="dash-card">
-
           <div className="dash-card-head">
-
-            <div>
-
-              <h2>
-                Recent leads
-              </h2>
-
-              <p>
-                Latest enquiries that need attention
-              </p>
-
-            </div>
-
-            <button className="dash-card-action">
-
-              View all
-
-              <Icon
-                name="arrow"
-                size={14}
-              />
-
-            </button>
-
+            <div><h2>Recent leads</h2><p>Latest enquiries that need attention</p></div>
+            <button className="dash-card-action" type="button" onClick={() => onNavigate("Leads")}>View all <Icon name="arrow" size={14} /></button>
           </div>
-
           <div className="dash-table-wrap">
-
-            <table className="dash-table">
-
-              <thead>
-
-                <tr>
-
-                  <th>
-                    Lead
-                  </th>
-
-                  <th>
-                    Interest
-                  </th>
-
-                  <th>
-                    Source
-                  </th>
-
-                  <th>
-                    Status
-                  </th>
-
-                  <th>
-                    Owner
-                  </th>
-
-                  <th>
-                    Added
-                  </th>
-
-                </tr>
-
-              </thead>
-
+            <table className="dash-table"><thead><tr><th>Lead</th><th>Interest</th><th>Source</th><th>Status</th><th>Owner</th><th>Added</th></tr></thead>
               <tbody>
-
-                {dashboardLeads.map(
-                  (lead) => (
-
-                    <tr
-                      key={lead._id}
-                    >
-
-                      <td>
-
-                        <div className="dash-lead">
-
-                          <Avatar
-                            initials={
-                              lead.owner ||
-                              user?.name ||
-                              "U"
-                            }
-                          />
-
-                          <span>
-
-                            <strong>
-                              {lead.name}
-                            </strong>
-
-                            <small>
-                              {getRelativeTime(
-                                lead.createdAt
-                              )}
-                            </small>
-
-                          </span>
-
-                        </div>
-
-                      </td>
-
-                      <td>
-                        {lead.service || "—"}
-                      </td>
-
-                      <td>
-                        {lead.source}
-                      </td>
-
-                      <td>
-
-                        <span
-                          className={`dash-status ${(lead.stage || "New")
-                            .toLowerCase()
-                            .replace(
-                              " ",
-                              "-"
-                            )}`}
-                        >
-                          {lead.stage || "New"}
-                        </span>
-
-                      </td>
-
-                      <td>
-                        {lead.owner || "Unassigned"}
-                      </td>
-
-                      <td className="muted">
-                        {getRelativeTime(
-                          lead.createdAt
-                        )}
-                      </td>
-
-                    </tr>
-                  )
-                )}
-
+                {recentLeads.length === 0 ? <tr><td colSpan="6">No leads found</td></tr> : recentLeads.map((lead) => <tr key={lead._id}>
+                  <td><div className="dash-lead"><Avatar initials={getInitials(lead.name)} /><span><strong>{lead.name || "Unnamed lead"}</strong><small>{getRelativeTime(lead.createdAt)}</small></span></div></td>
+                  <td>{lead.service || "—"}</td><td>{normalizeSource(lead.source)}</td>
+                  <td><span className={`dash-status ${(normalizeStage(lead.stage) || "New").toLowerCase().replaceAll(" ", "-")}`}>{normalizeStage(lead.stage)}</span></td>
+                  <td>{lead.owner || lead.preferredDoctor || "Unassigned"}</td><td className="muted">{getRelativeTime(lead.createdAt)}</td>
+                </tr>)}
               </tbody>
-
             </table>
-
           </div>
-
         </section>
 
         <section className="dash-card">
-
-          <div className="dash-card-head">
-
-            <div>
-
-              <h2>
-                Today’s follow-ups
-              </h2>
-
-              <p>
-                Keep your pipeline moving
-              </p>
-
-            </div>
-
-            <button className="dash-card-action">
-
-              Calendar
-
-              <Icon
-                name="arrow"
-                size={14}
-              />
-
-            </button>
-
-          </div>
-
+          <div className="dash-card-head"><div><h2>Today’s follow-ups</h2><p>Keep your pipeline moving</p></div><button className="dash-card-action" type="button" onClick={() => onNavigate("Calendar")}>Calendar <Icon name="arrow" size={14} /></button></div>
           <div className="dash-follow-list">
-
-            {followUps.map(
-              ([
-                name,
-                subject,
-                time,
-                initials,
-                priority,
-              ]) => (
-
-                <div
-                  className="dash-follow"
-                  key={name}
-                >
-
-                  <span
-                    className={`dash-priority ${priority}`}
-                  />
-
-                  <Avatar
-                    initials={initials}
-                  />
-
-                  <div className="grow">
-
-                    <strong>
-                      {name}
-                    </strong>
-
-                    <span>
-                      {subject}
-                    </span>
-
-                    <small>
-                      {time}
-                    </small>
-
-                  </div>
-
-                  <button className="dash-more">
-                    •••
-                  </button>
-
-                </div>
-              )
-            )}
-
+            {visibleFollowUps.length === 0 ? <p className="dash-notification-empty">No pending follow-ups today</p> : visibleFollowUps.map((item) => <div className="dash-follow" key={String(item._id)}>
+              <span className={`dash-priority ${String(item.priority || "medium").toLowerCase()}`} /><Avatar initials={getInitials(item.leadName)} /><div className="grow"><strong>{item.leadName}</strong><span>{item.purpose}</span><small>{new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(item.date))}</small></div><button type="button" className="dash-more" onClick={() => onNavigate("Follow-ups")}>•••</button>
+            </div>)}
           </div>
-
-          <button className="dash-full-btn">
-
-            View all follow-ups
-
-            <Icon
-              name="arrow"
-              size={15}
-            />
-
-          </button>
-
+          <button className="dash-full-btn" type="button" onClick={() => onNavigate("Follow-ups")}>View all follow-ups <Icon name="arrow" size={15} /></button>
         </section>
-
       </div>
     </>
   );
@@ -1361,6 +668,18 @@ export default function Dashboard() {
   const [dashboardLeads, setDashboardLeads] =
     useState([]);
 
+  const [allLeads, setAllLeads] =
+    useState([]);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
+  const [searchOpen, setSearchOpen] =
+    useState(false);
+
+  const [dashboardData, setDashboardData] =
+    useState(buildDashboardData([]));
+
   const [pendingFollowUpCount, setPendingFollowUpCount] =
     useState(0);
 
@@ -1384,6 +703,13 @@ export default function Dashboard() {
 
   const [aiUnreadCount, setAiUnreadCount] =
     useState(0);
+
+  const [billing, setBilling] =
+    useState(null);
+
+  const [billingLoading, setBillingLoading] =
+    useState(true);
+
 
   useEffect(() => {
     const dashboardParams =
@@ -1414,10 +740,8 @@ export default function Dashboard() {
       }
     }
 
-    const planPurchased =
-      localStorage.getItem("planPurchased") === "true";
+    loadBilling();
 
-    setShowPlans(!planPurchased);
   }, []);
 
   const getAuthToken = () =>
@@ -1426,6 +750,44 @@ export default function Dashboard() {
     localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("vitalsToken") ||
     "";
+
+  const loadBilling = async () => {
+    const token = getAuthToken();
+
+    if (!token) {
+      setBillingLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        buildApiUrl("/api/billing/current"),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setBilling(data);
+
+        const subscription = data.subscription || {};
+        const hasActivePlan =
+          subscription.status === "active" &&
+          subscription.planId;
+
+        setShowPlans(!hasActivePlan);
+      }
+    } catch (error) {
+      console.error("LOAD BILLING ERROR:", error);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
 
 const getLeadReadStorageKey = () => {
   let currentUser = null;
@@ -1938,40 +1300,31 @@ setLeadCount(unreadNewLeadCount);
   useEffect(() => {
     const loadDashboardLeads = async () => {
       const token = getAuthToken();
-
-      if (!token) {
-        return;
-      }
-
+      if (!token) return;
       try {
-        const response = await fetch(
-          buildApiUrl("/api/leads"),
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data =
-          await response.json();
-
-        if (response.ok) {
-          setDashboardLeads(
-            Array.isArray(data.leads)
-              ? data.leads.slice(0, 4)
-              : []
-          );
-        }
+        const response = await fetch(buildApiUrl("/api/leads"), {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) return;
+        const leads = Array.isArray(data.leads) ? data.leads : [];
+        const normalized = leads.map((lead) => ({ ...lead, source: normalizeSource(lead.source), stage: normalizeStage(lead.stage) }));
+        setAllLeads(normalized);
+        normalized.sort((a, b) => {
+          const aTime = getLeadDate(a)?.getTime() || 0;
+          const bTime = getLeadDate(b)?.getTime() || 0;
+          return bTime - aTime;
+        });
+        setDashboardLeads(normalized.slice(0, 15));
+        setDashboardData(buildDashboardData(normalized));
       } catch (error) {
-        console.error(
-          "LOAD DASHBOARD LEADS ERROR:",
-          error
-        );
+        console.error("LOAD DASHBOARD LEADS ERROR:", error);
       }
     };
-
     loadDashboardLeads();
+    const intervalId = window.setInterval(loadDashboardLeads, 30000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const markNotificationAsRead = async (
@@ -2085,31 +1438,39 @@ setLeadCount(unreadNewLeadCount);
     setActive(name);
     setMobileOpen(false);
     setProfileOpen(false);
+    setSearchOpen(false);
+    setSearchTerm("");
   };
 
-  const handleChoosePlan = (plan) => {
-    const numericPrice =
-      plan.id === "starter"
-        ? 59
-        : plan.id === "growth"
-          ? 79
-          : plan.id === "scale"
-            ? 99
-            : 0;
+  const searchResults = searchTerm.trim()
+    ? allLeads
+        .filter((lead) => {
+          const query = searchTerm.trim().toLowerCase();
+          const haystack = [
+            lead?.name,
+            lead?.phone,
+            lead?.email,
+            lead?.service,
+            lead?.owner,
+            lead?.preferredDoctor,
+            normalizeSource(lead?.source),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(query);
+        })
+        .slice(0, 8)
+    : [];
 
-    const selectedPlan = {
-      ...plan,
-      currency: "USD",
-      numericPrice: numericPrice,
-      billing: "monthly",
-    };
-
-    localStorage.setItem(
-      "selectedPlan",
-      JSON.stringify(selectedPlan)
-    );
-
-    window.location.href = "/cart";
+  const openSearchLead = (lead) => {
+    if (!lead?._id) return;
+    markLeadAsRead(lead._id);
+    setSelectedLeadId(lead._id);
+    setActive("LeadDetails");
+    setSearchTerm("");
+    setSearchOpen(false);
+    setMobileOpen(false);
   };
 
   const openTodayFollowUp = (item) => {
@@ -2182,8 +1543,12 @@ setLeadCount(unreadNewLeadCount);
       return <Contacts user={user} />;
     }
 
+    if (active === "Chat") {
+      return <AIAssistant initialTab="conversations" />;
+    }
+
     if (active === "AI Assistant") {
-      return <AIAssistant />;
+      return <AIAssistant initialTab="settings" />;
     }
 
     if (active === "Invoices") {
@@ -2208,19 +1573,14 @@ setLeadCount(unreadNewLeadCount);
       );
     }
 
-    if (showPlans) {
-      return (
-        <ChoosePlan
-          user={user}
-          onContinue={handleChoosePlan}
-        />
-      );
-    }
-
     return (
       <ActualDashboardContent
         user={user}
         dashboardLeads={dashboardLeads}
+        dashboardData={dashboardData}
+        todayFollowUps={todayFollowUps}
+        onNavigate={selectNav}
+        onAddLead={() => selectNav("Leads")}
       />
     );
   };
@@ -2326,14 +1686,16 @@ setLeadCount(unreadNewLeadCount);
                         name === "Leads" ||
                         name === "Contacts" ||
                         name === "Follow-ups" ||
-                        (name === "AI Assistant" && aiUnreadCount > 0)) && (
+                        (name === "Chat" && aiUnreadCount > 0)) && (
                         <em
                           className={
                             name === "Leads" && leadCount > 0
                               ? "hot"
                               : name === "Follow-ups"
                                 ? "hot"
-                                : countTone === "hot"
+                                : name === "Chat" && aiUnreadCount > 0
+                                  ? "hot"
+                                  : countTone === "hot"
                                   ? "hot"
                                   : ""
                           }
@@ -2344,7 +1706,7 @@ setLeadCount(unreadNewLeadCount);
                               ? contactCount
                               : name === "Follow-ups"
                                 ? pendingFollowUpCount
-                                : name === "AI Assistant"
+                                : name === "Chat"
                                   ? aiUnreadCount
                                   : count}
                         </em>
@@ -2361,61 +1723,86 @@ setLeadCount(unreadNewLeadCount);
         </nav>
 
         <div className="dash-plan">
+          {showPlans || billingLoading ? (
+            <>
+              <div className="dash-plan-top">
+                <strong>Choose your plan</strong>
+                <span>Get started</span>
+              </div>
 
-          <div className="dash-plan-top">
+              <div className="dash-plan-copy">
+                Choose a plan to unlock your workspace
+              </div>
 
-            <strong>
-              {showPlans
-                ? "Choose your plan"
-                : "Active plan"}
-            </strong>
+              <div className="dash-plan-bar">
+                <i style={{ width: "0%" }} />
+              </div>
 
-            <span>
-              {showPlans
-                ? "Get started"
-                : "Active"}
-            </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setActive("Settings");
+                }}
+              >
+                Choose plan
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="dash-plan-top">
+                <strong>
+                  {billing?.subscription?.planName ||
+                    "Active plan"}
+                </strong>
 
-          </div>
+                <span>Active</span>
+              </div>
 
-          <div className="dash-plan-copy">
+              <div className="dash-plan-copy">
+                {billing?.subscription?.daysRemaining !==
+                undefined
+                  ? `${billing.subscription.daysRemaining} days remaining`
+                  : "Your Vitals workspace is active"}
+              </div>
 
-            {showPlans
-              ? "Choose a plan to unlock your workspace"
-              : "Your Vitals workspace is active"}
+              <div className="dash-plan-usage">
+                <div className="dash-plan-usage-row">
+                  {/* <span>Contacts</span> */}
+                  <strong>
+                    {billing?.usage?.contacts?.limit === null
+                      ? `${billing?.usage?.contacts?.used || 0} contacts`
+                      : `${billing?.usage?.contacts?.used || 0} of ${billing?.usage?.contacts?.limit || 0}`}
+                  </strong>
+                </div>
 
-          </div>
+                <div className="dash-plan-bar">
+                  <i
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(
+                          0,
+                          Number(
+                            billing?.usage?.contacts?.percentage ||
+                              0
+                          )
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
 
-          <div className="dash-plan-bar">
-
-            <i
-              style={{
-                width: showPlans
-                  ? "0%"
-                  : "100%",
-              }}
-            />
-
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowPlans(true);
-
-              window.scrollTo({
-                top: 0,
-                behavior: "smooth",
-              });
-            }}
-          >
-
-            {showPlans
-              ? "Choose plan"
-              : "Manage plan"}
-
-          </button>
-
+              <button
+                type="button"
+                onClick={() => {
+                  setActive("Settings");
+                }}
+              >
+                Upgrade plan
+              </button>
+            </>
+          )}
         </div>
 
       </aside>
@@ -2448,22 +1835,109 @@ setLeadCount(unreadNewLeadCount);
 
           </button>
 
-          <button className="dash-search">
+          <div
+            className="dash-search"
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+            }}
+          >
+            <Icon name="search" size={18} />
 
-            <Icon
-              name="search"
-              size={18}
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setSearchTerm("");
+                  setSearchOpen(false);
+                }
+                if (event.key === "Enter" && searchResults[0]) {
+                  openSearchLead(searchResults[0]);
+                }
+              }}
+              placeholder="Search patients, leads, invoices…"
+              aria-label="Search patients, leads, invoices"
+              style={{
+                width: "100%",
+                border: 0,
+                outline: 0,
+                background: "transparent",
+                font: "inherit",
+                color: "inherit",
+                minWidth: 0,
+              }}
             />
 
-            <span>
-              Search patients, leads, invoices…
-            </span>
+            <kbd>⌘K</kbd>
 
-            <kbd>
-              ⌘K
-            </kbd>
-
-          </button>
+            {searchOpen && searchTerm.trim() && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  left: 0,
+                  right: 0,
+                  minWidth: 420,
+                  maxHeight: 420,
+                  overflowY: "auto",
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  boxShadow: "0 18px 45px rgba(15,23,42,.14)",
+                  zIndex: 1000,
+                  padding: 8,
+                }}
+              >
+                {searchResults.length === 0 ? (
+                  <div style={{ padding: "16px 14px", color: "#6b7280", fontSize: 13 }}>
+                    No leads found for “{searchTerm.trim()}”
+                  </div>
+                ) : (
+                  searchResults.map((lead) => (
+                    <button
+                      type="button"
+                      key={lead._id}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => openSearchLead(lead)}
+                      style={{
+                        width: "100%",
+                        border: 0,
+                        background: "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "11px 12px",
+                        borderRadius: 10,
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Avatar initials={getInitials(lead.name)} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: "block", fontSize: 13, color: "#172033" }}>
+                          {lead.name || "Unnamed lead"}
+                        </strong>
+                        <small style={{ display: "block", marginTop: 3, color: "#7b8798", fontSize: 11 }}>
+                          {lead.service || "Lead"} · {normalizeSource(lead.source)} · {lead.phone || lead.email || ""}
+                        </small>
+                      </span>
+                      <span style={{ fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>
+                        Open lead →
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="dash-top-actions">
 
@@ -2764,12 +2238,12 @@ setLeadCount(unreadNewLeadCount);
 
         <button
           className={
-            active === "Pipeline"
+            active === "Follow-ups"
               ? "on"
               : ""
           }
           onClick={() =>
-            selectNav("Pipeline")
+            selectNav("Follow-ups")
           }
         >
 
@@ -2779,7 +2253,7 @@ setLeadCount(unreadNewLeadCount);
           />
 
           <span>
-            Pipeline
+            Follow-ups
           </span>
 
         </button>

@@ -1,0 +1,135 @@
+html:has(.dashboard-shell),
+body:has(.dashboard-shell),
+#root:has(.dashboard-shell) {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+.dashboard-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  background: #f6f9fc;
+}
+
+.dash-sidebar {
+  position: fixed !important;
+  inset: 0 auto 0 0;
+  width: 270px;
+  height: 100dvh;
+  min-height: 100dvh;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 0 0 270px;
+}
+
+.dash-brand {
+  flex: 0 0 auto;
+}
+
+.dash-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.dash-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.dash-nav::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background: rgba(100, 116, 139, 0.28);
+}
+
+.dash-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dash-plan {
+  flex: 0 0 auto;
+}
+
+.dash-main {
+  width: calc(100% - 270px);
+  min-width: 0;
+  height: 100dvh;
+  min-height: 100dvh;
+  margin-left: 270px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
+.dash-topbar {
+  position: sticky !important;
+  top: 0;
+  z-index: 900;
+  width: 100%;
+}
+
+.dash-content {
+  width: 100%;
+  min-width: 0;
+  // min-height: calc(100dvh - 76px);
+  box-sizing: border-box;
+}
+
+.dash-content > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.today-followup-popup {
+  z-index: 1200 !important;
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell {
+    min-height: 100dvh;
+  }
+
+  .dash-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 86vw);
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    z-index: 1500;
+  }
+
+  .dash-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .dash-main {
+    width: 100%;
+    margin-left: 0;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .dash-topbar {
+    position: sticky !important;
+    top: 0;
+  }
+
+  .dash-overlay {
+    position: fixed !important;
+    inset: 0;
+    z-index: 1400;
+  }
+}
