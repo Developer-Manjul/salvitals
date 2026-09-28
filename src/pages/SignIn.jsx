@@ -19,6 +19,17 @@ export default function SignIn() {
       : "";
   });
 
+  const clearLoginRedirects = () => {
+    localStorage.removeItem("redirectAfterLogin");
+    sessionStorage.removeItem("redirectAfterLogin");
+
+    localStorage.removeItem("redirectAfterSetup");
+    sessionStorage.removeItem("redirectAfterSetup");
+
+    localStorage.removeItem("redirectAfterRegister");
+    sessionStorage.removeItem("redirectAfterRegister");
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -76,15 +87,27 @@ export default function SignIn() {
         return;
       }
 
+      const redirectAfterLogin =
+        localStorage.getItem(
+          "redirectAfterLogin"
+        ) ||
+        sessionStorage.getItem(
+          "redirectAfterLogin"
+        );
+
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("vitalsToken");
       localStorage.removeItem("vitalsUser");
+      localStorage.removeItem("salevitals_token");
+      localStorage.removeItem("salevitals_user");
 
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
       sessionStorage.removeItem("vitalsToken");
       sessionStorage.removeItem("vitalsUser");
+      sessionStorage.removeItem("salevitals_token");
+      sessionStorage.removeItem("salevitals_user");
 
       const storage = remember
         ? localStorage
@@ -112,15 +135,8 @@ export default function SignIn() {
         JSON.stringify(userData)
       );
 
-      const redirectAfterLogin =
-        localStorage.getItem(
-          "redirectAfterLogin"
-        ) ||
-        sessionStorage.getItem(
-          "redirectAfterLogin"
-        );
-
       let paymentCompleted = false;
+      let subscriptionActive = false;
 
       try {
         const paymentResponse =
@@ -139,33 +155,6 @@ export default function SignIn() {
         const paymentData =
           await paymentResponse.json();
 
-        console.log(
-          "================================="
-        );
-
-        console.log(
-          "LOGIN PAYMENT CHECK"
-        );
-
-        console.log(
-          "EMAIL:",
-          userData.email
-        );
-
-        console.log(
-          "PAYMENT RESPONSE STATUS:",
-          paymentResponse.status
-        );
-
-        console.log(
-          "PAYMENT DATA:",
-          paymentData
-        );
-
-        console.log(
-          "================================="
-        );
-
         const orderStatus =
           paymentData?.order
             ?.paymentStatus ||
@@ -177,6 +166,11 @@ export default function SignIn() {
           paymentData?.latestOrder
             ?.status ||
           paymentData?.payment?.status;
+
+        subscriptionActive =
+          paymentResponse.ok &&
+          paymentData?.subscription?.status ===
+            "active";
 
         paymentCompleted =
           paymentResponse.ok &&
@@ -192,14 +186,9 @@ export default function SignIn() {
             paymentData?.paymentStatus ===
               "paid" ||
             paymentData?.status === "paid" ||
-            orderStatus === "paid"
+            orderStatus === "paid" ||
+            subscriptionActive
           );
-
-        console.log(
-          "PAYMENT COMPLETED:",
-          paymentCompleted
-        );
-
       } catch (paymentError) {
         console.error(
           "Payment status check error:",
@@ -207,39 +196,7 @@ export default function SignIn() {
         );
 
         paymentCompleted = false;
-      }
-
-      if (paymentCompleted) {
-        localStorage.removeItem(
-          "redirectAfterLogin"
-        );
-
-        sessionStorage.removeItem(
-          "redirectAfterLogin"
-        );
-
-        localStorage.removeItem(
-          "redirectAfterSetup"
-        );
-
-        sessionStorage.removeItem(
-          "redirectAfterSetup"
-        );
-
-        localStorage.removeItem(
-          "redirectAfterRegister"
-        );
-
-        sessionStorage.removeItem(
-          "redirectAfterRegister"
-        );
-
-        setLoading(false);
-
-        window.location.href =
-          "/dashboard";
-
-        return;
+        subscriptionActive = false;
       }
 
       const accountSetupCompleted =
@@ -272,6 +229,20 @@ export default function SignIn() {
         return;
       }
 
+      if (
+        paymentCompleted ||
+        subscriptionActive
+      ) {
+        clearLoginRedirects();
+
+        setLoading(false);
+
+        window.location.href =
+          "/dashboard";
+
+        return;
+      }
+
       localStorage.removeItem(
         "redirectAfterLogin"
       );
@@ -282,11 +253,16 @@ export default function SignIn() {
 
       setLoading(false);
 
+      if (redirectAfterLogin) {
+        window.location.href =
+          redirectAfterLogin;
+        return;
+      }
+
       window.location.href =
-        redirectAfterLogin || "/cart";
+        "/dashboard";
 
       return;
-
     } catch (err) {
       console.error(
         "Login error:",
@@ -350,121 +326,93 @@ export default function SignIn() {
               alt="Vitals"
               className="auth-brand-logo"
             />
+
           </div>
 
           <div className="auth-eyebrow">
-           CRM FOR GROWING BUSINESSES 
+            CRM FOR GROWING BUSINESSES
           </div>
 
           <h2>
-           Every lead organized 
+            Every lead organized
           </h2>
 
           <p>
-            One workspace for leads, conversations, follow-ups, sales pipelines, and customer relationships so your team can focus on growing the business. 
+            One workspace for leads, conversations,
+            follow-ups, sales pipelines, and customer
+            relationships so your team can focus on
+            growing the business.
           </p>
 
           <div className="auth-feature-list">
-            <div className="auth-feature-item">
-              <span className="auth-feature-check">✓</span>
-              <div>
-                <strong>Capture</strong>
-                <p>Bring leads together from your website, WhatsApp, ads, and more.</p>
-              </div>
-            </div>
 
             <div className="auth-feature-item">
-              <span className="auth-feature-check">✓</span>
-              <div>
-                <strong>Engage</strong>
-                <p>Keep conversations, activities, and follow-ups connected.</p>
-              </div>
-            </div>
 
-            <div className="auth-feature-item">
-              <span className="auth-feature-check">✓</span>
-              <div>
-                <strong>Convert</strong>
-                <p>Move opportunities through your pipeline and close more business.</p>
-              </div>
-            </div>
-          </div>
-
-          
-
-          {/* <div className="auth-stats">
-
-            <div className="auth-stat">
-
-              <strong>
-                4,200+
-              </strong>
-
-              <span>
-                clinics &amp; practices
+              <span className="auth-feature-check">
+                ✓
               </span>
-
-            </div>
-
-            <div className="auth-stat">
-
-              <strong>
-                38%
-              </strong>
-
-              <span>
-                avg. enquiry-to-consult
-              </span>
-
-            </div>
-
-            <div className="auth-stat">
-
-              <strong>
-                &lt; 5 min
-              </strong>
-
-              <span>
-                first response time
-              </span>
-
-            </div>
-
-          </div> */}
-
-          {/* <div className="auth-testimonial">
-
-            <div className="auth-testimonial-head">
-
-              <div className="auth-avatar">
-                RM
-              </div>
 
               <div>
 
                 <strong>
-                  Dr. Rahul Mehta
+                  Capture
                 </strong>
 
-                <small>
-                  Mehta Ortho &amp; Physio,
-                  Pune
-                </small>
+                <p>
+                  Bring leads together from your website,
+                  WhatsApp, ads, and more.
+                </p>
 
               </div>
 
             </div>
 
-            <p>
-              “We were losing enquiries in
-              WhatsApp. Now every message
-              becomes a lead with an owner
-              and a follow-up date.
-              Consultations are up a third.”
-            </p>
+            <div className="auth-feature-item">
 
-          </div> */}
+              <span className="auth-feature-check">
+                ✓
+              </span>
+
+              <div>
+
+                <strong>
+                  Engage
+                </strong>
+
+                <p>
+                  Keep conversations, activities,
+                  and follow-ups connected.
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="auth-feature-item">
+
+              <span className="auth-feature-check">
+                ✓
+              </span>
+
+              <div>
+
+                <strong>
+                  Convert
+                </strong>
+
+                <p>
+                  Move opportunities through your
+                  pipeline and close more business.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
+
       </div>
 
       <div className="auth-right">
@@ -478,7 +426,7 @@ export default function SignIn() {
             </h1>
 
             <p>
-              Manage your business. Keep growing. 
+              Manage your business. Keep growing.
             </p>
 
           </div>
@@ -614,11 +562,13 @@ export default function SignIn() {
 
             {notice && (
               <div className="auth-notice auth-success-notice">
+
                 <span className="auth-notice-icon">
                   ✓
                 </span>
 
                 <div className="auth-notice-content">
+
                   <strong>
                     Email verified successfully
                   </strong>
@@ -626,7 +576,9 @@ export default function SignIn() {
                   <span>
                     {notice}
                   </span>
+
                 </div>
+
               </div>
             )}
 

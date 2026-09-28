@@ -416,7 +416,6 @@ export default function Pricing() {
                 }}
               >
                 {[
-                  "1,000 content pieces",
                   "1 team member",
                   "Lead & contact management",
                   "Sales pipeline",
@@ -609,7 +608,6 @@ export default function Pricing() {
                 }}
               >
                 {[
-                  "2,500 content pieces",
                   "3 team members",
                   "Marketing automation",
                   "Advanced lead management",
@@ -798,7 +796,6 @@ export default function Pricing() {
                 }}
               >
                 {[
-                  "5,000 content pieces",
                   "5 team members",
                   "Advanced automation",
                   "Custom workflows",

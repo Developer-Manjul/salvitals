@@ -35,7 +35,6 @@ const PLAN_ORDER = ["starter", "growth", "scale"];
 
 const PLAN_FEATURES = {
   starter: [
-    "1,000 content pieces",
     "1 team member",
     "Lead & contact management",
     "Sales pipeline",
@@ -46,7 +45,6 @@ const PLAN_FEATURES = {
     "500 contact save",
   ],
   growth: [
-    "2,500 content pieces",
     "3 team members",
     "Marketing automation",
     "Advanced lead management",
@@ -57,7 +55,6 @@ const PLAN_FEATURES = {
     "1,500 contact save",
   ],
   scale: [
-    "5,000 content pieces",
     "5 team members",
     "Advanced automation",
     "Custom workflows",

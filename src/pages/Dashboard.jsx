@@ -1498,7 +1498,7 @@ setLeadCount(unreadNewLeadCount);
 
   const renderDashboardSection = () => {
     if (active === "Settings") {
-      return <Settings user={user} />;
+      return <Settings user={user} initialTab="Plan & Billing" />;
     }
 
     if (active === "Leads") {
@@ -1767,27 +1767,54 @@ setLeadCount(unreadNewLeadCount);
 
               <div className="dash-plan-usage">
                 <div className="dash-plan-usage-row">
-                  {/* <span>Contacts</span> */}
                   <strong>
-                    {billing?.usage?.contacts?.limit === null
-                      ? `${billing?.usage?.contacts?.used || 0} contacts`
-                      : `${billing?.usage?.contacts?.used || 0} of ${billing?.usage?.contacts?.limit || 0}`}
+                    {(() => {
+                      const used = Number(
+                        billing?.usage?.contacts?.used || 0
+                      );
+
+                      const total =
+                        billing?.usage?.contacts?.totalLimit ??
+                        billing?.usage?.contacts?.planLimit ??
+                        billing?.usage?.contacts?.limit;
+
+                      return total === null ||
+                        total === undefined
+                        ? `${used} contacts`
+                        : `${used} / ${Number(total) || 0}`;
+                    })()}
                   </strong>
                 </div>
 
                 <div className="dash-plan-bar">
                   <i
                     style={{
-                      width: `${Math.min(
-                        100,
-                        Math.max(
-                          0,
-                          Number(
-                            billing?.usage?.contacts?.percentage ||
-                              0
+                      width: `${(() => {
+                        const used = Number(
+                          billing?.usage?.contacts?.used || 0
+                        );
+
+                        const total =
+                          billing?.usage?.contacts?.totalLimit ??
+                          billing?.usage?.contacts?.planLimit ??
+                          billing?.usage?.contacts?.limit;
+
+                        if (
+                          total === null ||
+                          total === undefined ||
+                          Number(total) <= 0
+                        ) {
+                          return 0;
+                        }
+
+                        return Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            (used / Number(total)) * 100
                           )
-                        )
-                      )}%`,
+                        );
+                      })()}%`,
                     }}
                   />
                 </div>
@@ -1797,6 +1824,8 @@ setLeadCount(unreadNewLeadCount);
                 type="button"
                 onClick={() => {
                   setActive("Settings");
+                  setMobileOpen(false);
+                  setProfileOpen(false);
                 }}
               >
                 Upgrade plan

@@ -48,7 +48,7 @@ const ADDONS = {
     ai_chat: {
         name: "AI Chatbot",
         unitPrice: 500,
-        quotaPerMonth: 1200,
+        quotaPerMonth: 5000,
         unitLabel: "AI conversations",
     },
 };
@@ -75,10 +75,11 @@ function getUserId(req) {
     }
 
     try {
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        );
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
 
         return (
             decoded.id ||
@@ -92,9 +93,10 @@ function getUserId(req) {
 }
 
 function normalizePlanId(value) {
-    const normalized = String(value || "")
-        .trim()
-        .toLowerCase();
+    const normalized =
+        String(value || "")
+            .trim()
+            .toLowerCase();
 
     if (normalized === "custom") {
         return "enterprise";
@@ -105,8 +107,9 @@ function normalizePlanId(value) {
 
 function getPlan(planId) {
     return (
-        PLANS[normalizePlanId(planId)] ||
-        null
+        PLANS[
+            normalizePlanId(planId)
+        ] || null
     );
 }
 
@@ -116,18 +119,25 @@ function getAddon(addonType) {
             .trim()
             .toLowerCase();
 
-    return ADDONS[normalized] || null;
+    return (
+        ADDONS[normalized] || null
+    );
 }
 
 function getDiscountPercentage(period) {
-    return DISCOUNTS[Number(period)] || 0;
+    return (
+        DISCOUNTS[
+            Number(period)
+        ] || 0
+    );
 }
 
 function getMonthlyPrice(
     planId,
     currency
 ) {
-    const plan = getPlan(planId);
+    const plan =
+        getPlan(planId);
 
     if (!plan) {
         return null;
@@ -160,7 +170,9 @@ function calculateSubscription(
         Number(period) || 1;
 
     const discountPercentage =
-        getDiscountPercentage(months);
+        getDiscountPercentage(
+            months
+        );
 
     const originalAmount =
         monthlyPrice * months;
@@ -207,22 +219,27 @@ function calculateAddon(
 
     if (
         !Number.isInteger(duration) ||
-        !ADDON_PERIODS.includes(duration)
+        !ADDON_PERIODS.includes(
+            duration
+        )
     ) {
         return null;
     }
 
     const amount =
-        addon.unitPrice * duration;
+        addon.unitPrice *
+        duration;
 
     const quota =
-        addon.quotaPerMonth * duration;
+        addon.quotaPerMonth *
+        duration;
 
     return {
         addonType,
         addonName: addon.name,
         months: duration,
-        unitPrice: addon.unitPrice,
+        unitPrice:
+            addon.unitPrice,
         quotaPerMonth:
             addon.quotaPerMonth,
         quota,
@@ -236,7 +253,8 @@ function calculateSetupFee(
     currency
 ) {
     if (
-        user?.subscription?.setupFeePaid
+        user?.subscription
+            ?.setupFeePaid
     ) {
         return 0;
     }
@@ -262,7 +280,9 @@ function calculateTax(
     }
 
     return Math.round(
-        subtotal * 0.18 * 100
+        subtotal *
+            0.18 *
+            100
     ) / 100;
 }
 
@@ -270,7 +290,8 @@ function addMonths(
     date,
     months
 ) {
-    const result = new Date(date);
+    const result =
+        new Date(date);
 
     const originalDate =
         result.getDate();
@@ -405,7 +426,8 @@ async function activateSubscription(
         planId === "enterprise"
             ? "Enterprise"
             : (
-                getPlan(planId)?.name ||
+                getPlan(planId)
+                    ?.name ||
                 order.planName ||
                 planId
             );
@@ -420,12 +442,15 @@ async function activateSubscription(
 
     const existingSetupFeePaid =
         Boolean(
-            user.subscription?.setupFeePaid
+            user.subscription
+                ?.setupFeePaid
         );
 
     const setupFeePaid =
         existingSetupFeePaid ||
-        Number(order.setupFee || 0) > 0;
+        Number(
+            order.setupFee || 0
+        ) > 0;
 
     user.subscription = {
         planId,
@@ -446,13 +471,16 @@ async function activateSubscription(
                 order.planAmount || 0
             ),
         currency:
-            order.currency || "INR",
+            order.currency ||
+            "INR",
         orderId:
             order._id,
         razorpayOrderId:
-            order.razorpayOrderId || "",
+            order.razorpayOrderId ||
+            "",
         paymentId:
-            order.razorpayPaymentId || "",
+            order.razorpayPaymentId ||
+            "",
         setupFeePaid,
     };
 
@@ -500,7 +528,9 @@ async function activateAddon(
     }
 
     const addon =
-        user.addons?.[addonType] || {};
+        user.addons?.[
+            addonType
+        ] || {};
 
     const now =
         new Date();
@@ -533,8 +563,9 @@ async function activateAddon(
     const unitPrice =
         Number(
             order.addonUnitPrice ||
-            ADDONS[addonType]
-                .unitPrice
+            ADDONS[
+                addonType
+            ].unitPrice
         );
 
     let startsAt;
@@ -604,7 +635,9 @@ async function activateAddon(
         user.addons = {};
     }
 
-    user.addons[addonType] = {
+    user.addons[
+        addonType
+    ] = {
         enabled: true,
         quota,
         used,
@@ -615,9 +648,11 @@ async function activateAddon(
         orderId:
             order._id,
         razorpayOrderId:
-            order.razorpayOrderId || "",
+            order.razorpayOrderId ||
+            "",
         paymentId:
-            order.razorpayPaymentId || "",
+            order.razorpayPaymentId ||
+            "",
     };
 
     order.addonStartsAt =
@@ -638,9 +673,7 @@ async function activateAddon(
 async function activatePaidOrder(
     order
 ) {
-    if (
-        !order
-    ) {
+    if (!order) {
         return null;
     }
 
@@ -666,6 +699,13 @@ async function ensureSubscriptionForPaidOrder(
         return null;
     }
 
+    if (
+        paidOrder.orderType !==
+        "subscription"
+    ) {
+        return null;
+    }
+
     const user =
         await User.findById(
             userId
@@ -680,7 +720,8 @@ async function ensureSubscriptionForPaidOrder(
 
     const orderMatches =
         String(
-            subscription.orderId || ""
+            subscription.orderId ||
+            ""
         ) ===
         String(
             paidOrder._id
@@ -711,12 +752,14 @@ async function ensureSubscriptionForPaidOrder(
     return user;
 }
 
-async function recoverPaidOrder(
+async function recoverPaidSubscriptionOrder(
     userId
 ) {
     const pendingOrder =
         await Order.findOne({
             userId,
+            orderType:
+                "subscription",
             paymentStatus:
                 "pending",
             razorpayOrderId: {
@@ -773,7 +816,7 @@ async function recoverPaidOrder(
 
     await pendingOrder.save();
 
-    await activatePaidOrder(
+    await activateSubscription(
         pendingOrder
     );
 
@@ -840,7 +883,7 @@ exports.getPaymentStatus =
             if (!paidOrder) {
                 try {
                     paidOrder =
-                        await recoverPaidOrder(
+                        await recoverPaidSubscriptionOrder(
                             userId
                         );
                 } catch (
@@ -973,6 +1016,76 @@ exports.getPaymentStatus =
                 });
             }
 
+            const subscription =
+                user.subscription || {};
+
+            const subscriptionIsActive =
+                subscription.status ===
+                    "active" &&
+                subscription.expiresAt &&
+                new Date(
+                    subscription.expiresAt
+                ).getTime() >
+                    Date.now();
+
+            if (
+                subscriptionIsActive
+            ) {
+                return res.status(200).json({
+                    success: true,
+                    payment_completed:
+                        true,
+                    payment_status:
+                        "paid",
+                    status:
+                        "paid",
+                    subscription: {
+                        planId:
+                            subscription.planId ||
+                            "",
+                        planName:
+                            subscription.planName ||
+                            "",
+                        status:
+                            subscription.status ||
+                            "active",
+                        billingCycle:
+                            subscription.billingCycle ||
+                            "",
+                        startedAt:
+                            subscription.startedAt ||
+                            null,
+                        expiresAt:
+                            subscription.expiresAt ||
+                            null,
+                        nextBillingAt:
+                            subscription.nextBillingAt ||
+                            null,
+                        amount:
+                            Number(
+                                subscription.amount ||
+                                0
+                            ),
+                        currency:
+                            subscription.currency ||
+                            "INR",
+                        setupFeePaid:
+                            Boolean(
+                                subscription.setupFeePaid
+                            ),
+                        orderId:
+                            subscription.orderId ||
+                            null,
+                        razorpayOrderId:
+                            subscription.razorpayOrderId ||
+                            "",
+                        paymentId:
+                            subscription.paymentId ||
+                            "",
+                    },
+                });
+            }
+
             return res.status(200).json({
                 success: true,
                 payment_completed:
@@ -983,37 +1096,37 @@ exports.getPaymentStatus =
                     "pending",
                 subscription: {
                     planId:
-                        user.subscription?.planId ||
+                        subscription.planId ||
                         "",
                     planName:
-                        user.subscription?.planName ||
+                        subscription.planName ||
                         "",
                     status:
-                        user.subscription?.status ||
+                        subscription.status ||
                         "none",
                     billingCycle:
-                        user.subscription?.billingCycle ||
+                        subscription.billingCycle ||
                         "",
                     startedAt:
-                        user.subscription?.startedAt ||
+                        subscription.startedAt ||
                         null,
                     expiresAt:
-                        user.subscription?.expiresAt ||
+                        subscription.expiresAt ||
                         null,
                     nextBillingAt:
-                        user.subscription?.nextBillingAt ||
+                        subscription.nextBillingAt ||
                         null,
                     amount:
                         Number(
-                            user.subscription?.amount ||
+                            subscription.amount ||
                             0
                         ),
                     currency:
-                        user.subscription?.currency ||
+                        subscription.currency ||
                         "INR",
                     setupFeePaid:
                         Boolean(
-                            user.subscription?.setupFeePaid
+                            subscription.setupFeePaid
                         ),
                 },
             });
@@ -1109,7 +1222,8 @@ exports.createOrder =
                 }
 
                 if (
-                    user.subscription?.status !==
+                    user.subscription
+                        ?.status !==
                     "active"
                 ) {
                     return res.status(400).json({
@@ -1145,13 +1259,17 @@ exports.createOrder =
 
                 const totalAmount =
                     Math.round(
-                        (subtotal + tax) *
+                        (
+                            subtotal +
+                            tax
+                        ) *
                             100
                     ) / 100;
 
                 const razorpayAmount =
                     Math.round(
-                        totalAmount * 100
+                        totalAmount *
+                            100
                     );
 
                 const addonDates =
@@ -1368,13 +1486,17 @@ exports.createOrder =
 
             const totalAmount =
                 Math.round(
-                    (subtotal + tax) *
+                    (
+                        subtotal +
+                        tax
+                    ) *
                         100
                 ) / 100;
 
             const razorpayAmount =
                 Math.round(
-                    totalAmount * 100
+                    totalAmount *
+                        100
                 );
 
             const razorpayOrder =
@@ -1666,7 +1788,8 @@ exports.verifyPayment =
                                 user
                                     ?.addons?.[
                                     order.addonType
-                                ]?.used || 0,
+                                ]?.used ||
+                                0,
                             startsAt:
                                 user
                                     ?.addons?.[
@@ -1682,49 +1805,59 @@ exports.verifyPayment =
                         }
                         : null,
                 subscription:
-                    user.subscription
+                    user?.subscription
                         ? {
                             planId:
-                                user.subscription
+                                user
+                                    .subscription
                                     .planId ||
                                 "",
                             planName:
-                                user.subscription
+                                user
+                                    .subscription
                                     .planName ||
                                 "",
                             status:
-                                user.subscription
+                                user
+                                    .subscription
                                     .status ||
                                 "active",
                             billingCycle:
-                                user.subscription
+                                user
+                                    .subscription
                                     .billingCycle ||
                                 "",
                             startedAt:
-                                user.subscription
+                                user
+                                    .subscription
                                     .startedAt ||
                                 null,
                             expiresAt:
-                                user.subscription
+                                user
+                                    .subscription
                                     .expiresAt ||
                                 null,
                             nextBillingAt:
-                                user.subscription
+                                user
+                                    .subscription
                                     .nextBillingAt ||
                                 null,
                             amount:
                                 Number(
-                                    user.subscription
+                                    user
+                                        .subscription
                                         .amount ||
                                     0
                                 ),
                             currency:
-                                user.subscription
+                                user
+                                    .subscription
                                     .currency ||
                                 "INR",
                             setupFeePaid:
                                 Boolean(
-                                    user.subscription
+                                    user
+                                        .subscription
                                         .setupFeePaid
                                 ),
                         }
