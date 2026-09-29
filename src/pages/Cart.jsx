@@ -21,7 +21,7 @@ const ADDONS = {
     id: "ai_chat",
     name: "AI Chatbot",
     price: 500,
-    quota: 5000,
+    quota: 3000,
     unit: "conversations",
   },
 };
