@@ -7,10 +7,9 @@ const AI_CHATBOT_LIMITS = Object.freeze({
 });
 
 function normalizeAIPlanId(value) {
-    const normalized =
-        String(value || "")
-            .trim()
-            .toLowerCase();
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
 
     if (normalized === "custom") {
         return "enterprise";
@@ -42,9 +41,7 @@ function getActiveAIAddon(addon) {
 
     if (
         addon.expiresAt &&
-        new Date(
-            addon.expiresAt
-        ).getTime() <= Date.now()
+        new Date(addon.expiresAt).getTime() <= Date.now()
     ) {
         return {
             enabled: false,
@@ -52,10 +49,8 @@ function getActiveAIAddon(addon) {
             used: 0,
             remaining: 0,
             months: 0,
-            startsAt:
-                addon.startsAt || null,
-            expiresAt:
-                addon.expiresAt || null,
+            startsAt: addon.startsAt || null,
+            expiresAt: addon.expiresAt || null,
         };
     }
 
@@ -65,10 +60,7 @@ function getActiveAIAddon(addon) {
     );
 
     const used = Math.min(
-        Math.max(
-            Number(addon.used || 0),
-            0
-        ),
+        Math.max(Number(addon.used || 0), 0),
         quota
     );
 
@@ -76,33 +68,19 @@ function getActiveAIAddon(addon) {
         enabled: true,
         quota,
         used,
-        remaining: Math.max(
-            quota - used,
-            0
-        ),
-        months:
-            Number(addon.months || 0),
-        startsAt:
-            addon.startsAt || null,
-        expiresAt:
-            addon.expiresAt || null,
+        remaining: Math.max(quota - used, 0),
+        months: Number(addon.months || 0),
+        startsAt: addon.startsAt || null,
+        expiresAt: addon.expiresAt || null,
     };
 }
 
 async function getAIPlan(userId) {
-    const user =
-        await User.findById(
-            userId
-        )
-            .select(
-                "subscription addons"
-            )
-            .lean();
+    const user = await User.findById(userId)
+        .select("subscription addons")
+        .lean();
 
-    if (
-        !user ||
-        !user.subscription
-    ) {
+    if (!user || !user.subscription) {
         return {
             planId: null,
             planName: "No active plan",
@@ -118,13 +96,9 @@ async function getAIPlan(userId) {
         };
     }
 
-    const subscription =
-        user.subscription;
+    const subscription = user.subscription;
 
-    if (
-        subscription.status !==
-        "active"
-    ) {
+    if (subscription.status !== "active") {
         return {
             planId: null,
             planName: "No active plan",
@@ -136,33 +110,23 @@ async function getAIPlan(userId) {
             addonUsed: 0,
             addonRemaining: 0,
             addon: null,
-            status:
-                subscription.status ||
-                "none",
+            status: subscription.status || "none",
         };
     }
 
     if (
         subscription.expiresAt &&
-        new Date(
-            subscription.expiresAt
-        ).getTime() <= Date.now()
+        new Date(subscription.expiresAt).getTime() <= Date.now()
     ) {
-        const planId =
-            normalizeAIPlanId(
-                subscription.planId
-            );
+        const planId = normalizeAIPlanId(
+            subscription.planId
+        );
 
-        const planLimit =
-            getAIChatbotLimit(
-                planId
-            );
+        const planLimit = getAIChatbotLimit(planId);
 
         return {
             planId,
-            planName:
-                subscription.planName ||
-                "Expired",
+            planName: subscription.planName || "Expired",
             planLimit,
             addonLimit: 0,
             totalLimit: planLimit,
@@ -175,39 +139,34 @@ async function getAIPlan(userId) {
         };
     }
 
-    const planId =
-        normalizeAIPlanId(
-            subscription.planId
-        );
+    const planId = normalizeAIPlanId(
+        subscription.planId
+    );
 
-    const planLimit =
-        getAIChatbotLimit(
-            planId
-        );
+    const planLimit = getAIChatbotLimit(planId);
 
     const planName =
         planId === "enterprise"
             ? "Enterprise"
             : (
                 subscription.planName ||
-                planId
-                    .charAt(0)
-                    .toUpperCase() +
-                planId.slice(1)
+                (
+                    planId
+                        ? planId.charAt(0).toUpperCase() +
+                          planId.slice(1)
+                        : "No active plan"
+                )
             );
 
-    const addon =
-        getActiveAIAddon(
-            user.addons?.ai_chat
-        );
+    const addon = getActiveAIAddon(
+        user.addons?.ai_chat
+    );
 
-    const addonLimit =
-        addon.enabled
-            ? addon.quota
-            : 0;
+    const addonLimit = addon.enabled
+        ? addon.quota
+        : 0;
 
-    const totalLimit =
-        planLimit + addonLimit;
+    const totalLimit = planLimit + addonLimit;
 
     return {
         planId,
@@ -216,37 +175,25 @@ async function getAIPlan(userId) {
         addonLimit,
         totalLimit,
         used: addon.used,
-        remaining:
-            Math.max(
-                totalLimit -
-                    addon.used,
-                0
-            ),
-        addonUsed:
-            addon.used,
-        addonRemaining:
-            addon.remaining,
+        remaining: Math.max(
+            totalLimit - addon.used,
+            0
+        ),
+        addonUsed: addon.used,
+        addonRemaining: addon.remaining,
         addon,
         status: "active",
-        startedAt:
-            subscription.startedAt ||
-            null,
-        expiresAt:
-            subscription.expiresAt ||
-            null,
+        startedAt: subscription.startedAt || null,
+        expiresAt: subscription.expiresAt || null,
     };
 }
 
-function getMonthKey(
-    date = new Date()
-) {
-    const year =
-        date.getUTCFullYear();
+function getMonthKey(date = new Date()) {
+    const year = date.getUTCFullYear();
 
-    const month =
-        String(
-            date.getUTCMonth() + 1
-        ).padStart(2, "0");
+    const month = String(
+        date.getUTCMonth() + 1
+    ).padStart(2, "0");
 
     return `${year}-${month}`;
 }

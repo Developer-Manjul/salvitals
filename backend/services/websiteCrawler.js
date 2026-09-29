@@ -20,8 +20,7 @@ function normalizeUrl(value, baseUrl = null) {
       .toLowerCase()
       .replace(/^www\./, "");
 
-    url.pathname = url.pathname
-      .replace(/\/{2,}/g, "/");
+    url.pathname = url.pathname.replace(/\/{2,}/g, "/");
 
     if (url.pathname.length > 1) {
       url.pathname = url.pathname.replace(/\/+$/, "");
@@ -104,7 +103,7 @@ function getMainContainer($) {
     ".post-content",
     ".single-content",
     "#main-content",
-    "#content"
+    "#content",
   ];
 
   for (const selector of selectors) {
@@ -137,7 +136,7 @@ function removeNoise($, root) {
         "button",
         "input",
         "select",
-        "textarea"
+        "textarea",
       ].join(",")
     )
     .remove();
@@ -157,7 +156,7 @@ function removeNoise($, root) {
         ".subscribe-popup",
         ".social-share",
         ".share-buttons",
-        ".breadcrumb"
+        ".breadcrumb",
       ].join(",")
     )
     .remove();
@@ -173,7 +172,7 @@ function removeNoise($, root) {
         ".mobile-menu",
         ".header-menu",
         ".footer-menu",
-        ".sidebar-menu"
+        ".sidebar-menu",
       ].join(",")
     )
     .remove();
@@ -196,7 +195,7 @@ function extractBlocks($, root) {
     "blockquote",
     "figcaption",
     "td",
-    "th"
+    "th",
   ];
 
   root.find(selectors.join(",")).each((index, element) => {
@@ -208,10 +207,21 @@ function extractBlocks($, root) {
       $(element).text()
     );
 
-    if (!isUsefulText(text)) return;
+    if (!isUsefulText(text)) {
+      return;
+    }
 
     if (
-      ["li", "p", "dd", "dt", "blockquote", "figcaption", "td", "th"].includes(tag) &&
+      [
+        "li",
+        "p",
+        "dd",
+        "dt",
+        "blockquote",
+        "figcaption",
+        "td",
+        "th",
+      ].includes(tag) &&
       text.length < 8
     ) {
       return;
@@ -221,7 +231,7 @@ function extractBlocks($, root) {
       index,
       tag,
       text,
-      isHeading: /^h[1-6]$/.test(tag)
+      isHeading: /^h[1-6]$/.test(tag),
     });
   });
 
@@ -236,8 +246,8 @@ function extractBlocks($, root) {
           index: 0,
           tag: "body",
           text: fallback,
-          isHeading: false
-        }
+          isHeading: false,
+        },
       ];
     }
   }
@@ -255,7 +265,7 @@ function buildSections(blocks) {
 
       sections.push({
         heading: currentHeading,
-        text: currentHeading
+        text: currentHeading,
       });
 
       continue;
@@ -263,7 +273,7 @@ function buildSections(blocks) {
 
     sections.push({
       heading: currentHeading,
-      text: block.text
+      text: block.text,
     });
   }
 
@@ -278,26 +288,29 @@ function normalizeForDuplicate(value) {
     .trim();
 }
 
-function removeDuplicateBlocks(sections, globalSeen) {
+function removeDuplicateBlocks(sections) {
   const unique = [];
+  const localSeen = new Set();
 
   for (const section of sections) {
     const normalized = normalizeForDuplicate(
       section.text
     );
 
-    if (!normalized) continue;
+    if (!normalized) {
+      continue;
+    }
 
     if (normalized.length < 20) {
       unique.push(section);
       continue;
     }
 
-    if (globalSeen.has(normalized)) {
+    if (localSeen.has(normalized)) {
       continue;
     }
 
-    globalSeen.add(normalized);
+    localSeen.add(normalized);
     unique.push(section);
   }
 
@@ -316,7 +329,9 @@ function buildTextBlocks(sections) {
       section.text
     );
 
-    if (!text) continue;
+    if (!text) {
+      continue;
+    }
 
     if (
       heading &&
@@ -336,15 +351,18 @@ function buildTextBlocks(sections) {
 function splitLongText(text, maxLength) {
   const value = cleanText(text);
 
-  if (!value) return [];
+  if (!value) {
+    return [];
+  }
 
   if (value.length <= maxLength) {
     return [value];
   }
 
-  const sentences = value.match(
-    /[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g
-  ) || [value];
+  const sentences =
+    value.match(
+      /[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g
+    ) || [value];
 
   const chunks = [];
   let current = "";
@@ -352,11 +370,14 @@ function splitLongText(text, maxLength) {
   for (const sentence of sentences) {
     const part = cleanText(sentence);
 
-    if (!part) continue;
+    if (!part) {
+      continue;
+    }
 
     if (
       current &&
-      current.length + part.length + 1 > maxLength
+      current.length + part.length + 1 >
+        maxLength
     ) {
       chunks.push(current.trim());
       current = part;
@@ -375,12 +396,17 @@ function splitLongText(text, maxLength) {
           maxLength
         );
 
-        if (cut < Math.floor(maxLength * 0.6)) {
+        if (
+          cut <
+          Math.floor(maxLength * 0.6)
+        ) {
           cut = maxLength;
         }
 
         chunks.push(
-          remaining.slice(0, cut).trim()
+          remaining
+            .slice(0, cut)
+            .trim()
         );
 
         remaining = remaining
@@ -414,11 +440,14 @@ function createChunks(
   for (const block of blocks) {
     const text = cleanText(block);
 
-    if (!text) continue;
+    if (!text) {
+      continue;
+    }
 
     if (
       current &&
-      current.length + text.length + 2 > maxLength
+      current.length + text.length + 2 >
+        maxLength
     ) {
       chunks.push(current.trim());
       current = "";
@@ -430,10 +459,11 @@ function createChunks(
         current = "";
       }
 
-      const longChunks = splitLongText(
-        text,
-        maxLength
-      );
+      const longChunks =
+        splitLongText(
+          text,
+          maxLength
+        );
 
       chunks.push(...longChunks);
       continue;
@@ -453,7 +483,11 @@ function createChunks(
   );
 }
 
-function extractLinks($, baseUrl, rootHost) {
+function extractLinks(
+  $,
+  baseUrl,
+  rootHost
+) {
   const links = new Set();
 
   $("a[href]").each((_, element) => {
@@ -461,7 +495,9 @@ function extractLinks($, baseUrl, rootHost) {
       $(element).attr("href") || ""
     ).trim();
 
-    if (!href) return;
+    if (!href) {
+      return;
+    }
 
     if (
       href.startsWith("#") ||
@@ -477,14 +513,19 @@ function extractLinks($, baseUrl, rootHost) {
       baseUrl
     );
 
-    if (!normalized) return;
+    if (!normalized) {
+      return;
+    }
 
     try {
-      const parsed = new URL(normalized);
+      const parsed = new URL(
+        normalized
+      );
 
       if (
-        normalizeHost(parsed.hostname) !==
-        rootHost
+        normalizeHost(
+          parsed.hostname
+        ) !== rootHost
       ) {
         return;
       }
@@ -501,28 +542,39 @@ function extractLinks($, baseUrl, rootHost) {
 }
 
 async function fetchPage(url) {
-  const response = await axios.get(url, {
-    timeout: 20000,
-    maxContentLength: 8 * 1024 * 1024,
-    maxBodyLength: 8 * 1024 * 1024,
-    responseType: "text",
-    headers: {
-      "User-Agent":
-        "SaleVitals-AI-Crawler/2.0",
-      Accept:
-        "text/html,application/xhtml+xml"
-    },
-    validateStatus: (status) =>
-      status >= 200 && status < 400
-  });
+  const response = await axios.get(
+    url,
+    {
+      timeout: 20000,
+      maxContentLength:
+        8 * 1024 * 1024,
+      maxBodyLength:
+        8 * 1024 * 1024,
+      responseType: "text",
+      headers: {
+        "User-Agent":
+          "SaleVitals-AI-Crawler/2.0",
+        Accept:
+          "text/html,application/xhtml+xml",
+      },
+      validateStatus: (status) =>
+        status >= 200 && status < 400,
+    }
+  );
 
   const contentType = String(
-    response.headers["content-type"] || ""
+    response.headers[
+      "content-type"
+    ] || ""
   ).toLowerCase();
 
   if (
-    !contentType.includes("text/html") &&
-    !contentType.includes("application/xhtml+xml")
+    !contentType.includes(
+      "text/html"
+    ) &&
+    !contentType.includes(
+      "application/xhtml+xml"
+    )
   ) {
     return null;
   }
@@ -536,7 +588,7 @@ async function crawlWebsite({
   ownerId,
   assistantId,
   websiteUrl,
-  maxPages = 30
+  maxPages = 30,
 }) {
   const startUrl = normalizeUrl(
     websiteUrl
@@ -548,16 +600,20 @@ async function crawlWebsite({
     );
   }
 
-  const start = new URL(startUrl);
+  const start = new URL(
+    startUrl
+  );
+
   const rootHost = normalizeHost(
     start.hostname
   );
 
   const queue = [startUrl];
-  const queued = new Set([startUrl]);
+  const queued = new Set([
+    startUrl,
+  ]);
   const visited = new Set();
   const pages = [];
-  const globalSeenBlocks = new Set();
 
   while (
     queue.length &&
@@ -565,30 +621,40 @@ async function crawlWebsite({
   ) {
     const current = queue.shift();
 
-    if (!current) continue;
-    if (visited.has(current)) continue;
+    if (!current) {
+      continue;
+    }
+
+    if (visited.has(current)) {
+      continue;
+    }
 
     visited.add(current);
 
     let html = "";
 
     try {
-      html = await fetchPage(current);
+      html = await fetchPage(
+        current
+      );
     } catch (error) {
       console.error(
         "CRAWL PAGE ERROR:",
         current,
         error?.message || error
       );
+
       continue;
     }
 
-    if (!html) continue;
+    if (!html) {
+      continue;
+    }
 
     const $ = cheerio.load(
       html,
       {
-        decodeEntities: true
+        decodeEntities: true,
       }
     );
 
@@ -597,27 +663,32 @@ async function crawlWebsite({
       current
     );
 
-    const root = getMainContainer($);
+    const root =
+      getMainContainer($);
 
-    if (!root || !root.length) {
+    if (
+      !root ||
+      !root.length
+    ) {
       continue;
     }
 
     removeNoise($, root);
 
-    const blocks = extractBlocks(
-      $,
-      root
-    );
+    const blocks =
+      extractBlocks(
+        $,
+        root
+      );
 
-    const sections = buildSections(
-      blocks
-    );
+    const sections =
+      buildSections(
+        blocks
+      );
 
     const uniqueSections =
       removeDuplicateBlocks(
-        sections,
-        globalSeenBlocks
+        sections
       );
 
     const textBlocks =
@@ -625,28 +696,35 @@ async function crawlWebsite({
         uniqueSections
       );
 
-    const chunks = createChunks(
-      textBlocks,
-      1800
-    );
+    const chunks =
+      createChunks(
+        textBlocks,
+        1800
+      );
 
     if (chunks.length) {
       pages.push({
         url: current,
         title,
-        chunks
+        chunks,
       });
     }
 
-    const links = extractLinks(
-      $,
-      current,
-      rootHost
-    );
+    const links =
+      extractLinks(
+        $,
+        current,
+        rootHost
+      );
 
     for (const link of links) {
-      if (visited.has(link)) continue;
-      if (queued.has(link)) continue;
+      if (visited.has(link)) {
+        continue;
+      }
+
+      if (queued.has(link)) {
+        continue;
+      }
 
       queued.add(link);
 
@@ -686,9 +764,10 @@ async function crawlWebsite({
             totalChunks:
               page.chunks.length,
             pageUrl: page.url,
-            pageTitle: page.title
+            pageTitle:
+              page.title,
           },
-          active: true
+          active: true,
         });
       }
     );
@@ -703,7 +782,7 @@ async function crawlWebsite({
   await AIKnowledge.deleteMany({
     ownerId,
     assistantId,
-    type: "website"
+    type: "website",
   });
 
   await AIKnowledge.insertMany(
@@ -712,10 +791,10 @@ async function crawlWebsite({
 
   return {
     pages: pages.length,
-    chunks: docs.length
+    chunks: docs.length,
   };
 }
 
 module.exports = {
-  crawlWebsite
+  crawlWebsite,
 };

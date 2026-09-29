@@ -128,16 +128,15 @@ exports.createKnowledge = async (req, res) => {
       .trim()
       .slice(0, 500);
 
-    const knowledge =
-      await AIKnowledge.create({
-        ownerId,
-        assistantId: assistant._id,
-        type,
-        title,
-        content,
-        sourceUrl,
-        active: true,
-      });
+    const knowledge = await AIKnowledge.create({
+      ownerId,
+      assistantId: assistant._id,
+      type,
+      title,
+      content,
+      sourceUrl,
+      active: true,
+    });
 
     return res.status(201).json({
       success: true,
@@ -167,10 +166,9 @@ exports.deleteKnowledge = async (req, res) => {
       });
     }
 
-    const assistant =
-      await AIAssistant.findOne({
-        ownerId,
-      });
+    const assistant = await AIAssistant.findOne({
+      ownerId,
+    });
 
     if (!assistant) {
       return res.status(404).json({
@@ -179,12 +177,11 @@ exports.deleteKnowledge = async (req, res) => {
       });
     }
 
-    const result =
-      await AIKnowledge.deleteOne({
-        _id: req.params.id,
-        ownerId,
-        assistantId: assistant._id,
-      });
+    const result = await AIKnowledge.deleteOne({
+      _id: req.params.id,
+      ownerId,
+      assistantId: assistant._id,
+    });
 
     if (!result.deletedCount) {
       return res.status(404).json({
@@ -221,10 +218,9 @@ exports.crawlWebsite = async (req, res) => {
       });
     }
 
-    const assistant =
-      await AIAssistant.findOne({
-        ownerId,
-      });
+    const assistant = await AIAssistant.findOne({
+      ownerId,
+    });
 
     if (!assistant) {
       return res.status(404).json({
@@ -269,13 +265,12 @@ exports.crawlWebsite = async (req, res) => {
       });
     }
 
-    const result =
-      await crawlWebsite({
-        ownerId,
-        assistantId: assistant._id,
-        websiteUrl,
-        maxPages: 30,
-      });
+    const result = await crawlWebsite({
+      ownerId,
+      assistantId: assistant._id,
+      websiteUrl,
+      maxPages: 30,
+    });
 
     await AIAssistant.updateOne(
       {

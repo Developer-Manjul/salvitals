@@ -21,29 +21,18 @@ const aiAssistantSchema = new mongoose.Schema(
       default: "AI Assistant",
     },
 
-    /*
-     * Business / Clinic / Company name shown in greeting
-     * Example:
-     * Hi 👋 I'm Sona from Konark Aesthetics. How can I help you today?
-     */
     fromName: {
       type: String,
       trim: true,
       default: "",
     },
 
-    /*
-     * Client / clinic logo URL
-     */
     logoUrl: {
       type: String,
       trim: true,
       default: "",
     },
 
-    /*
-     * Main chatbot theme color
-     */
     primaryColor: {
       type: String,
       trim: true,
@@ -51,6 +40,30 @@ const aiAssistantSchema = new mongoose.Schema(
     },
 
     websiteUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    contactPhone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    mobile: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    whatsappNumber: {
       type: String,
       trim: true,
       default: "",
@@ -79,7 +92,4 @@ const aiAssistantSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model(
-  "AIAssistant",
-  aiAssistantSchema
-);
+module.exports = mongoose.model("AIAssistant", aiAssistantSchema);

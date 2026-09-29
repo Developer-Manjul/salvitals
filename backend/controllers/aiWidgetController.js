@@ -16,6 +16,7 @@ function getClientName(assistant) {
       assistant.businessName ||
       assistant.companyName ||
       assistant.clinicName ||
+      assistant.fromName ||
       ""
   ).trim();
 }
@@ -60,8 +61,7 @@ exports.getConfig = async (req, res) => {
     ) {
       return res.status(404).json({
         success: false,
-        message:
-          "AI Assistant is unavailable",
+        message: "AI Assistant is unavailable",
       });
     }
 
@@ -88,29 +88,20 @@ exports.getConfig = async (req, res) => {
 
     return res.json({
       success: true,
-
       assistant: {
         id: assistant._id,
-
         assistantName,
-
         fromName,
-
         clientName,
-
         logoUrl: String(
           assistant.logoUrl || ""
         ).trim(),
-
         primaryColor:
           normalizeColor(
             assistant.primaryColor
           ),
-
         welcomeMessage,
-
-        enabled:
-          assistant.enabled,
+        enabled: assistant.enabled,
       },
     });
   } catch (error) {
@@ -121,8 +112,7 @@ exports.getConfig = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message:
-        "Unable to load AI widget",
+      message: "Unable to load AI widget",
     });
   }
 };
@@ -593,7 +583,7 @@ exports.script = (req, res) => {
 
   <div class="foot">
     <div class="powered">
-      Powered by SaleVitals 
+      Powered by SaleVitals
     </div>
 
     <div class="input-row">
@@ -1152,16 +1142,13 @@ exports.script = (req, res) => {
             "/api/ai-widget/start",
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json"
             },
-
             body: JSON.stringify({
               assistantId:
                 assistantId,
-
               sessionId:
                 sessionId
             })
@@ -1251,19 +1238,15 @@ exports.script = (req, res) => {
             "/api/ai-widget/message",
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json"
             },
-
             body: JSON.stringify({
               assistantId:
                 assistantId,
-
               sessionId:
                 sessionId,
-
               message:
                 text
             })

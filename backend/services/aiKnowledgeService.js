@@ -1,11 +1,5 @@
 const AIKnowledge = require("../models/AIKnowledge");
 
-/*
-|--------------------------------------------------------------------------
-| TEXT NORMALIZATION
-|--------------------------------------------------------------------------
-*/
-
 function normalizeText(value) {
   return String(value || "")
     .toLowerCase()
@@ -23,12 +17,6 @@ function normalizeText(value) {
     .trim();
 }
 
-/*
-|--------------------------------------------------------------------------
-| TOKENIZE
-|--------------------------------------------------------------------------
-*/
-
 function tokenize(value) {
   return [
     ...new Set(
@@ -38,12 +26,6 @@ function tokenize(value) {
     ),
   ];
 }
-
-/*
-|--------------------------------------------------------------------------
-| STOP WORDS
-|--------------------------------------------------------------------------
-*/
 
 const STOP_WORDS = new Set([
   "a",
@@ -57,7 +39,6 @@ const STOP_WORDS = new Set([
   "be",
   "been",
   "being",
-
   "do",
   "does",
   "did",
@@ -70,7 +51,6 @@ const STOP_WORDS = new Set([
   "may",
   "might",
   "must",
-
   "please",
   "tell",
   "me",
@@ -79,21 +59,18 @@ const STOP_WORDS = new Set([
   "know",
   "want",
   "need",
-
   "i",
   "we",
   "you",
   "your",
   "my",
   "our",
-
   "this",
   "that",
   "these",
   "those",
   "it",
   "its",
-
   "to",
   "of",
   "for",
@@ -106,10 +83,8 @@ const STOP_WORDS = new Set([
   "or",
   "but",
   "about",
-
   "there",
   "here",
-
   "what",
   "which",
   "who",
@@ -117,15 +92,12 @@ const STOP_WORDS = new Set([
   "when",
   "why",
   "how",
-
   "has",
   "have",
   "had",
-
   "not",
   "no",
   "yes",
-
   "if",
   "then",
   "than",
@@ -136,18 +108,14 @@ const STOP_WORDS = new Set([
   "some",
   "any",
   "all",
-
   "hello",
   "hi",
   "hey",
-
   "hai",
   "hain",
   "tha",
   "thi",
-  "the",
   "h",
-
   "kya",
   "ka",
   "ki",
@@ -164,28 +132,22 @@ const STOP_WORDS = new Set([
   "ye",
   "wo",
   "woh",
-
   "mujhe",
   "mujhko",
   "aap",
   "apka",
   "apki",
   "apke",
-
   "mera",
   "meri",
   "mere",
-
   "batao",
   "bata",
   "bataye",
-
   "chahiye",
-
   "kar",
   "karo",
   "kr",
-  "kya",
 ]);
 
 function meaningfulTokens(value) {
@@ -193,16 +155,6 @@ function meaningfulTokens(value) {
     (token) => !STOP_WORDS.has(token)
   );
 }
-
-/*
-|--------------------------------------------------------------------------
-| GENERIC QUERY CONCEPTS
-|--------------------------------------------------------------------------
-|
-| These describe the visitor's information intent.
-| They contain NO business-specific facts.
-|--------------------------------------------------------------------------
-*/
 
 const CONCEPTS = {
   price: [
@@ -405,16 +357,19 @@ const CONCEPTS = {
   ],
 };
 
-/*
-|--------------------------------------------------------------------------
-| CONCEPT MATCH
-|--------------------------------------------------------------------------
-*/
+function escapeRegExp(value) {
+  return String(value).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
 
 function hasConcept(text, concept) {
-  const normalized = normalizeText(text);
+  const normalized =
+    normalizeText(text);
 
-  const words = CONCEPTS[concept] || [];
+  const words =
+    CONCEPTS[concept] || [];
 
   return words.some((word) => {
     const normalizedWord =
@@ -424,12 +379,6 @@ function hasConcept(text, concept) {
       return false;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Exact word/phrase matching
-    |--------------------------------------------------------------------------
-    */
-
     const pattern =
       new RegExp(
         `(^|\\s)${escapeRegExp(
@@ -438,55 +387,38 @@ function hasConcept(text, concept) {
         "i"
       );
 
-    return pattern.test(normalized);
+    return pattern.test(
+      normalized
+    );
   });
 }
-
-function escapeRegExp(value) {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| QUERY CONCEPTS
-|--------------------------------------------------------------------------
-*/
 
 function getQueryConcepts(query) {
   const concepts = [];
 
-  for (const concept of Object.keys(CONCEPTS)) {
+  for (
+    const concept of Object.keys(
+      CONCEPTS
+    )
+  ) {
     if (
       hasConcept(
         query,
         concept
       )
     ) {
-      concepts.push(concept);
+      concepts.push(
+        concept
+      );
     }
   }
 
   return concepts;
 }
 
-/*
-|--------------------------------------------------------------------------
-| INTENT
-|--------------------------------------------------------------------------
-*/
-
 function getIntent(query) {
   const concepts =
     getQueryConcepts(query);
-
-  /*
-  |--------------------------------------------------------------------------
-  | More specific intents first
-  |--------------------------------------------------------------------------
-  */
 
   if (
     concepts.includes(
@@ -557,18 +489,6 @@ function getIntent(query) {
   return "general";
 }
 
-/*
-|--------------------------------------------------------------------------
-| QUERY TERMS
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| We only use words actually present in the visitor's question.
-| We do NOT add every synonym from a concept.
-|
-|--------------------------------------------------------------------------
-*/
-
 function getQueryTerms(query) {
   return [
     ...new Set(
@@ -577,14 +497,9 @@ function getQueryTerms(query) {
   ];
 }
 
-/*
-|--------------------------------------------------------------------------
-| DOCUMENT FREQUENCY
-|--------------------------------------------------------------------------
-*/
-
 function buildDocumentFrequency(items) {
-  const frequency = new Map();
+  const frequency =
+    new Map();
 
   for (const item of items) {
     const text =
@@ -599,7 +514,9 @@ function buildDocumentFrequency(items) {
         meaningfulTokens(text)
       );
 
-    for (const token of tokens) {
+    for (
+      const token of tokens
+    ) {
       frequency.set(
         token,
         (frequency.get(token) || 0) + 1
@@ -610,35 +527,26 @@ function buildDocumentFrequency(items) {
   return frequency;
 }
 
-/*
-|--------------------------------------------------------------------------
-| TOKEN WEIGHT
-|--------------------------------------------------------------------------
-*/
-
 function getTokenWeight(
   token,
   documentFrequency,
   totalDocuments
 ) {
   const frequency =
-    documentFrequency.get(token) || 0;
+    documentFrequency.get(
+      token
+    ) || 0;
 
   if (!frequency) {
     return 8;
   }
 
   const ratio =
-    totalDocuments / frequency;
+    totalDocuments /
+    frequency;
 
   let weight =
     Math.log(ratio + 1) * 5;
-
-  /*
-  |--------------------------------------------------------------------------
-  | Very common business words
-  |--------------------------------------------------------------------------
-  */
 
   const genericWords =
     new Set([
@@ -674,12 +582,6 @@ function getTokenWeight(
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| IMPORTANT PHRASES
-|--------------------------------------------------------------------------
-*/
-
 function getImportantPhrases(query) {
   const normalized =
     normalizeText(query);
@@ -699,18 +601,20 @@ function getImportantPhrases(query) {
     /\bcan i\b/g,
     /\bdo you\b/g,
     /\bis there\b/g,
-
     /\bkitne baje\b/g,
     /\bkitne ka\b/g,
     /\bkitne ki\b/g,
     /\bkitne ke\b/g,
-
     /\bkaise\b/g,
   ];
 
-  for (const pattern of phrasePatterns) {
+  for (
+    const pattern of phrasePatterns
+  ) {
     const matches =
-      normalized.match(pattern);
+      normalized.match(
+        pattern
+      );
 
     if (matches) {
       phrases.push(
@@ -723,16 +627,6 @@ function getImportantPhrases(query) {
     ...new Set(phrases),
   ];
 }
-
-/*
-|--------------------------------------------------------------------------
-| GENERIC CREDENTIAL SIGNALS
-|--------------------------------------------------------------------------
-|
-| These are generic indicators of qualification/education/experience.
-| They do NOT assume any particular industry.
-|--------------------------------------------------------------------------
-*/
 
 const CREDENTIAL_SIGNALS = [
   "qualification",
@@ -761,12 +655,6 @@ const CREDENTIAL_SIGNALS = [
   "credentials",
 ];
 
-/*
-|--------------------------------------------------------------------------
-| PERSON SIGNALS
-|--------------------------------------------------------------------------
-*/
-
 const PERSON_SIGNALS = [
   "doctor",
   "dr",
@@ -784,12 +672,6 @@ const PERSON_SIGNALS = [
   "staff",
   "member",
 ];
-
-/*
-|--------------------------------------------------------------------------
-| SCORE KNOWLEDGE
-|--------------------------------------------------------------------------
-*/
 
 function scoreKnowledge(
   query,
@@ -824,9 +706,6 @@ function scoreKnowledge(
       originalContent
     );
 
-  const fullText =
-    `${title} ${content}`;
-
   const intent =
     getIntent(query);
 
@@ -840,12 +719,6 @@ function scoreKnowledge(
     getImportantPhrases(query);
 
   let score = 0;
-
-  /*
-  |--------------------------------------------------------------------------
-  | EXACT MATCH
-  |--------------------------------------------------------------------------
-  */
 
   if (
     title === queryText
@@ -865,13 +738,9 @@ function scoreKnowledge(
     score += 45;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | IMPORTANT PHRASES
-  |--------------------------------------------------------------------------
-  */
-
-  for (const phrase of importantPhrases) {
+  for (
+    const phrase of importantPhrases
+  ) {
     if (
       title.includes(phrase)
     ) {
@@ -885,16 +754,12 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | TOKEN MATCH
-  |--------------------------------------------------------------------------
-  */
-
   let titleMatches = 0;
   let contentMatches = 0;
 
-  for (const token of queryTerms) {
+  for (
+    const token of queryTerms
+  ) {
     const weight =
       getTokenWeight(
         token,
@@ -916,12 +781,6 @@ function scoreKnowledge(
       contentMatches++;
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | QUERY COVERAGE
-  |--------------------------------------------------------------------------
-  */
 
   if (
     queryTokens.length
@@ -965,21 +824,9 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CREDENTIALS
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "credentials"
   ) {
-    /*
-    |--------------------------------------------------------------------------
-    | Title containing education/qualification signals
-    |--------------------------------------------------------------------------
-    */
-
     for (
       const signal of CREDENTIAL_SIGNALS
     ) {
@@ -989,12 +836,6 @@ function scoreKnowledge(
         score += 75;
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Content containing education signals
-    |--------------------------------------------------------------------------
-    */
 
     let credentialMatches = 0;
 
@@ -1026,12 +867,6 @@ function scoreKnowledge(
       score += 30;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Education-style content
-    |--------------------------------------------------------------------------
-    */
-
     const educationPatterns = [
       /\bcollege\b/i,
       /\buniversity\b/i,
@@ -1046,7 +881,8 @@ function scoreKnowledge(
       /\bmembership\b/i,
     ];
 
-    let educationPatternMatches = 0;
+    let educationPatternMatches =
+      0;
 
     for (
       const pattern of educationPatterns
@@ -1078,12 +914,6 @@ function scoreKnowledge(
       score += 30;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Experience
-    |--------------------------------------------------------------------------
-    */
-
     if (
       /\b\d+\+?\s*(years?|yrs?)\s*(of)?\s*experience\b/i.test(
         originalContent
@@ -1101,21 +931,9 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERSON
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "person"
   ) {
-    /*
-    |--------------------------------------------------------------------------
-    | Person-related title
-    |--------------------------------------------------------------------------
-    */
-
     let titlePersonSignals = 0;
 
     for (
@@ -1139,12 +957,6 @@ function scoreKnowledge(
     ) {
       score += 25;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Person-related content
-    |--------------------------------------------------------------------------
-    */
 
     let contentPersonSignals = 0;
 
@@ -1170,12 +982,6 @@ function scoreKnowledge(
       score += 20;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Name-like pattern
-    |--------------------------------------------------------------------------
-    */
-
     if (
       /\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}\b/.test(
         originalContent
@@ -1192,12 +998,6 @@ function scoreKnowledge(
       score += 40;
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | AVAILABILITY
-  |--------------------------------------------------------------------------
-  */
 
   if (
     intent === "availability"
@@ -1259,12 +1059,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | PRICE
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "price"
   ) {
@@ -1298,12 +1092,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | APPOINTMENT
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "appointment"
   ) {
@@ -1326,12 +1114,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | LOCATION
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "location"
   ) {
@@ -1353,12 +1135,6 @@ function scoreKnowledge(
       score += 30;
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | CONTACT
-  |--------------------------------------------------------------------------
-  */
 
   if (
     intent === "contact"
@@ -1398,12 +1174,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | POLICY
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "policy"
   ) {
@@ -1425,12 +1195,6 @@ function scoreKnowledge(
       score += 35;
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | PROCESS
-  |--------------------------------------------------------------------------
-  */
 
   if (
     intent === "process"
@@ -1454,12 +1218,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | SERVICE
-  |--------------------------------------------------------------------------
-  */
-
   if (
     intent === "service"
   ) {
@@ -1482,12 +1240,6 @@ function scoreKnowledge(
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | TITLE RELEVANCE
-  |--------------------------------------------------------------------------
-  */
-
   if (
     title.length > 0 &&
     queryTokens.some(
@@ -1497,12 +1249,6 @@ function scoreKnowledge(
   ) {
     score += 20;
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | GENERIC PAGE PENALTY
-  |--------------------------------------------------------------------------
-  */
 
   const genericPages = [
     "home",
@@ -1525,21 +1271,6 @@ function scoreKnowledge(
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| RESULT DIVERSITY
-|--------------------------------------------------------------------------
-|
-| Avoid returning:
-| same-url (1)
-| same-url (2)
-| same-url (3)
-| same-url (4)
-|
-| Maximum 2 chunks from the same URL.
-|--------------------------------------------------------------------------
-*/
-
 function diversifyResults(
   scoredResults,
   limit
@@ -1547,13 +1278,6 @@ function diversifyResults(
   const selected = [];
   const sourceCounts =
     new Map();
-
-  /*
-  |--------------------------------------------------------------------------
-  | First pass:
-  | Best result from every source
-  |--------------------------------------------------------------------------
-  */
 
   for (
     const result of scoredResults
@@ -1573,23 +1297,19 @@ function diversifyResults(
         .toLowerCase();
 
     const count =
-      sourceCounts.get(source) || 0;
+      sourceCounts.get(
+        source
+      ) || 0;
 
     if (count === 0) {
       selected.push(result);
+
       sourceCounts.set(
         source,
         1
       );
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Second pass:
-  | Allow maximum 2 chunks per source
-  |--------------------------------------------------------------------------
-  */
 
   if (
     selected.length < limit
@@ -1618,7 +1338,9 @@ function diversifyResults(
           .toLowerCase();
 
       const count =
-        sourceCounts.get(source) || 0;
+        sourceCounts.get(
+          source
+        ) || 0;
 
       if (count >= 2) {
         continue;
@@ -1636,12 +1358,6 @@ function diversifyResults(
   return selected;
 }
 
-/*
-|--------------------------------------------------------------------------
-| SEARCH KNOWLEDGE
-|--------------------------------------------------------------------------
-*/
-
 async function searchKnowledge({
   ownerId,
   assistantId,
@@ -1654,12 +1370,6 @@ async function searchKnowledge({
   if (!cleanQuery) {
     return [];
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Tenant isolation
-  |--------------------------------------------------------------------------
-  */
 
   const items =
     await AIKnowledge.find({
@@ -1687,12 +1397,6 @@ async function searchKnowledge({
     return [];
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Search statistics
-  |--------------------------------------------------------------------------
-  */
-
   const documentFrequency =
     buildDocumentFrequency(
       items
@@ -1706,17 +1410,10 @@ async function searchKnowledge({
       cleanQuery
     );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Score all knowledge
-  |--------------------------------------------------------------------------
-  */
-
   const scoredResults =
     items
       .map((item) => ({
         item,
-
         score:
           scoreKnowledge(
             cleanQuery,
@@ -1734,12 +1431,6 @@ async function searchKnowledge({
           b.score - a.score
       );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Diverse results
-  |--------------------------------------------------------------------------
-  */
-
   const results =
     diversifyResults(
       scoredResults,
@@ -1752,37 +1443,24 @@ async function searchKnowledge({
       })
     );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Debug Log
-  |--------------------------------------------------------------------------
-  */
-
   console.log(
     "KNOWLEDGE SEARCH:",
     {
       query: cleanQuery,
-
       intent,
-
       totalKnowledgeItems:
         items.length,
-
       matchedItems:
         scoredResults.length,
-
       results:
         results.map(
           (item) => ({
             title:
               item.title,
-
             type:
               item.type,
-
             score:
               item._knowledgeScore,
-
             sourceUrl:
               item.sourceUrl,
           })
