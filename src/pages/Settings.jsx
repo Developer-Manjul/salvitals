@@ -1584,7 +1584,7 @@ function PlanBillingContent() {
       title: "AI Chatbot",
       description: "Add more AI chatbot conversations.",
       price: 500,
-      quota: 5000,
+      quota: 3000,
       unit: "conversations",
       addon: aiAddon,
       icon: "✦",
