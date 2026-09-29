@@ -1,9 +1,9 @@
 const User = require("../models/User");
 
 const PLAN_LIMITS = Object.freeze({
-    starter: 500,
-    growth: 1500,
-    scale: 2500,
+    starter: 1000,
+    growth: 2500,
+    scale: 4500,
 });
 
 function normalizePlanId(value) {

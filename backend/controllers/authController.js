@@ -688,8 +688,8 @@ exports.verifyEmail = async (req, res) => {
     }
 
     user.emailVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpires = undefined;
+    user.emailVerificationToken = "";
+    user.emailVerificationExpires = null;
 
     await user.save();
 
@@ -849,6 +849,554 @@ exports.login = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Login failed",
+    });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    console.log("========== FORGOT PASSWORD ==========");
+    console.log("REQUEST BODY:", req.body);
+
+    const email = String(
+      req.body.email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    console.log("RESET EMAIL:", email);
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({
+      email,
+    });
+
+    if (!user) {
+      console.log("RESET EMAIL ACCOUNT NOT FOUND:", email);
+
+      return res.json({
+        success: true,
+        message:
+          "If an account exists with this email, a password reset link has been sent.",
+      });
+    }
+
+    const rawToken = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    const expires = new Date(
+      Date.now() + 60 * 60 * 1000
+    );
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = expires;
+
+    await user.save();
+
+    console.log("RESET TOKEN SAVED FOR:", user.email);
+
+    if (
+      !process.env.SMTP_HOST ||
+      !process.env.SMTP_USER ||
+      !process.env.SMTP_PASS
+    ) {
+      throw new Error(
+        "SMTP configuration is missing"
+      );
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(
+        process.env.SMTP_PORT || 587
+      ),
+      secure:
+        String(
+          process.env.SMTP_SECURE
+        ).toLowerCase() === "true",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    try {
+      await transporter.verify();
+
+      console.log(
+        "FORGOT PASSWORD SMTP AUTH SUCCESS"
+      );
+    } catch (smtpError) {
+      console.error(
+        "FORGOT PASSWORD SMTP AUTH FAILED"
+      );
+      console.error(
+        "SMTP CODE:",
+        smtpError.code
+      );
+      console.error(
+        "SMTP RESPONSE:",
+        smtpError.response
+      );
+      throw smtpError;
+    }
+
+    const base = (
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    ).replace(/\/$/, "");
+
+    const resetUrl =
+      `${base}/reset-password?token=${encodeURIComponent(
+        rawToken
+      )}`;
+
+    console.log(
+      "RESET URL:",
+      resetUrl
+    );
+
+    const logoUrl =
+      "https://salevitals.com/logo.png";
+
+    const info = await transporter.sendMail({
+      from: `"SaleVitals" <${
+        process.env.SMTP_FROM ||
+        process.env.SMTP_USER
+      }>`,
+      to: user.email,
+      subject:
+        "Reset your SaleVitals password",
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <title>Reset your SaleVitals password</title>
+</head>
+
+<body
+  style="
+    margin:0;
+    padding:0;
+    background:#f4f7fb;
+    font-family:Arial,Helvetica,sans-serif;
+  "
+>
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    background:#f4f7fb;
+    padding:40px 15px;
+  "
+>
+<tr>
+<td align="center">
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    max-width:620px;
+    background:#ffffff;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,0.08);
+  "
+>
+
+<tr>
+<td
+  style="
+    padding:28px 35px 20px;
+    text-align:center;
+    border-bottom:1px solid #e5e7eb;
+  "
+>
+
+<a
+  href="${base}"
+  target="_blank"
+  style="
+    text-decoration:none;
+    display:block;
+  "
+>
+
+<img
+  src="${logoUrl}"
+  alt="SaleVitals"
+  width="150"
+  style="
+    display:block;
+    width:150px;
+    max-width:150px;
+    height:auto;
+    margin:0 auto;
+    border:0;
+  "
+>
+
+</a>
+
+</td>
+</tr>
+
+<tr>
+<td
+  style="
+    padding:32px 60px 35px;
+  "
+>
+
+<div
+  style="
+    width:52px;
+    height:52px;
+    margin:0 auto 18px;
+    border-radius:50%;
+    background:#eef4ff;
+    text-align:center;
+    line-height:52px;
+    font-size:24px;
+  "
+>
+  🔐
+</div>
+
+<h1
+  style="
+    margin:0 0 12px;
+    text-align:center;
+    color:#1f2937;
+    font-size:23px;
+    line-height:1.35;
+    font-weight:700;
+  "
+>
+  Reset your password
+</h1>
+
+<p
+  style="
+    margin:0 0 18px;
+    color:#4b5563;
+    font-size:15px;
+    line-height:1.7;
+  "
+>
+  Hi ${user.name || "there"},
+</p>
+
+<p
+  style="
+    margin:0 0 24px;
+    color:#4b5563;
+    font-size:15px;
+    line-height:1.7;
+  "
+>
+  We received a request to reset your
+  SaleVitals account password. Click the
+  button below to create a new password.
+</p>
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+>
+<tr>
+<td align="center">
+
+<a
+  href="${resetUrl}"
+  target="_blank"
+  style="
+    display:inline-block;
+    background:#1769d1;
+    color:#ffffff;
+    text-decoration:none;
+    padding:14px 34px;
+    border-radius:5px;
+    font-size:15px;
+    line-height:20px;
+    font-weight:700;
+  "
+>
+  Reset My Password →
+</a>
+
+</td>
+</tr>
+</table>
+
+<div
+  style="
+    margin-top:28px;
+    padding:16px 18px;
+    background:#eefaf4;
+    border:1px solid #cceedd;
+    border-radius:9px;
+    color:#176b45;
+    font-size:13px;
+    line-height:1.6;
+  "
+>
+  ✓
+  <strong>This link is secure.</strong>
+  Your password reset link will expire
+  in <strong>1 hour.</strong>
+</div>
+
+<p
+  style="
+    margin:25px 0 0;
+    color:#6b7280;
+    font-size:12px;
+    line-height:1.7;
+  "
+>
+  If you did not request a password reset,
+  you can safely ignore this email.
+</p>
+
+<p
+  style="
+    margin:22px 0 0;
+    color:#6b7280;
+    font-size:11px;
+    line-height:1.6;
+  "
+>
+  If the button doesn't work, copy and paste
+  the link below into your browser:
+</p>
+
+<a
+  href="${resetUrl}"
+  target="_blank"
+  style="
+    display:block;
+    margin-top:8px;
+    padding:11px 12px;
+    background:#f1f6ff;
+    border-radius:6px;
+    color:#1769d1;
+    text-decoration:none;
+    font-size:10px;
+    line-height:1.5;
+    word-break:break-all;
+  "
+>
+  ${resetUrl}
+</a>
+
+</td>
+</tr>
+
+<tr>
+<td
+  style="
+    background:#f8fafc;
+    padding:24px 35px;
+    text-align:center;
+    border-top:1px solid #e5e7eb;
+  "
+>
+
+<p
+  style="
+    margin:0 0 9px;
+    color:#374151;
+    font-size:12px;
+    line-height:1.6;
+    font-weight:600;
+  "
+>
+  Need help? Reply to this email or contact
+  our
+  <a
+    href="mailto:support@salevitals.com"
+    style="
+      color:#1769d1;
+      text-decoration:none;
+    "
+  >
+    support team
+  </a>.
+</p>
+
+<p
+  style="
+    margin:0;
+    color:#9ca3af;
+    font-size:10px;
+  "
+>
+  SaleVitals · Secure CRM for smarter sales management
+</p>
+
+</td>
+</tr>
+
+</table>
+
+<p
+  style="
+    margin:20px 0 0;
+    color:#9ca3af;
+    font-size:10px;
+  "
+>
+  © ${new Date().getFullYear()} SaleVitals.
+  All rights reserved.
+</p>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>
+      `,
+    });
+
+    console.log(
+      "PASSWORD RESET EMAIL SENT:",
+      info.messageId
+    );
+
+    console.log(
+      "PASSWORD RESET EMAIL RESPONSE:",
+      info.response
+    );
+
+    return res.json({
+      success: true,
+      message:
+        "If an account exists with this email, a password reset link has been sent.",
+    });
+  } catch (error) {
+    console.error(
+      "Forgot password error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to process password reset request",
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const token = String(
+      req.body.token || ""
+    ).trim();
+
+    const password = String(
+      req.body.password || ""
+    );
+
+    const confirmPassword = String(
+      req.body.confirmPassword || ""
+    );
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Reset token is missing",
+      });
+    }
+
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Passwords do not match",
+      });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: {
+        $gt: new Date(),
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid or expired password reset link",
+      });
+    }
+
+    user.password = await bcrypt.hash(
+      password,
+      12
+    );
+
+    user.passwordResetToken = "";
+    user.passwordResetExpires = null;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message:
+        "Password reset successfully. You can now sign in.",
+    });
+  } catch (error) {
+    console.error(
+      "Reset password error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to reset password",
     });
   }
 };
@@ -1161,10 +1709,6 @@ exports.updateProfile = async (
     });
   }
 };
-
-/* =====================================================
-   TEAM INVITATION
-===================================================== */
 
 exports.getTeamInvitation = async (
   req,

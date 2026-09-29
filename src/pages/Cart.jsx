@@ -21,12 +21,10 @@ const ADDONS = {
     id: "ai_chat",
     name: "AI Chatbot",
     price: 500,
-    quota: 1200,
+    quota: 5000,
     unit: "conversations",
   },
 };
-
-const ADDON_PERIODS = [1, 2, 3, 6, 12];
 
 const goTo = (url) => {
   const nextUrl = url.startsWith("/") ? url : `/${url}`;
@@ -117,14 +115,18 @@ const getInitialAddonType = () => {
   return "contacts";
 };
 
-const getInitialAddonMonths = () => {
+const getInitialAddonQuantity = () => {
   const params = new URLSearchParams(window.location.search);
-  const queryMonths = Number(
-    params.get("months")
+  const queryQuantity = Number(
+    params.get("quantity")
   );
 
-  if (ADDON_PERIODS.includes(queryMonths)) {
-    return queryMonths;
+  if (
+    Number.isInteger(queryQuantity) &&
+    queryQuantity >= 1 &&
+    queryQuantity <= 10
+  ) {
+    return queryQuantity;
   }
 
   try {
@@ -132,12 +134,16 @@ const getInitialAddonMonths = () => {
       localStorage.getItem("selectedAddon") || "null"
     );
 
-    const savedMonths = Number(
-      savedAddon?.months || 1
+    const savedQuantity = Number(
+      savedAddon?.quantity || 1
     );
 
-    if (ADDON_PERIODS.includes(savedMonths)) {
-      return savedMonths;
+    if (
+      Number.isInteger(savedQuantity) &&
+      savedQuantity >= 1 &&
+      savedQuantity <= 10
+    ) {
+      return savedQuantity;
     }
   } catch {}
 
@@ -158,9 +164,12 @@ const Cart = () => {
   );
 
   const [selectedMonths, setSelectedMonths] =
+    useState(1);
+
+  const [selectedQuantity, setSelectedQuantity] =
     useState(() =>
       checkoutType === "addon"
-        ? getInitialAddonMonths()
+        ? getInitialAddonQuantity()
         : 1
     );
 
@@ -350,7 +359,7 @@ const Cart = () => {
   const addonSubtotal =
     checkoutType === "addon"
       ? selectedAddon.price *
-        Number(selectedMonths)
+        Number(selectedQuantity)
       : null;
 
   const addonTax =
@@ -381,7 +390,7 @@ const Cart = () => {
 
   const totalAddonQuota =
     addonQuota *
-    Number(selectedMonths);
+    Number(selectedQuantity);
 
   const formatPrice = (amount) => {
     if (
@@ -685,10 +694,8 @@ const Cart = () => {
               body: JSON.stringify({
                 orderType: "addon",
                 addonType,
-                months:
-                  Number(selectedMonths),
-                addonMonths:
-                  Number(selectedMonths),
+                quantity:
+                  Number(selectedQuantity),
                 currency,
                 country,
               }),
@@ -735,8 +742,8 @@ const Cart = () => {
             "SaleVitals",
 
           description:
-            `${addonName} - ${selectedMonths} month${
-              selectedMonths > 1
+            `${addonName} - ${selectedQuantity} pack${
+              selectedQuantity > 1
                 ? "s"
                 : ""
             }`,
@@ -994,7 +1001,7 @@ const Cart = () => {
                     )}{" "}
                     additional{" "}
                     {selectedAddon.unit}{" "}
-                    per month.
+                    per pack.
                   </p>
 
                   <span>
@@ -1002,7 +1009,9 @@ const Cart = () => {
                       "en-IN"
                     )}{" "}
                     {selectedAddon.unit}{" "}
-                    for the selected period.
+                    total for {selectedQuantity} pack
+                    {selectedQuantity > 1 ? "s" : ""}.
+                    Valid for 1 month.
                   </span>
                 </div>
 
@@ -1015,7 +1024,7 @@ const Cart = () => {
                   </strong>
 
                   <small>
-                    /month
+                    /pack
                   </small>
                 </div>
               </div>
@@ -1023,72 +1032,64 @@ const Cart = () => {
               <div className="card-divider" />
 
               <div className="subscription-title">
-                Choose add-on period
+                Select quantity
               </div>
 
-              <div className="period-list">
-                {ADDON_PERIODS.map(
-                  (months) => {
-                    const amount =
-                      selectedAddon.price *
-                      months;
-
-                    return (
-                      <button
-                        type="button"
-                        key={months}
-                        className={
-                          `period-option ${
-                            selectedMonths ===
-                            months
-                              ? "active"
-                              : ""
-                          }`
-                        }
-                        onClick={() =>
-                          setSelectedMonths(
-                            months
-                          )
-                        }
-                      >
-                        <span className="radio-circle">
-                          {selectedMonths ===
-                            months && (
-                            <span className="radio-dot" />
-                          )}
-                        </span>
-
-                        <span className="period-info">
-                          <strong>
-                            {months}{" "}
-                            month
-                            {months > 1
-                              ? "s"
-                              : ""}
-                          </strong>
-
-                          <small>
-                            {(
-                              addonQuota *
-                              months
-                            ).toLocaleString(
-                              "en-IN"
-                            )}{" "}
-                            {selectedAddon.unit}
-                          </small>
-                        </span>
-
-                        <span className="period-price">
-                          <strong>
-                            {formatPrice(
-                              amount
-                            )}
-                          </strong>
-                        </span>
-                      </button>
-                    );
+              <div
+                className="addon-quantity-control"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                  marginBottom: "20px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="quantity-btn"
+                  onClick={() =>
+                    setSelectedQuantity((previous) =>
+                      Math.max(1, previous - 1)
+                    )
                   }
-                )}
+                  disabled={selectedQuantity <= 1}
+                >
+                  −
+                </button>
+
+                <strong
+                  style={{
+                    minWidth: "30px",
+                    textAlign: "center",
+                    fontSize: "18px",
+                  }}
+                >
+                  {selectedQuantity}
+                </strong>
+
+                <button
+                  type="button"
+                  className="quantity-btn"
+                  onClick={() =>
+                    setSelectedQuantity((previous) =>
+                      Math.min(10, previous + 1)
+                    )
+                  }
+                  disabled={selectedQuantity >= 10}
+                >
+                  +
+                </button>
+
+                <span
+                  style={{
+                    marginLeft: "8px",
+                    fontSize: "14px",
+                    color: "#64748b",
+                  }}
+                >
+                  {selectedQuantity} pack
+                  {selectedQuantity > 1 ? "s" : ""} · valid for 1 month
+                </span>
               </div>
 
               <div className="features-included">
@@ -1118,8 +1119,8 @@ const Cart = () => {
                 </div>
 
                 <div className="summary-period">
-                  {selectedMonths}{" "}
-                  month period
+                  {selectedQuantity} pack
+                  {selectedQuantity > 1 ? "s" : ""} · Valid for 1 month
                 </div>
 
                 <div className="summary-plan-row">

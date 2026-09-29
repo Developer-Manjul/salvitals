@@ -170,21 +170,21 @@ export default function SignIn() {
         subscriptionActive =
           paymentResponse.ok &&
           paymentData?.subscription?.status ===
-            "active";
+          "active";
 
         paymentCompleted =
           paymentResponse.ok &&
           (
             paymentData?.payment_completed ===
-              true ||
+            true ||
             paymentData?.paymentCompleted ===
-              true ||
+            true ||
             paymentData?.paid === true ||
             paymentData?.isPaid === true ||
             paymentData?.payment_status ===
-              "paid" ||
+            "paid" ||
             paymentData?.paymentStatus ===
-              "paid" ||
+            "paid" ||
             paymentData?.status === "paid" ||
             orderStatus === "paid" ||
             subscriptionActive
@@ -201,7 +201,7 @@ export default function SignIn() {
 
       const accountSetupCompleted =
         userData.accountSetupCompleted ===
-          true ||
+        true ||
         userData.profileCompleted === true ||
         userData.setupCompleted === true;
 
@@ -516,9 +516,7 @@ export default function SignIn() {
                   type="button"
                   className="auth-eye"
                   onClick={() =>
-                    setShowPassword(
-                      (value) => !value
-                    )
+                    setShowPassword((value) => !value)
                   }
                   aria-label={
                     showPassword
@@ -526,9 +524,59 @@ export default function SignIn() {
                       : "Show password"
                   }
                 >
-                  {showPassword
-                    ? "◉"
-                    : "◌"}
+                  {showPassword ? (
+                    <svg
+                      width="19"
+                      height="19"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2 12C2 12 5.5 5.5 12 5.5C18.5 5.5 22 12 22 12C22 12 18.5 18.5 12 18.5C5.5 18.5 2 12 2 12Z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="3"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="19"
+                      height="19"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M3 3L21 21"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M10.6 5.7C11.05 5.57 11.52 5.5 12 5.5C18.5 5.5 22 12 22 12C22 12 20.65 14.5 18.2 16.3"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M6.1 7.3C3.55 9.1 2 12 2 12C2 12 5.5 18.5 12 18.5C13.5 18.5 14.85 18.15 16.05 17.6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
                 </button>
 
               </div>

@@ -25,6 +25,7 @@ import FloatingUI from "./components/FloatingUI";
 import SignIn from "./pages/SignIn";
 import CreateAccount from "./pages/CreateAccount";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Cart from "./pages/Cart";
 import Invoice from "./pages/Invoice";
@@ -468,6 +469,13 @@ export default function App() {
   ) {
     return <ForgotPassword />;
   }
+
+  if (
+  path === "/reset-password" ||
+  path === "/reset-password/"
+) {
+  return <ResetPassword />;
+}
 
   if (
     path === "/privacy-policy" ||

@@ -1,9 +1,9 @@
 const User = require("../models/User");
 
 const AI_CHATBOT_LIMITS = Object.freeze({
-    starter: 500,
-    growth: 1500,
-    scale: 3000,
+    starter: 5000,
+    growth: 15000,
+    scale: 40000,
 });
 
 function normalizeAIPlanId(value) {

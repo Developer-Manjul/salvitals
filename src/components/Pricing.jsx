@@ -422,8 +422,8 @@ export default function Pricing() {
                   "Follow-up management",
                   "Website lead capture",
                   "Basic reports",
-                  "500 chatbot conversations per month",
-                  "500 contact save",
+                  "5000 chatbot conversations per month",
+                  "1000 contact save",
                 ].map(
                   (
                     item,
@@ -614,8 +614,8 @@ export default function Pricing() {
                   "Team collaboration",
                   "Social media & ad lead capture",
                   "Advanced reports",
-                  "1500 chatbot conversations per month",
-                  "1500 contact save",
+                  "15000 chatbot conversations per month",
+                  "2500 contact save",
                 ].map(
                   (
                     item,
@@ -802,8 +802,8 @@ export default function Pricing() {
                   "Advanced permissions",
                   "Detailed analytics & reporting",
                   "More powerful integrations",
-                  "3000 chatbot conversations per month",
-                  "2500 contact save",
+                  "40,000 chatbot conversations per month",
+                  "4500 contact save",
                 ].map(
                   (
                     item,

@@ -2547,6 +2547,18 @@ textarea.inp {
   gap: 11px
 }
 
+.auth-simple-brand {
+  display: flex;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.auth-simple-logo {
+  width: 150px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
 // .auth-brand {
 //   margin-bottom: 42px
 // }
@@ -4856,4 +4868,32 @@ textarea.inp {
   color: #15803d;
   font-size: 13px;
   line-height: 1.5;
+}
+
+
+.auth-eye {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #52647d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.auth-eye:hover {
+  color: #1769d1;
+  background: #f1f6ff;
+}
+
+.auth-eye svg {
+  display: block;
 }

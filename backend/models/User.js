@@ -1,33 +1,260 @@
 const mongoose = require("mongoose");
 
-const addonSchema = new mongoose.Schema(
-    {
-        enabled: {
-            type: Boolean,
-            default: false,
+const addonSchema = new mongoose.Schema({
+    enabled: {
+        type: Boolean,
+        default: false,
+    },
+
+    quota: {
+        type: Number,
+        default: 0,
+    },
+
+    used: {
+        type: Number,
+        default: 0,
+    },
+
+    months: {
+        type: Number,
+        default: 0,
+    },
+
+    unitPrice: {
+        type: Number,
+        default: 0,
+    },
+
+    startsAt: {
+        type: Date,
+        default: null,
+    },
+
+    expiresAt: {
+        type: Date,
+        default: null,
+    },
+
+    orderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Order",
+        default: null,
+    },
+
+    razorpayOrderId: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    paymentId: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+}, {
+    _id: false,
+});
+
+const userSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        lowercase: true,
+        trim: true,
+    },
+
+    password: {
+        type: String,
+        required: true,
+        minlength: 6,
+    },
+
+    clinicName: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    phone: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    phoneCountryCode: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    emailVerified: {
+        type: Boolean,
+        default: false,
+    },
+
+    emailVerificationToken: {
+        type: String,
+        default: "",
+    },
+
+    emailVerificationExpires: {
+        type: Date,
+        default: null,
+    },
+
+    passwordResetToken: {
+        type: String,
+        default: "",
+    },
+
+    passwordResetExpires: {
+        type: Date,
+        default: null,
+    },
+
+
+
+    speciality: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    numberOfDoctors: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    displayName: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    address: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    gstin: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        default: "",
+    },
+
+    zipCode: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    website: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    clinicLogo: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    bankName: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    accountHolderName: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    accountNumber: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    ifscCode: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        default: "",
+    },
+
+    upiId: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+
+    accountSetupCompleted: {
+        type: Boolean,
+        default: false,
+    },
+
+    role: {
+        type: String,
+        enum: ["user", "admin"],
+        default: "user",
+    },
+
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+
+    contactQuotaVersion: {
+        type: Number,
+        default: 0,
+    },
+
+    subscription: {
+        planId: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
-        quota: {
-            type: Number,
-            default: 0,
+        planName: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
-        used: {
-            type: Number,
-            default: 0,
+        status: {
+            type: String,
+            enum: [
+                "none",
+                "active",
+                "expired",
+                "cancelled",
+            ],
+            default: "none",
         },
 
-        months: {
-            type: Number,
-            default: 0,
+        billingCycle: {
+            type: String,
+            trim: true,
+            default: "monthly",
         },
 
-        unitPrice: {
-            type: Number,
-            default: 0,
-        },
-
-        startsAt: {
+        startedAt: {
             type: Date,
             default: null,
         },
@@ -35,6 +262,23 @@ const addonSchema = new mongoose.Schema(
         expiresAt: {
             type: Date,
             default: null,
+        },
+
+        nextBillingAt: {
+            type: Date,
+            default: null,
+        },
+
+        amount: {
+            type: Number,
+            default: 0,
+        },
+
+        currency: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: "INR",
         },
 
         orderId: {
@@ -54,265 +298,27 @@ const addonSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
-    },
-    {
-        _id: false,
-    }
-);
 
-const userSchema = new mongoose.Schema(
-    {
-        name: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-
-        email: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-        },
-
-        password: {
-            type: String,
-            required: true,
-            minlength: 6,
-        },
-
-        clinicName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        phone: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        phoneCountryCode: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        emailVerified: {
+        setupFeePaid: {
             type: Boolean,
             default: false,
         },
+    },
 
-        emailVerificationToken: {
-            type: String,
-            default: "",
+    addons: {
+        contacts: {
+            type: addonSchema,
+            default: () => ({}),
         },
 
-        emailVerificationExpires: {
-            type: Date,
-            default: null,
-        },
-
-        speciality: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        numberOfDoctors: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        displayName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        address: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        gstin: {
-            type: String,
-            trim: true,
-            uppercase: true,
-            default: "",
-        },
-
-        zipCode: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        website: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        clinicLogo: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        bankName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        accountHolderName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        accountNumber: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        ifscCode: {
-            type: String,
-            trim: true,
-            uppercase: true,
-            default: "",
-        },
-
-        upiId: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        accountSetupCompleted: {
-            type: Boolean,
-            default: false,
-        },
-
-        role: {
-            type: String,
-            enum: ["user", "admin"],
-            default: "user",
-        },
-
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
-
-        contactQuotaVersion: {
-            type: Number,
-            default: 0,
-        },
-
-        subscription: {
-            planId: {
-                type: String,
-                trim: true,
-                default: "",
-            },
-
-            planName: {
-                type: String,
-                trim: true,
-                default: "",
-            },
-
-            status: {
-                type: String,
-                enum: [
-                    "none",
-                    "active",
-                    "expired",
-                    "cancelled",
-                ],
-                default: "none",
-            },
-
-            billingCycle: {
-                type: String,
-                trim: true,
-                default: "monthly",
-            },
-
-            startedAt: {
-                type: Date,
-                default: null,
-            },
-
-            expiresAt: {
-                type: Date,
-                default: null,
-            },
-
-            nextBillingAt: {
-                type: Date,
-                default: null,
-            },
-
-            amount: {
-                type: Number,
-                default: 0,
-            },
-
-            currency: {
-                type: String,
-                trim: true,
-                uppercase: true,
-                default: "INR",
-            },
-
-            orderId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "Order",
-                default: null,
-            },
-
-            razorpayOrderId: {
-                type: String,
-                trim: true,
-                default: "",
-            },
-
-            paymentId: {
-                type: String,
-                trim: true,
-                default: "",
-            },
-
-            setupFeePaid: {
-                type: Boolean,
-                default: false,
-            },
-        },
-
-        addons: {
-            contacts: {
-                type: addonSchema,
-                default: () => ({}),
-            },
-
-            ai_chat: {
-                type: addonSchema,
-                default: () => ({}),
-            },
+        ai_chat: {
+            type: addonSchema,
+            default: () => ({}),
         },
     },
-    {
-        timestamps: true,
-    }
-);
+}, {
+    timestamps: true,
+});
 
 module.exports = mongoose.model(
     "User",

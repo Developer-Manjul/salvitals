@@ -485,7 +485,7 @@ function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFoll
           <h1>{greeting}, {firstName}.</h1>
         </div>
         <div className="dash-head-actions">
-       
+
         </div>
       </div>
 
@@ -547,7 +547,7 @@ function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFoll
         </section>
       </div>
 
-    
+
       <div className="dash-grid-two lower">
         <section className="dash-card">
           <div className="dash-card-head">
@@ -638,6 +638,9 @@ function TodayFollowUpPopup({ items, minimized, onOpen, onMinimize, onClose, onR
 export default function Dashboard() {
   const [active, setActive] =
     useState("Dashboard");
+
+  const [settingsTab, setSettingsTab] =
+    useState("Business Profile");
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
@@ -789,73 +792,73 @@ export default function Dashboard() {
     }
   };
 
-const getLeadReadStorageKey = () => {
-  let currentUser = null;
+  const getLeadReadStorageKey = () => {
+    let currentUser = null;
 
-  try {
-    currentUser = JSON.parse(
-      localStorage.getItem("user") ||
+    try {
+      currentUser = JSON.parse(
+        localStorage.getItem("user") ||
         sessionStorage.getItem("user") ||
         "null"
+      );
+    } catch {
+      currentUser = null;
+    }
+
+    const userId =
+      currentUser?._id ||
+      currentUser?.id ||
+      currentUser?.email ||
+      "current";
+
+    return `saleVitalsReadLeadIds_v5_${String(userId).trim()}`;
+  };
+
+  const markLeadAsRead = (leadId) => {
+    const id = String(leadId || "").trim();
+
+    if (!id) {
+      return;
+    }
+
+    const storageKey = getLeadReadStorageKey();
+
+    let readLeadIds = [];
+
+    try {
+      readLeadIds = JSON.parse(
+        localStorage.getItem(storageKey) || "[]"
+      );
+    } catch {
+      readLeadIds = [];
+    }
+
+    if (!Array.isArray(readLeadIds)) {
+      readLeadIds = [];
+    }
+
+    const alreadyRead = readLeadIds.some(
+      (readId) => String(readId) === id
     );
-  } catch {
-    currentUser = null;
-  }
 
-  const userId =
-    currentUser?._id ||
-    currentUser?.id ||
-    currentUser?.email ||
-    "current";
+    if (alreadyRead) {
+      return;
+    }
 
-  return `saleVitalsReadLeadIds_v5_${String(userId).trim()}`;
-};
+    const updatedReadIds = [
+      ...readLeadIds,
+      id,
+    ];
 
- const markLeadAsRead = (leadId) => {
-  const id = String(leadId || "").trim();
-
-  if (!id) {
-    return;
-  }
-
-  const storageKey = getLeadReadStorageKey();
-
-  let readLeadIds = [];
-
-  try {
-    readLeadIds = JSON.parse(
-      localStorage.getItem(storageKey) || "[]"
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify(updatedReadIds)
     );
-  } catch {
-    readLeadIds = [];
-  }
 
-  if (!Array.isArray(readLeadIds)) {
-    readLeadIds = [];
-  }
-
-  const alreadyRead = readLeadIds.some(
-    (readId) => String(readId) === id
-  );
-
-  if (alreadyRead) {
-    return;
-  }
-
-  const updatedReadIds = [
-    ...readLeadIds,
-    id,
-  ];
-
-  localStorage.setItem(
-    storageKey,
-    JSON.stringify(updatedReadIds)
-  );
-
-  setLeadCount((count) =>
-    Math.max(0, count - 1)
-  );
-};
+    setLeadCount((count) =>
+      Math.max(0, count - 1)
+    );
+  };
 
   const isTodayDate = (value) => {
     const date = new Date(value);
@@ -1022,58 +1025,58 @@ const getLeadReadStorageKey = () => {
           ? leadsData.leads
           : [];
 
-       const readStorageKey = getLeadReadStorageKey();
+        const readStorageKey = getLeadReadStorageKey();
 
-let readLeadIds = [];
+        let readLeadIds = [];
 
-try {
-  readLeadIds = JSON.parse(
-    localStorage.getItem(readStorageKey) || "[]"
-  );
-} catch {
-  readLeadIds = [];
-}
+        try {
+          readLeadIds = JSON.parse(
+            localStorage.getItem(readStorageKey) || "[]"
+          );
+        } catch {
+          readLeadIds = [];
+        }
 
-if (!Array.isArray(readLeadIds)) {
-  readLeadIds = [];
-}
+        if (!Array.isArray(readLeadIds)) {
+          readLeadIds = [];
+        }
 
-const currentLeadIds = leads
-  .map((lead) => String(lead?._id || ""))
-  .filter(Boolean);
+        const currentLeadIds = leads
+          .map((lead) => String(lead?._id || ""))
+          .filter(Boolean);
 
-const currentLeadIdSet = new Set(currentLeadIds);
+        const currentLeadIdSet = new Set(currentLeadIds);
 
-readLeadIds = readLeadIds.filter((id) =>
-  currentLeadIdSet.has(String(id))
-);
+        readLeadIds = readLeadIds.filter((id) =>
+          currentLeadIdSet.has(String(id))
+        );
 
-localStorage.setItem(
-  readStorageKey,
-  JSON.stringify(readLeadIds)
-);
+        localStorage.setItem(
+          readStorageKey,
+          JSON.stringify(readLeadIds)
+        );
 
-const readLeadIdSet = new Set(
-  readLeadIds.map((id) => String(id))
-);
+        const readLeadIdSet = new Set(
+          readLeadIds.map((id) => String(id))
+        );
 
-const unreadNewLeadCount = leads.filter((lead) => {
-  const id = String(lead?._id || "");
+        const unreadNewLeadCount = leads.filter((lead) => {
+          const id = String(lead?._id || "");
 
-  const stage = String(
-    lead?.stage || "New"
-  )
-    .trim()
-    .toLowerCase();
+          const stage = String(
+            lead?.stage || "New"
+          )
+            .trim()
+            .toLowerCase();
 
-  return (
-    id &&
-    stage === "new" &&
-    !readLeadIdSet.has(id)
-  );
-}).length;
+          return (
+            id &&
+            stage === "new" &&
+            !readLeadIdSet.has(id)
+          );
+        }).length;
 
-setLeadCount(unreadNewLeadCount);
+        setLeadCount(unreadNewLeadCount);
 
         const now = new Date();
 
@@ -1140,7 +1143,7 @@ setLeadCount(unreadNewLeadCount);
         if (
           contactsData.usage &&
           typeof contactsData.usage.used ===
-            "number"
+          "number"
         ) {
           setContactCount(
             contactsData.usage.used
@@ -1436,6 +1439,11 @@ setLeadCount(unreadNewLeadCount);
 
   const selectNav = (name) => {
     setActive(name);
+
+    if (name === "Settings") {
+      setSettingsTab("Business Profile");
+    }
+
     setMobileOpen(false);
     setProfileOpen(false);
     setSearchOpen(false);
@@ -1444,23 +1452,23 @@ setLeadCount(unreadNewLeadCount);
 
   const searchResults = searchTerm.trim()
     ? allLeads
-        .filter((lead) => {
-          const query = searchTerm.trim().toLowerCase();
-          const haystack = [
-            lead?.name,
-            lead?.phone,
-            lead?.email,
-            lead?.service,
-            lead?.owner,
-            lead?.preferredDoctor,
-            normalizeSource(lead?.source),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(query);
-        })
-        .slice(0, 8)
+      .filter((lead) => {
+        const query = searchTerm.trim().toLowerCase();
+        const haystack = [
+          lead?.name,
+          lead?.phone,
+          lead?.email,
+          lead?.service,
+          lead?.owner,
+          lead?.preferredDoctor,
+          normalizeSource(lead?.source),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice(0, 8)
     : [];
 
   const openSearchLead = (lead) => {
@@ -1498,7 +1506,12 @@ setLeadCount(unreadNewLeadCount);
 
   const renderDashboardSection = () => {
     if (active === "Settings") {
-      return <Settings user={user} initialTab="Plan & Billing" />;
+      return (
+        <Settings
+          user={user}
+          initialTab={settingsTab}
+        />
+      );
     }
 
     if (active === "Leads") {
@@ -1625,8 +1638,8 @@ setLeadCount(unreadNewLeadCount);
 
           <button
             className={`dash-nav-item ${active === "Dashboard"
-                ? "active"
-                : ""
+              ? "active"
+              : ""
               }`}
             onClick={() =>
               selectNav("Dashboard")
@@ -1665,8 +1678,8 @@ setLeadCount(unreadNewLeadCount);
                     <button
                       key={name}
                       className={`dash-nav-item ${active === name
-                          ? "active"
-                          : ""
+                        ? "active"
+                        : ""
                         }`}
                       onClick={() =>
                         selectNav(name)
@@ -1687,30 +1700,30 @@ setLeadCount(unreadNewLeadCount);
                         name === "Contacts" ||
                         name === "Follow-ups" ||
                         (name === "Chat" && aiUnreadCount > 0)) && (
-                        <em
-                          className={
-                            name === "Leads" && leadCount > 0
-                              ? "hot"
-                              : name === "Follow-ups"
+                          <em
+                            className={
+                              name === "Leads" && leadCount > 0
                                 ? "hot"
-                                : name === "Chat" && aiUnreadCount > 0
+                                : name === "Follow-ups"
                                   ? "hot"
-                                  : countTone === "hot"
-                                  ? "hot"
-                                  : ""
-                          }
-                        >
-                          {name === "Leads"
-                            ? leadCount
-                            : name === "Contacts"
-                              ? contactCount
-                              : name === "Follow-ups"
-                                ? pendingFollowUpCount
-                                : name === "Chat"
-                                  ? aiUnreadCount
-                                  : count}
-                        </em>
-                      )}
+                                  : name === "Chat" && aiUnreadCount > 0
+                                    ? "hot"
+                                    : countTone === "hot"
+                                      ? "hot"
+                                      : ""
+                            }
+                          >
+                            {name === "Leads"
+                              ? leadCount
+                              : name === "Contacts"
+                                ? contactCount
+                                : name === "Follow-ups"
+                                  ? pendingFollowUpCount
+                                  : name === "Chat"
+                                    ? aiUnreadCount
+                                    : count}
+                          </em>
+                        )}
 
                     </button>
                   )
@@ -1741,7 +1754,10 @@ setLeadCount(unreadNewLeadCount);
               <button
                 type="button"
                 onClick={() => {
+                  setSettingsTab("Plan & Billing");
                   setActive("Settings");
+                  setMobileOpen(false);
+                  setProfileOpen(false);
                 }}
               >
                 Choose plan
@@ -1760,7 +1776,7 @@ setLeadCount(unreadNewLeadCount);
 
               <div className="dash-plan-copy">
                 {billing?.subscription?.daysRemaining !==
-                undefined
+                  undefined
                   ? `${billing.subscription.daysRemaining} days remaining`
                   : "Your Vitals workspace is active"}
               </div>
@@ -1823,6 +1839,7 @@ setLeadCount(unreadNewLeadCount);
               <button
                 type="button"
                 onClick={() => {
+                  setSettingsTab("Plan & Billing");
                   setActive("Settings");
                   setMobileOpen(false);
                   setProfileOpen(false);
@@ -2058,8 +2075,8 @@ setLeadCount(unreadNewLeadCount);
                           <button
                             type="button"
                             className={`dash-notification-item ${notification.isRead
-                                ? "read"
-                                : "unread"
+                              ? "read"
+                              : "unread"
                               }`}
                             key={
                               notification._id
@@ -2199,25 +2216,25 @@ setLeadCount(unreadNewLeadCount);
           ) &&
           new Date(item.date).getTime() > Date.now()
       ).length > 0 && (
-        <TodayFollowUpPopup
-          items={todayFollowUps.filter(
-            (item) =>
-              !dismissedTodayFollowUps.has(
-                String(item._id)
-              ) &&
-              new Date(item.date).getTime() > Date.now()
-          )}
-          minimized={todayFollowUpsMinimized}
-          onOpen={openTodayFollowUp}
-          onMinimize={() =>
-            setTodayFollowUpsMinimized(true)
-          }
-          onRestore={() =>
-            setTodayFollowUpsMinimized(false)
-          }
-          onClose={closeTodayFollowUps}
-        />
-      )}
+          <TodayFollowUpPopup
+            items={todayFollowUps.filter(
+              (item) =>
+                !dismissedTodayFollowUps.has(
+                  String(item._id)
+                ) &&
+                new Date(item.date).getTime() > Date.now()
+            )}
+            minimized={todayFollowUpsMinimized}
+            onOpen={openTodayFollowUp}
+            onMinimize={() =>
+              setTodayFollowUpsMinimized(true)
+            }
+            onRestore={() =>
+              setTodayFollowUpsMinimized(false)
+            }
+            onClose={closeTodayFollowUps}
+          />
+        )}
 
       <nav className="dash-mobile-nav">
 

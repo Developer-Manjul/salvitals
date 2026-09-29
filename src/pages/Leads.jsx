@@ -2040,11 +2040,17 @@ export default function Leads({
 
                             <div
                               className="lead-name-cell"
-                              onClick={(
-                                event
-                              ) =>
-                                event.stopPropagation()
+                              role="button"
+                              tabIndex={0}
+                              onClick={() =>
+                                openLeadDetails(lead)
                               }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openLeadDetails(lead);
+                                }
+                              }}
                             >
 
                               <span className="lead-avatar">
@@ -2227,18 +2233,7 @@ export default function Leads({
                                     >
                                       Edit lead
                                     </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        convertToContact(
-                                          lead
-                                        )
-                                      }
-                                    >
-                                      Convert to contact
-                                    </button>
-
+{/* 
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -2248,7 +2243,7 @@ export default function Leads({
                                       }
                                     >
                                       Delete lead
-                                    </button>
+                                    </button> */}
 
                                   </div>
                                 )}

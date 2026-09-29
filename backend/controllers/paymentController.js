@@ -14,17 +14,17 @@ const razorpay = new Razorpay({
 const PLANS = {
     starter: {
         name: "Starter",
-        inr: 1489,
+        inr: 1953,
         usd: 63,
     },
     growth: {
         name: "Growth",
-        inr: 2289,
+        inr: 2953,
         usd: 93,
     },
     scale: {
         name: "Scale",
-        inr: 3189,
+        inr: 4953,
         usd: 113,
     },
 };
@@ -53,33 +53,22 @@ const ADDONS = {
     },
 };
 
-const ADDON_PERIODS = [
-    1,
-    2,
-    3,
-    6,
-    12,
-];
-
 function getUserId(req) {
-    const authorization =
-        req.headers.authorization || "";
+    const authorization = req.headers.authorization || "";
 
-    const token =
-        authorization.startsWith("Bearer ")
-            ? authorization.slice(7)
-            : "";
+    const token = authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
 
     if (!token) {
         return null;
     }
 
     try {
-        const decoded =
-            jwt.verify(
-                token,
-                process.env.JWT_SECRET
-            );
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
 
         return (
             decoded.id ||
@@ -93,10 +82,9 @@ function getUserId(req) {
 }
 
 function normalizePlanId(value) {
-    const normalized =
-        String(value || "")
-            .trim()
-            .toLowerCase();
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
 
     if (normalized === "custom") {
         return "enterprise";
@@ -114,10 +102,9 @@ function getPlan(planId) {
 }
 
 function getAddon(addonType) {
-    const normalized =
-        String(addonType || "")
-            .trim()
-            .toLowerCase();
+    const normalized = String(addonType || "")
+        .trim()
+        .toLowerCase();
 
     return (
         ADDONS[normalized] || null
@@ -136,8 +123,7 @@ function getMonthlyPrice(
     planId,
     currency
 ) {
-    const plan =
-        getPlan(planId);
+    const plan = getPlan(planId);
 
     if (!plan) {
         return null;
@@ -153,11 +139,10 @@ function calculateSubscription(
     period,
     currency
 ) {
-    const monthlyPrice =
-        getMonthlyPrice(
-            planId,
-            currency
-        );
+    const monthlyPrice = getMonthlyPrice(
+        planId,
+        currency
+    );
 
     if (
         monthlyPrice === null ||
@@ -166,13 +151,10 @@ function calculateSubscription(
         return null;
     }
 
-    const months =
-        Number(period) || 1;
+    const months = Number(period) || 1;
 
     const discountPercentage =
-        getDiscountPercentage(
-            months
-        );
+        getDiscountPercentage(months);
 
     const originalAmount =
         monthlyPrice * months;
@@ -200,11 +182,10 @@ function calculateSubscription(
 
 function calculateAddon(
     addonType,
-    months,
+    quantity,
     currency
 ) {
-    const addon =
-        getAddon(addonType);
+    const addon = getAddon(addonType);
 
     if (!addon) {
         return null;
@@ -214,34 +195,31 @@ function calculateAddon(
         return null;
     }
 
-    const duration =
-        Number(months);
+    const packs = Number(quantity);
 
     if (
-        !Number.isInteger(duration) ||
-        !ADDON_PERIODS.includes(
-            duration
-        )
+        !Number.isInteger(packs) ||
+        packs < 1 ||
+        packs > 10
     ) {
         return null;
     }
 
     const amount =
-        addon.unitPrice *
-        duration;
+        addon.unitPrice * packs;
 
     const quota =
-        addon.quotaPerMonth *
-        duration;
+        addon.quotaPerMonth * packs;
 
     return {
-        addonType,
+        addonType: String(addonType)
+            .trim()
+            .toLowerCase(),
         addonName: addon.name,
-        months: duration,
-        unitPrice:
-            addon.unitPrice,
-        quotaPerMonth:
-            addon.quotaPerMonth,
+        quantity: packs,
+        months: 1,
+        unitPrice: addon.unitPrice,
+        quotaPerMonth: addon.quotaPerMonth,
         quota,
         amount,
         currency: "INR",
@@ -253,8 +231,7 @@ function calculateSetupFee(
     currency
 ) {
     if (
-        user?.subscription
-            ?.setupFeePaid
+        user?.subscription?.setupFeePaid
     ) {
         return 0;
     }
@@ -331,16 +308,14 @@ function getSubscriptionDates(
     };
 }
 
-function getAddonDates(
-    months
-) {
+function getAddonDates() {
     const startedAt =
         new Date();
 
     const expiresAt =
         addMonths(
             startedAt,
-            Number(months) || 1
+            1
         );
 
     return {
@@ -425,12 +400,9 @@ async function activateSubscription(
     const planName =
         planId === "enterprise"
             ? "Enterprise"
-            : (
-                getPlan(planId)
-                    ?.name ||
-                order.planName ||
-                planId
-            );
+            : getPlan(planId)?.name ||
+              order.planName ||
+              planId;
 
     const period =
         Number(order.period) || 1;
@@ -442,8 +414,7 @@ async function activateSubscription(
 
     const existingSetupFeePaid =
         Boolean(
-            user.subscription
-                ?.setupFeePaid
+            user.subscription?.setupFeePaid
         );
 
     const setupFeePaid =
@@ -466,13 +437,11 @@ async function activateSubscription(
             dates.expiresAt,
         nextBillingAt:
             dates.nextBillingAt,
-        amount:
-            Number(
-                order.planAmount || 0
-            ),
+        amount: Number(
+            order.planAmount || 0
+        ),
         currency:
-            order.currency ||
-            "INR",
+            order.currency || "INR",
         orderId:
             order._id,
         razorpayOrderId:
@@ -519,9 +488,7 @@ async function activateAddon(
             .trim()
             .toLowerCase();
 
-    if (
-        !ADDONS[addonType]
-    ) {
+    if (!ADDONS[addonType]) {
         throw new Error(
             "Invalid add-on type"
         );
@@ -538,21 +505,16 @@ async function activateAddon(
     const existingExpiresAt =
         addon.expiresAt
             ? new Date(
-                addon.expiresAt
-            )
+                  addon.expiresAt
+              )
             : null;
 
     const existingActive =
         Boolean(
             addon.enabled &&
-            existingExpiresAt &&
-            existingExpiresAt.getTime() >
-                now.getTime()
-        );
-
-    const purchasedMonths =
-        Number(
-            order.addonMonths || 0
+                existingExpiresAt &&
+                existingExpiresAt.getTime() >
+                    now.getTime()
         );
 
     const purchasedQuota =
@@ -563,30 +525,26 @@ async function activateAddon(
     const unitPrice =
         Number(
             order.addonUnitPrice ||
-            ADDONS[
-                addonType
-            ].unitPrice
+                ADDONS[
+                    addonType
+                ].unitPrice
         );
 
     let startsAt;
     let expiresAt;
     let quota;
     let used;
-    let months;
 
     if (existingActive) {
         startsAt =
             addon.startsAt
                 ? new Date(
-                    addon.startsAt
-                )
+                      addon.startsAt
+                  )
                 : now;
 
         expiresAt =
-            addMonths(
-                existingExpiresAt,
-                purchasedMonths
-            );
+            existingExpiresAt;
 
         quota =
             Number(
@@ -598,37 +556,20 @@ async function activateAddon(
             Number(
                 addon.used || 0
             );
-
-        months =
-            Number(
-                addon.months || 0
-            ) +
-            purchasedMonths;
     } else {
         startsAt =
-            order.addonStartsAt
-                ? new Date(
-                    order.addonStartsAt
-                )
-                : now;
+            now;
 
         expiresAt =
-            order.addonExpiresAt
-                ? new Date(
-                    order.addonExpiresAt
-                )
-                : addMonths(
-                    startsAt,
-                    purchasedMonths
-                );
+            addMonths(
+                startsAt,
+                1
+            );
 
         quota =
             purchasedQuota;
 
         used = 0;
-
-        months =
-            purchasedMonths;
     }
 
     if (!user.addons) {
@@ -641,7 +582,7 @@ async function activateAddon(
         enabled: true,
         quota,
         used,
-        months,
+        months: 1,
         unitPrice,
         startsAt,
         expiresAt,
@@ -654,6 +595,8 @@ async function activateAddon(
             order.razorpayPaymentId ||
             "",
     };
+
+    order.addonMonths = 1;
 
     order.addonStartsAt =
         startsAt;
@@ -695,13 +638,10 @@ async function ensureSubscriptionForPaidOrder(
     userId,
     paidOrder
 ) {
-    if (!paidOrder) {
-        return null;
-    }
-
     if (
+        !paidOrder ||
         paidOrder.orderType !==
-        "subscription"
+            "subscription"
     ) {
         return null;
     }
@@ -721,7 +661,7 @@ async function ensureSubscriptionForPaidOrder(
     const orderMatches =
         String(
             subscription.orderId ||
-            ""
+                ""
         ) ===
         String(
             paidOrder._id
@@ -961,12 +901,11 @@ exports.getPaymentStatus =
                         nextBillingAt:
                             subscription.nextBillingAt ||
                             null,
-                        amount:
-                            Number(
-                                subscription.amount ||
+                        amount: Number(
+                            subscription.amount ||
                                 paidOrder.planAmount ||
                                 0
-                            ),
+                        ),
                         currency:
                             subscription.currency ||
                             paidOrder.currency ||
@@ -1017,7 +956,8 @@ exports.getPaymentStatus =
             }
 
             const subscription =
-                user.subscription || {};
+                user.subscription ||
+                {};
 
             const subscriptionIsActive =
                 subscription.status ===
@@ -1061,11 +1001,10 @@ exports.getPaymentStatus =
                         nextBillingAt:
                             subscription.nextBillingAt ||
                             null,
-                        amount:
-                            Number(
-                                subscription.amount ||
+                        amount: Number(
+                            subscription.amount ||
                                 0
-                            ),
+                        ),
                         currency:
                             subscription.currency ||
                             "INR",
@@ -1116,11 +1055,10 @@ exports.getPaymentStatus =
                     nextBillingAt:
                         subscription.nextBillingAt ||
                         null,
-                    amount:
-                        Number(
-                            subscription.amount ||
+                    amount: Number(
+                        subscription.amount ||
                             0
-                        ),
+                    ),
                     currency:
                         subscription.currency ||
                         "INR",
@@ -1191,13 +1129,21 @@ exports.createOrder =
             }
 
             const {
-                orderType = "subscription",
-                currency = "INR",
+                orderType =
+                    "subscription",
+                currency =
+                    "INR",
                 planId,
-                period = 1,
-                periodLabel = "",
-                country = "",
-                addonType = "",
+                period =
+                    1,
+                periodLabel =
+                    "",
+                country =
+                    "",
+                addonType =
+                    "",
+                quantity =
+                    1,
             } = req.body;
 
             const curr =
@@ -1212,7 +1158,8 @@ exports.createOrder =
                 "addon"
             ) {
                 if (
-                    curr !== "INR"
+                    curr !==
+                    "INR"
                 ) {
                     return res.status(400).json({
                         success: false,
@@ -1222,8 +1169,7 @@ exports.createOrder =
                 }
 
                 if (
-                    user.subscription
-                        ?.status !==
+                    user.subscription?.status !==
                     "active"
                 ) {
                     return res.status(400).json({
@@ -1236,7 +1182,7 @@ exports.createOrder =
                 const addonCalculation =
                     calculateAddon(
                         addonType,
-                        period,
+                        quantity,
                         curr
                     );
 
@@ -1244,7 +1190,7 @@ exports.createOrder =
                     return res.status(400).json({
                         success: false,
                         message:
-                            "Invalid add-on or duration selected.",
+                            "Invalid add-on or quantity selected.",
                     });
                 }
 
@@ -1273,9 +1219,7 @@ exports.createOrder =
                     );
 
                 const addonDates =
-                    getAddonDates(
-                        addonCalculation.months
-                    );
+                    getAddonDates();
 
                 const razorpayOrder =
                     await razorpay.orders.create({
@@ -1292,10 +1236,12 @@ exports.createOrder =
                                 addonCalculation.addonType,
                             addonName:
                                 addonCalculation.addonName,
-                            addonMonths:
+                            addonQuantity:
                                 String(
-                                    addonCalculation.months
+                                    addonCalculation.quantity
                                 ),
+                            addonMonths:
+                                "1",
                             addonQuota:
                                 String(
                                     addonCalculation.quota
@@ -1335,15 +1281,14 @@ exports.createOrder =
                         planId:
                             addonCalculation.addonType,
                         planName:
-                            user.subscription
-                                ?.planName ||
+                            user.subscription?.planName ||
                             "",
                         addonType:
                             addonCalculation.addonType,
                         addonName:
                             addonCalculation.addonName,
                         addonMonths:
-                            addonCalculation.months,
+                            1,
                         addonUnitPrice:
                             addonCalculation.unitPrice,
                         addonQuota:
@@ -1364,11 +1309,10 @@ exports.createOrder =
                         currency:
                             curr,
                         period:
-                            addonCalculation.months,
+                            1,
                         periodLabel:
-                            `${addonCalculation.months} month${
-                                addonCalculation.months >
-                                1
+                            `${addonCalculation.quantity} pack${
+                                addonCalculation.quantity > 1
                                     ? "s"
                                     : ""
                             }`,
@@ -1399,8 +1343,10 @@ exports.createOrder =
                             addonCalculation.addonType,
                         addonName:
                             addonCalculation.addonName,
+                        addonQuantity:
+                            addonCalculation.quantity,
                         addonMonths:
-                            addonCalculation.months,
+                            1,
                         addonQuota:
                             addonCalculation.quota,
                         addonUnitPrice:
@@ -1687,7 +1633,7 @@ exports.verifyPayment =
                 });
             }
 
-            let order =
+            const order =
                 await Order.findOne({
                     razorpayOrderId:
                         razorpay_order_id,
@@ -1719,7 +1665,8 @@ exports.verifyPayment =
 
                 const invoiceSequence =
                     String(
-                        paidOrdersCount + 1
+                        paidOrdersCount +
+                            1
                     ).padStart(
                         3,
                         "0"
@@ -1780,8 +1727,24 @@ exports.verifyPayment =
                                 order.addonType,
                             name:
                                 order.addonName,
+                            quantity:
+                                Math.max(
+                                    1,
+                                    Math.round(
+                                        Number(
+                                            order.addonQuota ||
+                                            0
+                                        ) /
+                                        Number(
+                                            ADDONS[
+                                                order.addonType
+                                            ]?.quotaPerMonth ||
+                                            1
+                                        )
+                                    )
+                                ),
                             months:
-                                order.addonMonths,
+                                1,
                             quota:
                                 order.addonQuota,
                             used:
