@@ -47,6 +47,11 @@ router.get(
 );
 
 router.get(
+    "/debug/permissions",
+    controller.debugMetaPermissions
+);
+
+router.get(
     "/webhook",
     controller.verifyWebhook
 );

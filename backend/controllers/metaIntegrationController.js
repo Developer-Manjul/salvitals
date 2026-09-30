@@ -2,64 +2,42 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
-const MetaIntegration =
-    require("../models/MetaIntegration");
+const MetaIntegration = require("../models/MetaIntegration");
+const MetaOAuthState = require("../models/MetaOAuthState");
+const Lead = require("../models/Lead");
 
-const MetaOAuthState =
-    require("../models/MetaOAuthState");
+const { encrypt, decrypt } = require("../utils/encryption");
 
-const Lead =
-    require("../models/Lead");
+const meta = require("../services/metaService");
 
-const {
-    encrypt,
-    decrypt,
-} = require("../utils/encryption");
-
-const meta =
-    require("../services/metaService");
-
-const {
-    processNewLead,
-} = require("../services/leadProcessingService");
+const { processNewLead } = require("../services/leadProcessingService");
 
 function getUserId(req) {
-    const authorization =
-        req.headers.authorization || "";
+    const authorization = req.headers.authorization || "";
 
-    if (
-        !authorization.startsWith("Bearer ")
-    ) {
+    if (!authorization.startsWith("Bearer ")) {
         return null;
     }
 
     try {
-        const decoded =
-            jwt.verify(
-                authorization.slice(7),
-                process.env.JWT_SECRET
-            );
-
-        return (
-            decoded.id ||
-            decoded._id ||
-            decoded.userId ||
-            null
+        const decoded = jwt.verify(
+            authorization.slice(7),
+            process.env.JWT_SECRET
         );
+
+        return decoded.id || decoded._id || decoded.userId || null;
     } catch {
         return null;
     }
 }
 
 function requireUser(req, res) {
-    const userId =
-        getUserId(req);
+    const userId = getUserId(req);
 
     if (!userId) {
         res.status(401).json({
             success: false,
-            message:
-                "Authentication required",
+            message: "Authentication required",
         });
 
         return null;
@@ -74,175 +52,82 @@ function publicIntegration(integration) {
     }
 
     return {
-        id:
-            integration._id,
-
-        pageId:
-            integration.pageId,
-
-        pageName:
-            integration.pageName,
-
-        instagramAccountId:
-            integration.instagramAccountId,
-
-        instagramUsername:
-            integration.instagramUsername,
-
-        instagramName:
-            integration.instagramName,
-
-        instagramProfilePicture:
-            integration.instagramProfilePicture,
+        id: integration._id,
+        pageId: integration.pageId,
+        pageName: integration.pageName,
+        instagramAccountId: integration.instagramAccountId,
+        instagramUsername: integration.instagramUsername,
+        instagramName: integration.instagramName,
+        instagramProfilePicture: integration.instagramProfilePicture,
 
         facebook: {
-            connected:
-                Boolean(
-                    integration.isActive
-                ),
-
-            pageId:
-                integration.pageId,
-
-            pageName:
-                integration.pageName,
+            connected: Boolean(integration.isActive),
+            pageId: integration.pageId,
+            pageName: integration.pageName,
         },
 
         instagram: {
-            connected:
-                Boolean(
-                    integration.instagramAccountId
-                ),
-
-            accountId:
-                integration.instagramAccountId,
-
-            username:
-                integration.instagramUsername,
-
-            name:
-                integration.instagramName,
-
-            profilePicture:
-                integration.instagramProfilePicture,
+            connected: Boolean(integration.instagramAccountId),
+            accountId: integration.instagramAccountId,
+            username: integration.instagramUsername,
+            name: integration.instagramName,
+            profilePicture: integration.instagramProfilePicture,
         },
 
-        businessId:
-            integration.businessId,
-
-        businessName:
-            integration.businessName,
-
-        isActive:
-            integration.isActive,
-
-        connectedAt:
-            integration.connectedAt,
-
-        updatedAt:
-            integration.updatedAt,
+        businessId: integration.businessId,
+        businessName: integration.businessName,
+        isActive: integration.isActive,
+        connectedAt: integration.connectedAt,
+        updatedAt: integration.updatedAt,
     };
 }
 
-function applyInstagramDetails(
-    integration,
-    details
-) {
+function applyInstagramDetails(integration, details) {
     const instagram =
         details?.instagram_business_account ||
         details?.instagramBusinessAccount;
 
-    integration.instagramAccountId =
-        instagram?.id || "";
-
-    integration.instagramUsername =
-        instagram?.username || "";
-
-    integration.instagramName =
-        instagram?.name || "";
-
+    integration.instagramAccountId = instagram?.id || "";
+    integration.instagramUsername = instagram?.username || "";
+    integration.instagramName = instagram?.name || "";
     integration.instagramProfilePicture =
         instagram?.profile_picture_url || "";
 }
 
 function cleanMetaServiceName(name) {
-    const value =
-        String(name || "").trim();
+    const value = String(name || "").trim();
 
     if (!value) {
         return "";
     }
 
-    return value
-        .split("|")[0]
-        .trim();
+    return value.split("|")[0].trim();
 }
 
 function getIndiaDateStart(daysAgo = 0) {
-    const parts =
-        new Intl.DateTimeFormat(
-            "en-CA",
-            {
-                timeZone:
-                    "Asia/Kolkata",
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(new Date());
 
-                year:
-                    "numeric",
+    const year = Number(
+        parts.find((item) => item.type === "year")?.value
+    );
 
-                month:
-                    "2-digit",
+    const month = Number(
+        parts.find((item) => item.type === "month")?.value
+    );
 
-                day:
-                    "2-digit",
-            }
-        ).formatToParts(
-            new Date()
-        );
-
-    const year =
-        Number(
-            parts.find(
-                (item) =>
-                    item.type ===
-                    "year"
-            )?.value
-        );
-
-    const month =
-        Number(
-            parts.find(
-                (item) =>
-                    item.type ===
-                    "month"
-            )?.value
-        );
-
-    const day =
-        Number(
-            parts.find(
-                (item) =>
-                    item.type ===
-                    "day"
-            )?.value
-        );
+    const day = Number(
+        parts.find((item) => item.type === "day")?.value
+    );
 
     return new Date(
-        Date.UTC(
-            year,
-            month - 1,
-            day,
-            0,
-            0,
-            0
-        ) -
-            330 *
-                60 *
-                1000 -
-            daysAgo *
-                24 *
-                60 *
-                60 *
-                1000
+        Date.UTC(year, month - 1, day, 0, 0, 0) -
+            330 * 60 * 1000 -
+            daysAgo * 24 * 60 * 60 * 1000
     );
 }
 
@@ -255,774 +140,302 @@ async function getMetaCampaignName(
     adId,
     accessToken
 ) {
-    let resolvedCampaignId =
-        String(
-            campaignId || ""
-        ).trim();
-
+    let resolvedCampaignId = String(campaignId || "").trim();
     let campaignName = "";
     let adName = "";
 
-    const resolvedAdId =
-        String(
-            adId || ""
-        ).trim();
+    const resolvedAdId = String(adId || "").trim();
 
     const graphVersion =
         process.env.META_GRAPH_VERSION ||
         process.env.META_GRAPH_API_VERSION ||
         "v25.0";
 
-    if (
-        resolvedCampaignId &&
-        accessToken
-    ) {
+    if (resolvedCampaignId && accessToken) {
         try {
-            const response =
-                await axios.get(
-                    `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
-                        resolvedCampaignId
-                    )}`,
-                    {
-                        params: {
-                            fields:
-                                "id,name",
+            const response = await axios.get(
+                `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
+                    resolvedCampaignId
+                )}`,
+                {
+                    params: {
+                        fields: "id,name",
+                        access_token: accessToken,
+                    },
+                    timeout: 10000,
+                }
+            );
 
-                            access_token:
-                                accessToken,
-                        },
-
-                        timeout:
-                            10000,
-                    }
-                );
-
-            campaignName =
-                String(
-                    response.data?.name ||
-                        ""
-                ).trim();
+            campaignName = String(
+                response.data?.name || ""
+            ).trim();
         } catch (error) {
             console.error(
                 "META CAMPAIGN NAME FETCH ERROR:",
-                error.response?.data ||
-                    error.message
+                error.response?.data || error.message
             );
         }
     }
 
-    if (
-        resolvedAdId &&
-        accessToken &&
-        !campaignName
-    ) {
+    if (resolvedAdId && accessToken && !campaignName) {
         try {
-            const response =
-                await axios.get(
-                    `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
-                        resolvedAdId
-                    )}`,
-                    {
-                        params: {
-                            fields:
-                                "id,name,campaign{id,name}",
+            const response = await axios.get(
+                `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
+                    resolvedAdId
+                )}`,
+                {
+                    params: {
+                        fields: "id,name,campaign{id,name}",
+                        access_token: accessToken,
+                    },
+                    timeout: 10000,
+                }
+            );
 
-                            access_token:
-                                accessToken,
-                        },
+            adName = String(
+                response.data?.name || ""
+            ).trim();
 
-                        timeout:
-                            10000,
-                    }
-                );
+            const adCampaignId = String(
+                response.data?.campaign?.id || ""
+            ).trim();
 
-            adName =
-                String(
-                    response.data?.name ||
-                        ""
-                ).trim();
+            const adCampaignName = String(
+                response.data?.campaign?.name || ""
+            ).trim();
 
-            const adCampaignId =
-                String(
-                    response.data
-                        ?.campaign?.id ||
-                        ""
-                ).trim();
-
-            const adCampaignName =
-                String(
-                    response.data
-                        ?.campaign?.name ||
-                        ""
-                ).trim();
-
-            if (
-                !resolvedCampaignId &&
-                adCampaignId
-            ) {
-                resolvedCampaignId =
-                    adCampaignId;
+            if (!resolvedCampaignId && adCampaignId) {
+                resolvedCampaignId = adCampaignId;
             }
 
-            if (
-                !campaignName &&
-                adCampaignName
-            ) {
-                campaignName =
-                    adCampaignName;
+            if (!campaignName && adCampaignName) {
+                campaignName = adCampaignName;
             }
         } catch (error) {
             console.error(
                 "META AD CAMPAIGN FETCH ERROR:",
-                error.response?.data ||
-                    error.message
+                error.response?.data || error.message
             );
         }
     }
 
-    if (
-        !campaignName &&
-        adName
-    ) {
-        campaignName =
-            adName;
+    if (!campaignName && adName) {
+        campaignName = adName;
     }
 
     return {
-        campaignId:
-            resolvedCampaignId,
-
-        campaignName:
-            campaignName || "",
-
-        serviceName:
-            cleanMetaServiceName(
-                campaignName
-            ),
-
-        adName:
-            adName || "",
+        campaignId: resolvedCampaignId,
+        campaignName: campaignName || "",
+        serviceName: cleanMetaServiceName(campaignName),
+        adName: adName || "",
     };
 }
 
-exports.connect =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
-            );
+exports.connect = async (req, res) => {
+    const userId = requireUser(req, res);
 
-        if (!userId) {
-            return;
-        }
+    if (!userId) {
+        return;
+    }
+
+    if (
+        !meta.isConfigured() ||
+        !process.env.META_TOKEN_ENCRYPTION_KEY
+    ) {
+        return res.status(503).json({
+            success: false,
+            configured: false,
+            message: "Meta integration is not configured yet.",
+        });
+    }
+
+    try {
+        const state = crypto.randomBytes(32).toString("hex");
+
+        await MetaOAuthState.create({
+            state,
+            userId,
+            expiresAt: new Date(
+                Date.now() + 10 * 60 * 1000
+            ),
+        });
+
+        const authorizationUrl =
+            meta.getAuthorizationUrl(state);
 
         if (
-            !meta.isConfigured() ||
-            !process.env
-                .META_TOKEN_ENCRYPTION_KEY
+            String(req.headers.accept || "").includes(
+                "application/json"
+            )
         ) {
-            return res.status(503).json({
-                success: false,
-                configured: false,
-                message:
-                    "Meta integration is not configured yet.",
-            });
-        }
-
-        try {
-            const state =
-                crypto
-                    .randomBytes(32)
-                    .toString("hex");
-
-            await MetaOAuthState.create({
-                state,
-
-                userId,
-
-                expiresAt:
-                    new Date(
-                        Date.now() +
-                            10 *
-                                60 *
-                                1000
-                    ),
-            });
-
-            const authorizationUrl =
-                meta.getAuthorizationUrl(
-                    state
-                );
-
-            if (
-                String(
-                    req.headers.accept ||
-                        ""
-                ).includes(
-                    "application/json"
-                )
-            ) {
-                return res.json({
-                    success: true,
-                    authorizationUrl,
-                });
-            }
-
-            return res.redirect(
-                authorizationUrl
-            );
-        } catch (error) {
-            console.error(
-                "META CONNECT ERROR:",
-                error.message
-            );
-
-            return res.status(500).json({
-                success: false,
-
-                message:
-                    "Unable to start Meta connection",
-            });
-        }
-    };
-
-exports.callback =
-    async (req, res) => {
-        const frontend =
-            (
-                process.env.FRONTEND_URL ||
-                "http://localhost:5173"
-            ).replace(
-                /\/$/,
-                ""
-            );
-
-        const stateRecord =
-            await MetaOAuthState.findOne({
-                state:
-                    req.query.state,
-
-                expiresAt: {
-                    $gt:
-                        new Date(),
-                },
-            });
-
-        if (!stateRecord) {
-            return res.redirect(
-                `${frontend}/dashboard?metaError=Invalid%20or%20expired%20Meta%20authorization`
-            );
-        }
-
-        if (req.query.error) {
-            await MetaOAuthState.deleteOne({
-                _id:
-                    stateRecord._id,
-            });
-
-            return res.redirect(
-                `${frontend}/dashboard?metaError=Meta%20authorization%20was%20cancelled`
-            );
-        }
-
-        if (!req.query.code) {
-            await MetaOAuthState.deleteOne({
-                _id:
-                    stateRecord._id,
-            });
-
-            return res.redirect(
-                `${frontend}/dashboard?metaError=Meta%20authorization%20code%20missing`
-            );
-        }
-
-        try {
-            const tokenData =
-                await meta.exchangeCodeForToken(
-                    req.query.code
-                );
-
-            const pages =
-                await meta.getPages(
-                    tokenData.access_token
-                );
-
-            stateRecord.accessTokenEncrypted =
-                encrypt(
-                    tokenData.access_token
-                );
-
-            stateRecord.tokenExpiresAt =
-                tokenData.expires_in
-                    ? new Date(
-                          Date.now() +
-                              Number(
-                                  tokenData.expires_in
-                              ) *
-                                  1000
-                      )
-                    : null;
-
-            stateRecord.pages =
-                (
-                    pages.data || []
-                ).map(
-                    (page) => ({
-                        id:
-                            page.id,
-
-                        name:
-                            page.name ||
-                            "",
-
-                        accessToken:
-                            encrypt(
-                                page.access_token ||
-                                    tokenData.access_token
-                            ),
-
-                        instagramAccountId:
-                            page
-                                .instagram_business_account
-                                ?.id || "",
-
-                        instagramUsername:
-                            page
-                                .instagram_business_account
-                                ?.username ||
-                            "",
-
-                        instagramName:
-                            page
-                                .instagram_business_account
-                                ?.name ||
-                            "",
-
-                        instagramProfilePicture:
-                            page
-                                .instagram_business_account
-                                ?.profile_picture_url ||
-                            "",
-
-                        businessId:
-                            page.business?.id ||
-                            "",
-
-                        businessName:
-                            page.business?.name ||
-                            "",
-                    })
-                );
-
-            await stateRecord.save();
-
-            return res.redirect(
-                `${frontend}/dashboard?metaSelectPage=true`
-            );
-        } catch (error) {
-            console.error(
-                "META CALLBACK ERROR:",
-                error.response?.data ||
-                    error.message
-            );
-
-            await MetaOAuthState.deleteOne({
-                _id:
-                    stateRecord._id,
-            });
-
-            return res.redirect(
-                `${frontend}/dashboard?metaError=Unable%20to%20load%20Meta%20Pages`
-            );
-        }
-    };
-
-exports.status =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
-            );
-
-        if (!userId) {
-            return;
-        }
-
-        const integration =
-            await MetaIntegration.findOne({
-                userId,
-
-                isActive:
-                    true,
-            }).sort({
-                updatedAt:
-                    -1,
-            });
-
-        if (
-            integration &&
-            !integration.instagramAccountId
-        ) {
-            try {
-                const details =
-                    await meta.getPageDetails(
-                        integration.pageId,
-                        decrypt(
-                            integration
-                                .accessTokenEncrypted
-                        )
-                    );
-
-                applyInstagramDetails(
-                    integration,
-                    details
-                );
-
-                await integration.save();
-            } catch (error) {
-                console.error(
-                    "META INSTAGRAM DETECTION ERROR:",
-                    error.message
-                );
-            }
-        }
-
-        return res.json({
-            configured:
-                meta.isConfigured() &&
-                Boolean(
-                    process.env
-                        .META_TOKEN_ENCRYPTION_KEY
-                ),
-
-            connected:
-                Boolean(
-                    integration
-                ),
-
-            integration:
-                publicIntegration(
-                    integration
-                ),
-        });
-    };
-
-exports.pages =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
-            );
-
-        if (!userId) {
-            return;
-        }
-
-        const state =
-            await MetaOAuthState.findOne({
-                userId,
-
-                expiresAt: {
-                    $gt:
-                        new Date(),
-                },
-            }).sort({
-                createdAt:
-                    -1,
-            });
-
-        return res.json({
-            success: true,
-
-            pages:
-                (
-                    state?.pages ||
-                    []
-                ).map(
-                    ({
-                        accessToken,
-                        ...page
-                    }) => page
-                ),
-        });
-    };
-
-exports.selectPage =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
-            );
-
-        if (!userId) {
-            return;
-        }
-
-        try {
-            const state =
-                await MetaOAuthState.findOne({
-                    userId,
-
-                    expiresAt: {
-                        $gt:
-                            new Date(),
-                    },
-                }).sort({
-                    createdAt:
-                        -1,
-                });
-
-            const page =
-                state?.pages?.find(
-                    (item) =>
-                        item.id ===
-                        String(
-                            req.body?.pageId ||
-                                ""
-                        )
-                );
-
-            if (
-                !state ||
-                !page
-            ) {
-                return res.status(404).json({
-                    success: false,
-
-                    message:
-                        "Meta Page selection expired or unavailable",
-                });
-            }
-
-            let pageDetails =
-                null;
-
-            try {
-                pageDetails =
-                    await meta.getPageDetails(
-                        page.id,
-                        decrypt(
-                            page.accessToken
-                        )
-                    );
-            } catch (error) {
-                console.error(
-                    "META INSTAGRAM DETECTION ERROR:",
-                    error.message
-                );
-            }
-
-            const integration =
-                await MetaIntegration.findOneAndUpdate(
-                    {
-                        userId,
-
-                        pageId:
-                            page.id,
-                    },
-                    {
-                        userId,
-
-                        pageId:
-                            page.id,
-
-                        pageName:
-                            page.name,
-
-                        instagramAccountId:
-                            page.instagramAccountId,
-
-                        instagramUsername:
-                            page.instagramUsername,
-
-                        instagramName:
-                            page.instagramName,
-
-                        instagramProfilePicture:
-                            page.instagramProfilePicture,
-
-                        businessId:
-                            page.businessId,
-
-                        businessName:
-                            page.businessName,
-
-                        accessTokenEncrypted:
-                            page.accessToken,
-
-                        tokenExpiresAt:
-                            state.tokenExpiresAt,
-
-                        isActive:
-                            true,
-
-                        connectedAt:
-                            new Date(),
-                    },
-                    {
-                        upsert:
-                            true,
-
-                        new:
-                            true,
-
-                        setDefaultsOnInsert:
-                            true,
-                    }
-                );
-
-            if (pageDetails) {
-                applyInstagramDetails(
-                    integration,
-                    pageDetails
-                );
-
-                await integration.save();
-            }
-
-            try {
-                const subscription =
-                    await meta.subscribePageToLeadgen(
-                        page.id,
-                        decrypt(
-                            page.accessToken
-                        )
-                    );
-
-                console.log(
-                    "META LEADGEN SUBSCRIPTION SUCCESS:",
-                    page.id,
-                    subscription
-                );
-            } catch (
-                subscriptionError
-            ) {
-                console.error(
-                    "META LEADGEN SUBSCRIPTION ERROR:",
-                    subscriptionError.metaError ||
-                        subscriptionError.message
-                );
-
-                return res.status(409).json({
-                    success: false,
-
-                    message:
-                        "Meta Page connected, but Lead Ads webhook subscription failed.",
-
-                    details:
-                        subscriptionError.metaError ||
-                        subscriptionError.message,
-                });
-            }
-
-            await MetaOAuthState.deleteOne({
-                _id:
-                    state._id,
-            });
-
             return res.json({
                 success: true,
-
-                integration:
-                    publicIntegration(
-                        integration
-                    ),
-            });
-        } catch (error) {
-            console.error(
-                "META PAGE SELECT ERROR:",
-                error.response?.data ||
-                    error.message
-            );
-
-            return res.status(500).json({
-                success: false,
-
-                message:
-                    "Unable to connect Meta Page",
+                authorizationUrl,
             });
         }
-    };
 
-exports.disconnect =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
-            );
-
-        if (!userId) {
-            return;
-        }
-
-        await MetaIntegration.updateMany(
-            {
-                userId,
-            },
-            {
-                $set: {
-                    isActive:
-                        false,
-                },
-            }
+        return res.redirect(authorizationUrl);
+    } catch (error) {
+        console.error(
+            "META CONNECT ERROR:",
+            error.message
         );
 
-        return res.json({
-            success: true,
-
-            message:
-                "Meta connection disconnected",
+        return res.status(500).json({
+            success: false,
+            message: "Unable to start Meta connection",
         });
-    };
+    }
+};
 
-exports.refresh =
-    async (req, res) => {
-        const userId =
-            requireUser(
-                req,
-                res
+exports.callback = async (req, res) => {
+    const frontend = (
+        process.env.FRONTEND_URL ||
+        "http://localhost:5173"
+    ).replace(/\/$/, "");
+
+    const stateRecord = await MetaOAuthState.findOne({
+        state: req.query.state,
+        expiresAt: {
+            $gt: new Date(),
+        },
+    });
+
+    if (!stateRecord) {
+        return res.redirect(
+            `${frontend}/dashboard?metaError=Invalid%20or%20expired%20Meta%20authorization`
+        );
+    }
+
+    if (req.query.error) {
+        await MetaOAuthState.deleteOne({
+            _id: stateRecord._id,
+        });
+
+        return res.redirect(
+            `${frontend}/dashboard?metaError=Meta%20authorization%20was%20cancelled`
+        );
+    }
+
+    if (!req.query.code) {
+        await MetaOAuthState.deleteOne({
+            _id: stateRecord._id,
+        });
+
+        return res.redirect(
+            `${frontend}/dashboard?metaError=Meta%20authorization%20code%20missing`
+        );
+    }
+
+    try {
+        const tokenData =
+            await meta.exchangeCodeForToken(
+                req.query.code
             );
 
-        if (!userId) {
-            return;
-        }
+        const pages =
+            await meta.getPages(
+                tokenData.access_token
+            );
 
+        stateRecord.accessTokenEncrypted =
+            encrypt(tokenData.access_token);
+
+        stateRecord.tokenExpiresAt =
+            tokenData.expires_in
+                ? new Date(
+                      Date.now() +
+                          Number(
+                              tokenData.expires_in
+                          ) *
+                              1000
+                  )
+                : null;
+
+        stateRecord.pages = (
+            pages.data || []
+        ).map((page) => ({
+            id: page.id,
+            name: page.name || "",
+
+            accessToken: encrypt(
+                page.access_token ||
+                    tokenData.access_token
+            ),
+
+            instagramAccountId:
+                page.instagram_business_account?.id ||
+                "",
+
+            instagramUsername:
+                page.instagram_business_account?.username ||
+                "",
+
+            instagramName:
+                page.instagram_business_account?.name ||
+                "",
+
+            instagramProfilePicture:
+                page.instagram_business_account
+                    ?.profile_picture_url ||
+                "",
+
+            businessId:
+                page.business?.id || "",
+
+            businessName:
+                page.business?.name || "",
+        }));
+
+        await stateRecord.save();
+
+        return res.redirect(
+            `${frontend}/dashboard?metaSelectPage=true`
+        );
+    } catch (error) {
+        console.error(
+            "META CALLBACK ERROR:",
+            error.response?.data ||
+                error.message
+        );
+
+        await MetaOAuthState.deleteOne({
+            _id: stateRecord._id,
+        });
+
+        return res.redirect(
+            `${frontend}/dashboard?metaError=Unable%20to%20load%20Meta%20Pages`
+        );
+    }
+};
+
+exports.status = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    const integration =
+        await MetaIntegration.findOne({
+            userId,
+            isActive: true,
+        }).sort({
+            updatedAt: -1,
+        });
+
+    if (
+        integration &&
+        !integration.instagramAccountId
+    ) {
         try {
-            const integration =
-                await MetaIntegration.findOne({
-                    userId,
-
-                    isActive:
-                        true,
-                });
-
-            if (!integration) {
-                return res.status(404).json({
-                    success: false,
-
-                    message:
-                        "Meta connection not found",
-                });
-            }
-
             const details =
-                await meta.refreshConnection(
-                    integration,
-
+                await meta.getPageDetails(
+                    integration.pageId,
                     decrypt(
-                        integration
-                            .accessTokenEncrypted
+                        integration.accessTokenEncrypted
                     )
                 );
-
-            integration.pageName =
-                details.name ||
-                integration.pageName;
 
             applyInstagramDetails(
                 integration,
@@ -1030,63 +443,321 @@ exports.refresh =
             );
 
             await integration.save();
-
-            return res.json({
-                success: true,
-
-                integration:
-                    publicIntegration(
-                        integration
-                    ),
-            });
         } catch (error) {
             console.error(
-                "META REFRESH ERROR:",
+                "META INSTAGRAM DETECTION ERROR:",
                 error.message
+            );
+        }
+    }
+
+    return res.json({
+        configured:
+            meta.isConfigured() &&
+            Boolean(
+                process.env.META_TOKEN_ENCRYPTION_KEY
+            ),
+
+        connected:
+            Boolean(integration),
+
+        integration:
+            publicIntegration(integration),
+    });
+};
+
+exports.pages = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    const state =
+        await MetaOAuthState.findOne({
+            userId,
+            expiresAt: {
+                $gt: new Date(),
+            },
+        }).sort({
+            createdAt: -1,
+        });
+
+    return res.json({
+        success: true,
+
+        pages: (
+            state?.pages || []
+        ).map(
+            ({
+                accessToken,
+                ...page
+            }) => page
+        ),
+    });
+};
+
+exports.selectPage = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    try {
+        const state =
+            await MetaOAuthState.findOne({
+                userId,
+                expiresAt: {
+                    $gt: new Date(),
+                },
+            }).sort({
+                createdAt: -1,
+            });
+
+        const page =
+            state?.pages?.find(
+                (item) =>
+                    item.id ===
+                    String(
+                        req.body?.pageId || ""
+                    )
+            );
+
+        if (!state || !page) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Meta Page selection expired or unavailable",
+            });
+        }
+
+        let pageDetails = null;
+
+        try {
+            pageDetails =
+                await meta.getPageDetails(
+                    page.id,
+                    decrypt(page.accessToken)
+                );
+        } catch (error) {
+            console.error(
+                "META INSTAGRAM DETECTION ERROR:",
+                error.message
+            );
+        }
+
+        const integration =
+            await MetaIntegration.findOneAndUpdate(
+                {
+                    userId,
+                    pageId: page.id,
+                },
+                {
+                    userId,
+                    pageId: page.id,
+                    pageName: page.name,
+
+                    instagramAccountId:
+                        page.instagramAccountId,
+
+                    instagramUsername:
+                        page.instagramUsername,
+
+                    instagramName:
+                        page.instagramName,
+
+                    instagramProfilePicture:
+                        page.instagramProfilePicture,
+
+                    businessId:
+                        page.businessId,
+
+                    businessName:
+                        page.businessName,
+
+                    accessTokenEncrypted:
+                        page.accessToken,
+
+                    tokenExpiresAt:
+                        state.tokenExpiresAt,
+
+                    isActive: true,
+                    connectedAt: new Date(),
+                },
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
+        if (pageDetails) {
+            applyInstagramDetails(
+                integration,
+                pageDetails
+            );
+
+            await integration.save();
+        }
+
+        try {
+            const subscription =
+                await meta.subscribePageToLeadgen(
+                    page.id,
+                    decrypt(page.accessToken)
+                );
+
+            console.log(
+                "META LEADGEN SUBSCRIPTION SUCCESS:",
+                page.id,
+                subscription
+            );
+        } catch (subscriptionError) {
+            console.error(
+                "META LEADGEN SUBSCRIPTION ERROR:",
+                subscriptionError.metaError ||
+                    subscriptionError.message
             );
 
             return res.status(409).json({
                 success: false,
-
                 message:
-                    "Meta connection needs to be reconnected.",
+                    "Meta Page connected, but Lead Ads webhook subscription failed.",
+                details:
+                    subscriptionError.metaError ||
+                    subscriptionError.message,
             });
         }
-    };
 
-exports.verifyWebhook =
-    (req, res) => {
-        if (
-            req.query[
-                "hub.verify_token"
-            ] !==
-            process.env
-                .META_WEBHOOK_VERIFY_TOKEN
-        ) {
-            return res.sendStatus(
-                403
-            );
+        await MetaOAuthState.deleteOne({
+            _id: state._id,
+        });
+
+        return res.json({
+            success: true,
+            integration:
+                publicIntegration(integration),
+        });
+    } catch (error) {
+        console.error(
+            "META PAGE SELECT ERROR:",
+            error.response?.data ||
+                error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to connect Meta Page",
+        });
+    }
+};
+
+exports.disconnect = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    await MetaIntegration.updateMany(
+        {
+            userId,
+        },
+        {
+            $set: {
+                isActive: false,
+            },
+        }
+    );
+
+    return res.json({
+        success: true,
+        message:
+            "Meta connection disconnected",
+    });
+};
+
+exports.refresh = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    try {
+        const integration =
+            await MetaIntegration.findOne({
+                userId,
+                isActive: true,
+            });
+
+        if (!integration) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Meta connection not found",
+            });
         }
 
-        return res
-            .status(200)
-            .send(
-                req.query[
-                    "hub.challenge"
-                ]
+        const details =
+            await meta.refreshConnection(
+                integration,
+                decrypt(
+                    integration.accessTokenEncrypted
+                )
             );
-    };
+
+        integration.pageName =
+            details.name ||
+            integration.pageName;
+
+        applyInstagramDetails(
+            integration,
+            details
+        );
+
+        await integration.save();
+
+        return res.json({
+            success: true,
+            integration:
+                publicIntegration(integration),
+        });
+    } catch (error) {
+        console.error(
+            "META REFRESH ERROR:",
+            error.message
+        );
+
+        return res.status(409).json({
+            success: false,
+            message:
+                "Meta connection needs to be reconnected.",
+        });
+    }
+};
+
+exports.verifyWebhook = (req, res) => {
+    if (
+        req.query["hub.verify_token"] !==
+        process.env.META_WEBHOOK_VERIFY_TOKEN
+    ) {
+        return res.sendStatus(403);
+    }
+
+    return res
+        .status(200)
+        .send(
+            req.query["hub.challenge"]
+        );
+};
 
 function fieldMap(fieldData = []) {
     return fieldData.reduce(
-        (
-            result,
-            field
-        ) => {
+        (result, field) => {
             const key =
-                String(
-                    field?.name || ""
-                )
+                String(field?.name || "")
                     .toLowerCase()
                     .replace(
                         /[^a-z0-9]/g,
@@ -1094,8 +765,7 @@ function fieldMap(fieldData = []) {
                     );
 
             result[key] =
-                field?.values?.[0] ||
-                "";
+                field?.values?.[0] || "";
 
             return result;
         },
@@ -1154,8 +824,7 @@ exports.receiveWebhook =
         try {
             for (
                 const entry of
-                req.body?.entry ||
-                []
+                req.body?.entry || []
             ) {
                 const pageId =
                     String(
@@ -1169,9 +838,7 @@ exports.receiveWebhook =
                 const integration =
                     await MetaIntegration.findOne({
                         pageId,
-
-                        isActive:
-                            true,
+                        isActive: true,
                     });
 
                 if (!integration) {
@@ -1185,8 +852,7 @@ exports.receiveWebhook =
 
                 for (
                     const change of
-                    entry.changes ||
-                    []
+                    entry.changes || []
                 ) {
                     const value =
                         change.value || {};
@@ -1300,14 +966,12 @@ exports.receiveWebhook =
                         });
 
                     if (existing) {
-                        let changed =
-                            false;
+                        let changed = false;
 
                         if (
                             serviceName &&
                             !String(
-                                existing.service ||
-                                    ""
+                                existing.service || ""
                             ).trim()
                         ) {
                             existing.service =
@@ -1332,8 +996,7 @@ exports.receiveWebhook =
                         if (
                             adId &&
                             !String(
-                                existing.metaAdId ||
-                                    ""
+                                existing.metaAdId || ""
                             ).trim()
                         ) {
                             existing.metaAdId =
@@ -1420,18 +1083,12 @@ exports.receiveWebhook =
                                 resolvedCampaignId,
 
                             name,
-
                             email,
-
                             phone,
 
                             source,
-
-                            stage:
-                                "New",
-
+                            stage: "New",
                             service,
-
                             landingPage,
 
                             pageUrl:
@@ -1477,10 +1134,7 @@ exports.receiveWebhook =
 exports.debugLeadgenSubscription =
     async (req, res) => {
         const userId =
-            requireUser(
-                req,
-                res
-            );
+            requireUser(req, res);
 
         if (!userId) {
             return;
@@ -1490,15 +1144,12 @@ exports.debugLeadgenSubscription =
             const integration =
                 await MetaIntegration.findOne({
                     userId,
-
-                    isActive:
-                        true,
+                    isActive: true,
                 });
 
             if (!integration) {
                 return res.status(404).json({
                     success: false,
-
                     message:
                         "Meta integration not found",
                 });
@@ -1518,16 +1169,9 @@ exports.debugLeadgenSubscription =
 
             return res.json({
                 success: true,
-
-                pageId:
-                    integration.pageId,
-
-                pageName:
-                    integration.pageName,
-
-                userId:
-                    integration.userId,
-
+                pageId: integration.pageId,
+                pageName: integration.pageName,
+                userId: integration.userId,
                 subscription,
             });
         } catch (error) {
@@ -1539,12 +1183,203 @@ exports.debugLeadgenSubscription =
 
             return res.status(500).json({
                 success: false,
-
                 message:
                     "Unable to check Meta Leadgen subscription",
-
                 error:
                     error.metaError ||
+                    error.message,
+            });
+        }
+    };
+
+exports.debugMetaPermissions =
+    async (req, res) => {
+        const userId =
+            requireUser(req, res);
+
+        if (!userId) {
+            return;
+        }
+
+        try {
+            const integration =
+                await MetaIntegration.findOne({
+                    userId,
+                    isActive: true,
+                });
+
+            if (!integration) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "Meta integration not found",
+                });
+            }
+
+            const accessToken =
+                decrypt(
+                    integration
+                        .accessTokenEncrypted
+                );
+
+            const graphVersion =
+                process.env.META_GRAPH_VERSION ||
+                process.env.META_GRAPH_API_VERSION ||
+                "v25.0";
+
+            const appId =
+                process.env.META_APP_ID;
+
+            const appSecret =
+                process.env.META_APP_SECRET;
+
+            if (
+                !appId ||
+                !appSecret
+            ) {
+                return res.status(503).json({
+                    success: false,
+                    message:
+                        "Meta App credentials are not configured.",
+                });
+            }
+
+            const appAccessToken =
+                `${appId}|${appSecret}`;
+
+            const response =
+                await axios.get(
+                    `https://graph.facebook.com/${graphVersion}/debug_token`,
+                    {
+                        params: {
+                            input_token:
+                                accessToken,
+
+                            access_token:
+                                appAccessToken,
+                        },
+
+                        timeout: 10000,
+                    }
+                );
+
+            const tokenData =
+                response.data?.data || {};
+
+            let subscription = null;
+
+            try {
+                subscription =
+                    await meta.getPageLeadgenSubscription(
+                        integration.pageId,
+                        accessToken
+                    );
+            } catch (subscriptionError) {
+                subscription = {
+                    error:
+                        subscriptionError.metaError ||
+                        subscriptionError.message,
+                };
+            }
+
+            const scopes =
+                Array.isArray(
+                    tokenData.scopes
+                )
+                    ? tokenData.scopes
+                    : [];
+
+            const requiredPermissions = [
+                "leads_retrieval",
+                "pages_manage_metadata",
+                "pages_show_list",
+                "pages_read_engagement",
+                "ads_management",
+            ];
+
+            const permissionStatus =
+                requiredPermissions.reduce(
+                    (result, permission) => {
+                        result[permission] =
+                            scopes.includes(
+                                permission
+                            );
+
+                        return result;
+                    },
+                    {}
+                );
+
+            return res.json({
+                success: true,
+
+                page: {
+                    id:
+                        integration.pageId,
+
+                    name:
+                        integration.pageName,
+                },
+
+                token: {
+                    appId:
+                        tokenData.app_id ||
+                        "",
+
+                    type:
+                        tokenData.type ||
+                        "",
+
+                    application:
+                        tokenData.application ||
+                        "",
+
+                    expiresAt:
+                        tokenData.expires_at ||
+                        null,
+
+                    dataAccessExpiresAt:
+                        tokenData.data_access_expiration_time ||
+                        null,
+
+                    isValid:
+                        Boolean(
+                            tokenData.is_valid
+                        ),
+
+                    scopes,
+                },
+
+                requiredPermissions,
+
+                permissionStatus,
+
+                missingPermissions:
+                    requiredPermissions.filter(
+                        (permission) =>
+                            !scopes.includes(
+                                permission
+                            )
+                    ),
+
+                leadgenSubscription:
+                    subscription,
+            });
+        } catch (error) {
+            console.error(
+                "META DEBUG PERMISSIONS ERROR:",
+                error.response?.data ||
+                    error.message
+            );
+
+            return res.status(500).json({
+                success: false,
+
+                message:
+                    "Unable to check Meta token permissions",
+
+                error:
+                    error.response?.data ||
                     error.message,
             });
         }

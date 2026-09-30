@@ -118,6 +118,7 @@ const SourceCard = ({
             justifyContent: "flex-end",
             gap: 8,
             marginTop: 15,
+            flexWrap: "wrap",
           }}
         >
           {actions}
@@ -184,6 +185,374 @@ const PrimaryButton = ({
   );
 };
 
+const PermissionRow = ({ name, allowed }) => {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        padding: "9px 11px",
+        borderRadius: 8,
+        background: allowed ? "#f0fdf4" : "#fef2f2",
+        border: `1px solid ${
+          allowed ? "#bbf7d0" : "#fecaca"
+        }`,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          color: "#334155",
+          fontFamily: "monospace",
+        }}
+      >
+        {name}
+      </span>
+
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: allowed ? "#15803d" : "#dc2626",
+        }}
+      >
+        {allowed ? "Granted" : "Missing"}
+      </span>
+    </div>
+  );
+};
+
+const MetaDebugPanel = ({
+  data,
+  loading,
+  onCheck,
+}) => {
+  if (!data && !loading) {
+    return null;
+  }
+
+  const permissionStatus =
+    data?.permissionStatus || {};
+
+  const requiredPermissions =
+    data?.requiredPermissions || [];
+
+  const missingPermissions =
+    data?.missingPermissions || [];
+
+  const token =
+    data?.token || {};
+
+  const subscription =
+    data?.leadgenSubscription;
+
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: 16,
+        borderRadius: 12,
+        border: "1px solid #dbe3ec",
+        background: "#f8fafc",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#111827",
+            }}
+          >
+            Meta Lead Ads Diagnostics
+          </div>
+
+          {data?.page && (
+            <div
+              style={{
+                marginTop: 3,
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              {data.page.name || "Facebook Page"}{" "}
+              {data.page.id
+                ? `• ${data.page.id}`
+                : ""}
+            </div>
+          )}
+        </div>
+
+        <OutlineButton
+          onClick={onCheck}
+          disabled={loading}
+        >
+          {loading ? "Checking..." : "Refresh"}
+        </OutlineButton>
+      </div>
+
+      {loading ? (
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 9,
+            background: "#fff",
+            color: "#64748b",
+            fontSize: 13,
+          }}
+        >
+          Checking Meta token permissions...
+        </div>
+      ) : (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(190px, 1fr))",
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 9,
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#64748b",
+                  marginBottom: 4,
+                }}
+              >
+                Token Status
+              </div>
+
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: token.isValid
+                    ? "#15803d"
+                    : "#dc2626",
+                }}
+              >
+                {token.isValid
+                  ? "Valid"
+                  : "Invalid"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 9,
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#64748b",
+                  marginBottom: 4,
+                }}
+              >
+                App ID
+              </div>
+
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#334155",
+                  wordBreak: "break-all",
+                }}
+              >
+                {token.appId || "-"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 9,
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#64748b",
+                  marginBottom: 4,
+                }}
+              >
+                Leadgen Subscription
+              </div>
+
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: subscription?.error
+                    ? "#dc2626"
+                    : "#15803d",
+                }}
+              >
+                {subscription?.error
+                  ? "Error"
+                  : "Checked"}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#111827",
+              marginBottom: 9,
+            }}
+          >
+            Required Permissions
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: 8,
+            }}
+          >
+            {requiredPermissions.map(
+              (permission) => (
+                <PermissionRow
+                  key={permission}
+                  name={permission}
+                  allowed={Boolean(
+                    permissionStatus[
+                      permission
+                    ]
+                  )}
+                />
+              )
+            )}
+          </div>
+
+          {missingPermissions.length > 0 ? (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 9,
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#b91c1c",
+                  marginBottom: 5,
+                }}
+              >
+                Missing Permissions
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#7f1d1d",
+                  lineHeight: 1.6,
+                }}
+              >
+                {missingPermissions.join(
+                  ", "
+                )}
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 9,
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                color: "#166534",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              All required permissions are present.
+            </div>
+          )}
+
+          {subscription && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 9,
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#111827",
+                  marginBottom: 7,
+                }}
+              >
+                Leadgen Subscription Response
+              </div>
+
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: "#475569",
+                  maxHeight: 220,
+                  overflow: "auto",
+                }}
+              >
+                {JSON.stringify(
+                  subscription,
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 const GoogleAccountModal = ({
   accounts,
   selectedId,
@@ -213,13 +582,15 @@ const GoogleAccountModal = ({
           overflow: "auto",
           background: "#fff",
           borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(15, 23, 42, .2)",
+          boxShadow:
+            "0 20px 60px rgba(15, 23, 42, .2)",
         }}
       >
         <div
           style={{
             padding: "18px 20px",
-            borderBottom: "1px solid #e5e7eb",
+            borderBottom:
+              "1px solid #e5e7eb",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -243,7 +614,8 @@ const GoogleAccountModal = ({
                 color: "#64748b",
               }}
             >
-              Choose the account you want to connect.
+              Choose the account you want to
+              connect.
             </div>
           </div>
 
@@ -255,10 +627,13 @@ const GoogleAccountModal = ({
               width: 32,
               height: 32,
               borderRadius: 8,
-              border: "1px solid #e5e7eb",
+              border:
+                "1px solid #e5e7eb",
               background: "#fff",
               color: "#64748b",
-              cursor: busy ? "not-allowed" : "pointer",
+              cursor: busy
+                ? "not-allowed"
+                : "pointer",
               fontSize: 18,
             }}
           >
@@ -277,7 +652,8 @@ const GoogleAccountModal = ({
                 fontSize: 13,
               }}
             >
-              No Google Ads accounts were found.
+              No Google Ads accounts were
+              found.
             </div>
           ) : (
             <div
@@ -288,7 +664,8 @@ const GoogleAccountModal = ({
               }}
             >
               {accounts.map((account) => {
-                const id = account.customerId;
+                const id =
+                  account.customerId;
 
                 return (
                   <label
@@ -299,23 +676,32 @@ const GoogleAccountModal = ({
                       gap: 12,
                       padding: 13,
                       border: `1px solid ${
-                        selectedId === id ? "#93c5fd" : "#e2e8f0"
+                        selectedId === id
+                          ? "#93c5fd"
+                          : "#e2e8f0"
                       }`,
                       borderRadius: 10,
                       background:
-                        selectedId === id ? "#eff6ff" : "#fff",
+                        selectedId === id
+                          ? "#eff6ff"
+                          : "#fff",
                       cursor: "pointer",
                     }}
                   >
                     <input
                       type="radio"
                       name="googleAdsAccount"
-                      checked={selectedId === id}
-                      onChange={() => setSelectedId(id)}
+                      checked={
+                        selectedId === id
+                      }
+                      onChange={() =>
+                        setSelectedId(id)
+                      }
                       style={{
                         width: 16,
                         height: 16,
-                        accentColor: "#2563eb",
+                        accentColor:
+                          "#2563eb",
                       }}
                     />
 
@@ -327,7 +713,8 @@ const GoogleAccountModal = ({
                           color: "#111827",
                         }}
                       >
-                        {account.customerName || "Google Ads Account"}
+                        {account.customerName ||
+                          "Google Ads Account"}
                       </div>
 
                       <div
@@ -340,19 +727,24 @@ const GoogleAccountModal = ({
                         Customer ID: {id}
                       </div>
 
-                      {(account.currencyCode || account.timeZone) && (
+                      {(account.currencyCode ||
+                        account.timeZone) && (
                         <div
                           style={{
                             marginTop: 2,
                             fontSize: 11,
-                            color: "#94a3b8",
+                            color:
+                              "#94a3b8",
                           }}
                         >
-                          {account.currencyCode || ""}
-                          {account.currencyCode && account.timeZone
+                          {account.currencyCode ||
+                            ""}
+                          {account.currencyCode &&
+                          account.timeZone
                             ? " • "
                             : ""}
-                          {account.timeZone || ""}
+                          {account.timeZone ||
+                            ""}
                         </div>
                       )}
                     </div>
@@ -370,15 +762,22 @@ const GoogleAccountModal = ({
               marginTop: 18,
             }}
           >
-            <OutlineButton onClick={onClose} disabled={busy}>
+            <OutlineButton
+              onClick={onClose}
+              disabled={busy}
+            >
               Cancel
             </OutlineButton>
 
             <PrimaryButton
               onClick={onSelect}
-              disabled={!selectedId || busy}
+              disabled={
+                !selectedId || busy
+              }
             >
-              {busy ? "Connecting..." : "Connect Account"}
+              {busy
+                ? "Connecting..."
+                : "Connect Account"}
             </PrimaryButton>
           </div>
         </div>
@@ -401,7 +800,8 @@ const MetaPageModal = ({
         position: "fixed",
         inset: 0,
         zIndex: 1100,
-        background: "rgba(15, 23, 42, 0.45)",
+        background:
+          "rgba(15, 23, 42, 0.45)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -416,13 +816,15 @@ const MetaPageModal = ({
           overflow: "auto",
           background: "#fff",
           borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(15, 23, 42, .2)",
+          boxShadow:
+            "0 20px 60px rgba(15, 23, 42, .2)",
         }}
       >
         <div
           style={{
             padding: "18px 20px",
-            borderBottom: "1px solid #e5e7eb",
+            borderBottom:
+              "1px solid #e5e7eb",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -446,7 +848,8 @@ const MetaPageModal = ({
                 color: "#64748b",
               }}
             >
-              Choose the Facebook Page you want to connect.
+              Choose the Facebook Page you
+              want to connect.
             </div>
           </div>
 
@@ -458,10 +861,13 @@ const MetaPageModal = ({
               width: 32,
               height: 32,
               borderRadius: 8,
-              border: "1px solid #e5e7eb",
+              border:
+                "1px solid #e5e7eb",
               background: "#fff",
               color: "#64748b",
-              cursor: busy ? "not-allowed" : "pointer",
+              cursor: busy
+                ? "not-allowed"
+                : "pointer",
               fontSize: 18,
             }}
           >
@@ -480,7 +886,8 @@ const MetaPageModal = ({
                 fontSize: 13,
               }}
             >
-              No Facebook Pages were found.
+              No Facebook Pages were
+              found.
             </div>
           ) : (
             <div
@@ -499,23 +906,37 @@ const MetaPageModal = ({
                     gap: 12,
                     padding: 13,
                     border: `1px solid ${
-                      selectedId === page.id ? "#93c5fd" : "#e2e8f0"
+                      selectedId ===
+                      page.id
+                        ? "#93c5fd"
+                        : "#e2e8f0"
                     }`,
                     borderRadius: 10,
                     background:
-                      selectedId === page.id ? "#eff6ff" : "#fff",
+                      selectedId ===
+                      page.id
+                        ? "#eff6ff"
+                        : "#fff",
                     cursor: "pointer",
                   }}
                 >
                   <input
                     type="radio"
                     name="metaPage"
-                    checked={selectedId === page.id}
-                    onChange={() => setSelectedId(page.id)}
+                    checked={
+                      selectedId ===
+                      page.id
+                    }
+                    onChange={() =>
+                      setSelectedId(
+                        page.id
+                      )
+                    }
                     style={{
                       width: 16,
                       height: 16,
-                      accentColor: "#2563eb",
+                      accentColor:
+                        "#2563eb",
                     }}
                   />
 
@@ -527,7 +948,8 @@ const MetaPageModal = ({
                         color: "#111827",
                       }}
                     >
-                      {page.name || "Facebook Page"}
+                      {page.name ||
+                        "Facebook Page"}
                     </div>
 
                     <div
@@ -545,10 +967,14 @@ const MetaPageModal = ({
                         style={{
                           marginTop: 2,
                           fontSize: 11,
-                          color: "#94a3b8",
+                          color:
+                            "#94a3b8",
                         }}
                       >
-                        Instagram: @{page.instagramUsername}
+                        Instagram: @
+                        {
+                          page.instagramUsername
+                        }
                       </div>
                     )}
                   </div>
@@ -565,15 +991,22 @@ const MetaPageModal = ({
               marginTop: 18,
             }}
           >
-            <OutlineButton onClick={onClose} disabled={busy}>
+            <OutlineButton
+              onClick={onClose}
+              disabled={busy}
+            >
               Cancel
             </OutlineButton>
 
             <PrimaryButton
               onClick={onSelect}
-              disabled={!selectedId || busy}
+              disabled={
+                !selectedId || busy
+              }
             >
-              {busy ? "Connecting..." : "Connect Page"}
+              {busy
+                ? "Connecting..."
+                : "Connect Page"}
             </PrimaryButton>
           </div>
         </div>
@@ -583,419 +1016,613 @@ const MetaPageModal = ({
 };
 
 export default function MetaIntegrationPanel() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [metaConnected, setMetaConnected] = useState(false);
-  const [metaPage, setMetaPage] = useState(null);
-  const [metaPages, setMetaPages] = useState([]);
-  const [showMetaPageModal, setShowMetaPageModal] = useState(false);
-  const [selectedMetaPage, setSelectedMetaPage] = useState("");
+  const [metaConnected, setMetaConnected] =
+    useState(false);
 
-  const [googleConnected, setGoogleConnected] = useState(false);
-  const [googleAccount, setGoogleAccount] = useState(null);
-  const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [metaPage, setMetaPage] =
+    useState(null);
 
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [metaPages, setMetaPages] =
+    useState([]);
 
-  const [connectingMeta, setConnectingMeta] = useState(false);
-  const [disconnectingMeta, setDisconnectingMeta] = useState(false);
+  const [
+    showMetaPageModal,
+    setShowMetaPageModal,
+  ] = useState(false);
 
-  const [googleBusy, setGoogleBusy] = useState(false);
-  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
+  const [
+    selectedMetaPage,
+    setSelectedMetaPage,
+  ] = useState("");
 
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState("");
+  const [
+    metaDebug,
+    setMetaDebug,
+  ] = useState(null);
 
-  const loadMetaStatus = async () => {
-    try {
-      const data = await api("/api/integrations/meta/status");
+  const [
+    metaDebugLoading,
+    setMetaDebugLoading,
+  ] = useState(false);
 
-      setMetaConnected(Boolean(data.connected));
+  const [
+    googleConnected,
+    setGoogleConnected,
+  ] = useState(false);
 
-      const integration = data.integration || null;
+  const [
+    googleAccount,
+    setGoogleAccount,
+  ] = useState(null);
 
-      setMetaPage(
-        integration
-          ? {
-              name: integration.pageName || "",
-              pageName: integration.pageName || "",
-              pageId: integration.pageId || "",
-              instagramUsername:
-                integration.instagramUsername || "",
-              instagramName: integration.instagramName || "",
+  const [
+    googleAccounts,
+    setGoogleAccounts,
+  ] = useState([]);
+
+  const [message, setMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [
+    connectingMeta,
+    setConnectingMeta,
+  ] = useState(false);
+
+  const [
+    disconnectingMeta,
+    setDisconnectingMeta,
+  ] = useState(false);
+
+  const [googleBusy, setGoogleBusy] =
+    useState(false);
+
+  const [
+    googleDisconnecting,
+    setGoogleDisconnecting,
+  ] = useState(false);
+
+  const [
+    showGoogleModal,
+    setShowGoogleModal,
+  ] = useState(false);
+
+  const [
+    selectedGoogleAccount,
+    setSelectedGoogleAccount,
+  ] = useState("");
+
+  const loadMetaStatus =
+    async () => {
+      try {
+        const data =
+          await api(
+            "/api/integrations/meta/status"
+          );
+
+        setMetaConnected(
+          Boolean(data.connected)
+        );
+
+        const integration =
+          data.integration || null;
+
+        setMetaPage(
+          integration
+            ? {
+                name:
+                  integration.pageName ||
+                  "",
+                pageName:
+                  integration.pageName ||
+                  "",
+                pageId:
+                  integration.pageId ||
+                  "",
+                instagramUsername:
+                  integration.instagramUsername ||
+                  "",
+                instagramName:
+                  integration.instagramName ||
+                  "",
+              }
+            : null
+        );
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+  const checkMetaPermissions =
+    async () => {
+      setMetaDebugLoading(true);
+      setError("");
+
+      try {
+        const data =
+          await api(
+            "/api/integrations/meta/debug/permissions"
+          );
+
+        setMetaDebug(data);
+      } catch (err) {
+        setMetaDebug(null);
+        setError(err.message);
+      } finally {
+        setMetaDebugLoading(false);
+      }
+    };
+
+  const loadMetaPages =
+    async () => {
+      try {
+        const data =
+          await api(
+            "/api/integrations/meta/pages"
+          );
+
+        const pages =
+          data.pages || [];
+
+        setMetaPages(pages);
+
+        if (pages.length === 1) {
+          setSelectedMetaPage(
+            pages[0].id
+          );
+        } else {
+          setSelectedMetaPage("");
+        }
+
+        setShowMetaPageModal(true);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+  const loadGoogleStatus =
+    async () => {
+      try {
+        const data =
+          await api(
+            "/api/integrations/google/accounts"
+          );
+
+        setGoogleConnected(
+          Boolean(data.connected)
+        );
+
+        setGoogleAccount(
+          data.account ||
+            data.selectedAccount ||
+            null
+        );
+
+        setGoogleAccounts(
+          data.accounts ||
+            data.availableAccounts ||
+            []
+        );
+      } catch (err) {
+        setGoogleConnected(false);
+        setGoogleAccount(null);
+        setGoogleAccounts([]);
+      }
+    };
+
+  const loadStatus =
+    async () => {
+      setLoading(true);
+      setError("");
+
+      await Promise.all([
+        loadMetaStatus(),
+        loadGoogleStatus(),
+      ]);
+
+      setLoading(false);
+    };
+
+  const selectMetaPage =
+    async () => {
+      if (!selectedMetaPage) {
+        return;
+      }
+
+      setConnectingMeta(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const data =
+          await api(
+            "/api/integrations/meta/select-page",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                pageId:
+                  selectedMetaPage,
+              }),
             }
-          : null
-      );
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+          );
 
-  const loadMetaPages = async () => {
-    try {
-      const data = await api("/api/integrations/meta/pages");
+        setMetaConnected(true);
 
-      const pages = data.pages || [];
+        const integration =
+          data.integration ||
+          null;
 
-      setMetaPages(pages);
+        setMetaPage(
+          integration
+            ? {
+                name:
+                  integration.pageName ||
+                  "",
+                pageName:
+                  integration.pageName ||
+                  "",
+                pageId:
+                  integration.pageId ||
+                  "",
+                instagramUsername:
+                  integration.instagramUsername ||
+                  "",
+                instagramName:
+                  integration.instagramName ||
+                  "",
+              }
+            : null
+        );
 
-      if (pages.length === 1) {
-        setSelectedMetaPage(pages[0].id);
-      } else {
+        setShowMetaPageModal(
+          false
+        );
+
+        setMessage(
+          "Facebook Page connected successfully."
+        );
+
+        setMetaDebug(null);
+
+        await loadMetaStatus();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setConnectingMeta(false);
+      }
+    };
+
+  const connectMeta =
+    async () => {
+      setConnectingMeta(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const data =
+          await api(
+            "/api/integrations/meta/connect",
+            {
+              headers: {
+                Accept:
+                  "application/json",
+              },
+            }
+          );
+
+        if (
+          !data.authorizationUrl
+        ) {
+          throw new Error(
+            "Meta authorization URL was not returned."
+          );
+        }
+
+        window.location.assign(
+          data.authorizationUrl
+        );
+      } catch (err) {
+        setError(err.message);
+        setConnectingMeta(false);
+      }
+    };
+
+  const disconnectMeta =
+    async () => {
+      setDisconnectingMeta(true);
+      setError("");
+      setMessage("");
+      setMetaDebug(null);
+
+      try {
+        await api(
+          "/api/integrations/meta/disconnect",
+          {
+            method: "POST",
+          }
+        );
+
+        setMetaConnected(false);
+        setMetaPage(null);
+        setMetaPages([]);
         setSelectedMetaPage("");
+        setShowMetaPageModal(false);
+
+        setMessage(
+          "Meta disconnected successfully."
+        );
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setDisconnectingMeta(
+          false
+        );
       }
+    };
 
-      setShowMetaPageModal(true);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  const connectGoogleAds =
+    async () => {
+      setGoogleBusy(true);
+      setError("");
+      setMessage("");
 
-  const loadGoogleStatus = async () => {
-    try {
-      const data = await api(
-        "/api/integrations/google/accounts"
-      );
-
-      setGoogleConnected(Boolean(data.connected));
-
-      setGoogleAccount(
-        data.account ||
-          data.selectedAccount ||
-          null
-      );
-
-      setGoogleAccounts(
-        data.accounts ||
-          data.availableAccounts ||
-          []
-      );
-    } catch (err) {
-      setGoogleConnected(false);
-      setGoogleAccount(null);
-      setGoogleAccounts([]);
-    }
-  };
-
-  const loadStatus = async () => {
-    setLoading(true);
-    setError("");
-
-    await Promise.all([
-      loadMetaStatus(),
-      loadGoogleStatus(),
-    ]);
-
-    setLoading(false);
-  };
-
-  const selectMetaPage = async () => {
-    if (!selectedMetaPage) {
-      return;
-    }
-
-    setConnectingMeta(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const data = await api(
-        "/api/integrations/meta/select-page",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            pageId: selectedMetaPage,
-          }),
-        }
-      );
-
-      setMetaConnected(true);
-
-      const integration = data.integration || null;
-
-      setMetaPage(
-        integration
-          ? {
-              name: integration.pageName || "",
-              pageName: integration.pageName || "",
-              pageId: integration.pageId || "",
-              instagramUsername:
-                integration.instagramUsername || "",
-              instagramName: integration.instagramName || "",
+      try {
+        const data =
+          await api(
+            "/api/integrations/google/connect",
+            {
+              headers: {
+                Accept:
+                  "application/json",
+              },
             }
-          : null
-      );
+          );
 
-      setShowMetaPageModal(false);
-
-      setMessage(
-        "Facebook Page connected successfully."
-      );
-
-      await loadMetaStatus();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setConnectingMeta(false);
-    }
-  };
-
-  const connectMeta = async () => {
-    setConnectingMeta(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const data = await api(
-        "/api/integrations/meta/connect",
-        {
-          headers: {
-            Accept: "application/json",
-          },
+        if (
+          !data.authorizationUrl
+        ) {
+          throw new Error(
+            "Google authorization URL was not returned."
+          );
         }
-      );
 
-      if (!data.authorizationUrl) {
-        throw new Error(
-          "Meta authorization URL was not returned."
+        window.location.assign(
+          data.authorizationUrl
         );
+      } catch (err) {
+        setError(err.message);
+        setGoogleBusy(false);
+      }
+    };
+
+  const openGoogleAccountSelector =
+    async () => {
+      setGoogleBusy(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const data =
+          await api(
+            "/api/integrations/google/accounts"
+          );
+
+        const accounts =
+          data.accounts ||
+          data.availableAccounts ||
+          [];
+
+        setGoogleAccounts(
+          accounts
+        );
+
+        setGoogleAccount(
+          data.account ||
+            data.selectedAccount ||
+            null
+        );
+
+        const currentId =
+          data.account?.customerId ||
+          data.selectedAccount
+            ?.customerId ||
+          "";
+
+        setSelectedGoogleAccount(
+          currentId
+        );
+
+        setShowGoogleModal(true);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setGoogleBusy(false);
+      }
+    };
+
+  const selectGoogleAccount =
+    async () => {
+      if (!selectedGoogleAccount) {
+        return;
       }
 
-      window.location.assign(data.authorizationUrl);
-    } catch (err) {
-      setError(err.message);
-      setConnectingMeta(false);
-    }
-  };
+      setGoogleBusy(true);
+      setError("");
+      setMessage("");
 
-  const disconnectMeta = async () => {
-    setDisconnectingMeta(true);
-    setError("");
-    setMessage("");
+      try {
+        const data =
+          await api(
+            "/api/integrations/google/select-account",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                customerId:
+                  selectedGoogleAccount,
+              }),
+            }
+          );
 
-    try {
-      await api(
-        "/api/integrations/meta/disconnect",
-        {
-          method: "POST",
-        }
+        setGoogleConnected(true);
+
+        setGoogleAccount(
+          data.account ||
+            data.selectedAccount ||
+            googleAccounts.find(
+              (account) =>
+                account.customerId ===
+                selectedGoogleAccount
+            ) ||
+            null
+        );
+
+        setShowGoogleModal(
+          false
+        );
+
+        setMessage(
+          "Google Ads account connected successfully."
+        );
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setGoogleBusy(false);
+      }
+    };
+
+  const disconnectGoogleAds =
+    async () => {
+      setGoogleDisconnecting(
+        true
       );
 
-      setMetaConnected(false);
-      setMetaPage(null);
-      setMetaPages([]);
-      setSelectedMetaPage("");
-      setShowMetaPageModal(false);
+      setError("");
+      setMessage("");
 
-      setMessage(
-        "Meta disconnected successfully."
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDisconnectingMeta(false);
-    }
-  };
+      try {
+        await api(
+          "/api/integrations/google/disconnect",
+          {
+            method: "POST",
+          }
+        );
 
-  const connectGoogleAds = async () => {
-    setGoogleBusy(true);
-    setError("");
-    setMessage("");
+        setGoogleConnected(false);
+        setGoogleAccount(null);
+        setSelectedGoogleAccount("");
 
-    try {
-      const data = await api(
-        "/api/integrations/google/connect",
-        {
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!data.authorizationUrl) {
-        throw new Error(
-          "Google authorization URL was not returned."
+        setMessage(
+          "Google Ads disconnected successfully."
+        );
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setGoogleDisconnecting(
+          false
         );
       }
-
-      window.location.assign(data.authorizationUrl);
-    } catch (err) {
-      setError(err.message);
-      setGoogleBusy(false);
-    }
-  };
-
-  const openGoogleAccountSelector = async () => {
-    setGoogleBusy(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const data = await api(
-        "/api/integrations/google/accounts"
-      );
-
-      const accounts =
-        data.accounts ||
-        data.availableAccounts ||
-        [];
-
-      setGoogleAccounts(accounts);
-
-      setGoogleAccount(
-        data.account ||
-          data.selectedAccount ||
-          null
-      );
-
-      const currentId =
-        data.account?.customerId ||
-        data.selectedAccount?.customerId ||
-        "";
-
-      setSelectedGoogleAccount(currentId);
-      setShowGoogleModal(true);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGoogleBusy(false);
-    }
-  };
-
-  const selectGoogleAccount = async () => {
-    if (!selectedGoogleAccount) {
-      return;
-    }
-
-    setGoogleBusy(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const data = await api(
-        "/api/integrations/google/select-account",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            customerId: selectedGoogleAccount,
-          }),
-        }
-      );
-
-      setGoogleConnected(true);
-
-      setGoogleAccount(
-        data.account ||
-          data.selectedAccount ||
-          googleAccounts.find(
-            (account) =>
-              account.customerId ===
-              selectedGoogleAccount
-          ) ||
-          null
-      );
-
-      setShowGoogleModal(false);
-
-      setMessage(
-        "Google Ads account connected successfully."
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGoogleBusy(false);
-    }
-  };
-
-  const disconnectGoogleAds = async () => {
-    setGoogleDisconnecting(true);
-    setError("");
-    setMessage("");
-
-    try {
-      await api(
-        "/api/integrations/google/disconnect",
-        {
-          method: "POST",
-        }
-      );
-
-      setGoogleConnected(false);
-      setGoogleAccount(null);
-      setSelectedGoogleAccount("");
-
-      setMessage(
-        "Google Ads disconnected successfully."
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGoogleDisconnecting(false);
-    }
-  };
+    };
 
   useEffect(() => {
     loadStatus();
 
-    const params = new URLSearchParams(
-      window.location.search
-    );
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
 
-    const googleState = params.get("google");
-    const metaState = params.get("meta");
+    const googleState =
+      params.get("google");
+
+    const metaState =
+      params.get("meta");
+
     const metaSelectPage =
-      params.get("metaSelectPage");
+      params.get(
+        "metaSelectPage"
+      );
 
-    if (googleState === "connected") {
+    if (
+      googleState ===
+      "connected"
+    ) {
       setMessage(
         "Google Ads connected successfully."
       );
     }
 
-    if (googleState === "select_account") {
+    if (
+      googleState ===
+      "select_account"
+    ) {
       setMessage(
         "Select the Google Ads account you want to connect."
       );
     }
 
-    if (googleState === "no_accounts") {
+    if (
+      googleState ===
+      "no_accounts"
+    ) {
       setError(
         "No accessible Google Ads accounts were found."
       );
     }
 
-    if (googleState === "cancelled") {
+    if (
+      googleState ===
+      "cancelled"
+    ) {
       setMessage(
         "Google Ads connection was cancelled."
       );
     }
 
-    if (googleState === "error") {
+    if (
+      googleState ===
+      "error"
+    ) {
       setError(
         "Google Ads connection failed."
       );
     }
 
-    if (metaState === "connected") {
+    if (
+      metaState ===
+      "connected"
+    ) {
       setMessage(
         "Meta connected successfully."
       );
     }
 
-    if (metaState === "cancelled") {
+    if (
+      metaState ===
+      "cancelled"
+    ) {
       setMessage(
         "Meta connection was cancelled."
       );
     }
 
-    if (metaState === "error") {
+    if (
+      metaState ===
+      "error"
+    ) {
       setError(
         "Meta connection failed."
       );
     }
 
-    if (metaSelectPage === "true") {
+    if (
+      metaSelectPage ===
+      "true"
+    ) {
       loadMetaPages();
     }
 
@@ -1004,16 +1631,26 @@ export default function MetaIntegrationPanel() {
       metaState ||
       metaSelectPage
     ) {
-      const url = new URL(
-        window.location.href
+      const url =
+        new URL(
+          window.location.href
+        );
+
+      url.searchParams.delete(
+        "google"
       );
 
-      url.searchParams.delete("google");
-      url.searchParams.delete("meta");
+      url.searchParams.delete(
+        "meta"
+      );
+
       url.searchParams.delete(
         "metaSelectPage"
       );
-      url.searchParams.delete("message");
+
+      url.searchParams.delete(
+        "message"
+      );
 
       window.history.replaceState(
         {},
@@ -1049,10 +1686,12 @@ export default function MetaIntegrationPanel() {
           <div
             style={{
               marginBottom: 14,
-              padding: "10px 13px",
+              padding:
+                "10px 13px",
               borderRadius: 9,
               background: "#eff6ff",
-              border: "1px solid #bfdbfe",
+              border:
+                "1px solid #bfdbfe",
               color: "#1d4ed8",
               fontSize: 13,
             }}
@@ -1065,10 +1704,12 @@ export default function MetaIntegrationPanel() {
           <div
             style={{
               marginBottom: 14,
-              padding: "10px 13px",
+              padding:
+                "10px 13px",
               borderRadius: 9,
               background: "#fef2f2",
-              border: "1px solid #fecaca",
+              border:
+                "1px solid #fecaca",
               color: "#b91c1c",
               fontSize: 13,
             }}
@@ -1077,14 +1718,20 @@ export default function MetaIntegrationPanel() {
           </div>
         )}
 
-        <div style={{ marginBottom: 18 }}>
+        <div
+          style={{
+            marginBottom: 18,
+          }}
+        >
           <div
             style={{
               color: "#2563eb",
               fontSize: 12,
               fontWeight: 700,
-              letterSpacing: "1px",
-              textTransform: "uppercase",
+              letterSpacing:
+                "1px",
+              textTransform:
+                "uppercase",
               marginBottom: 5,
             }}
           >
@@ -1105,13 +1752,15 @@ export default function MetaIntegrationPanel() {
 
           <p
             style={{
-              margin: "6px 0 0",
+              margin:
+                "6px 0 0",
               color: "#64748b",
               fontSize: 13,
               lineHeight: 1.5,
             }}
           >
-            Connect your advertising platforms to receive leads
+            Connect your advertising
+            platforms to receive leads
             directly in SaleVitals.
           </p>
         </div>
@@ -1138,7 +1787,8 @@ export default function MetaIntegrationPanel() {
                 : "Not connected"
             }
             description={
-              metaConnected && metaPage
+              metaConnected &&
+              metaPage
                 ? `Page: ${
                     metaPage.name ||
                     metaPage.pageName ||
@@ -1148,19 +1798,29 @@ export default function MetaIntegrationPanel() {
             }
             actions={
               metaConnected ? (
-                <OutlineButton
-                  onClick={disconnectMeta}
-                  disabled={disconnectingMeta}
-                  danger
-                >
-                  {disconnectingMeta
-                    ? "Disconnecting..."
-                    : "Disconnect"}
-                </OutlineButton>
+                <>
+                
+
+                  <OutlineButton
+                    onClick={
+                      disconnectMeta
+                    }
+                    disabled={
+                      disconnectingMeta
+                    }
+                    danger
+                  >
+                    {disconnectingMeta
+                      ? "Disconnecting..."
+                      : "Disconnect"}
+                  </OutlineButton>
+                </>
               ) : (
                 <PrimaryButton
                   onClick={connectMeta}
-                  disabled={connectingMeta}
+                  disabled={
+                    connectingMeta
+                  }
                 >
                   {connectingMeta
                     ? "Connecting..."
@@ -1179,9 +1839,11 @@ export default function MetaIntegrationPanel() {
             }
             description={
               metaConnected
-                ? metaPage?.instagramUsername
+                ? metaPage
+                    ?.instagramUsername
                   ? `@${metaPage.instagramUsername}`
-                  : metaPage?.instagramName ||
+                  : metaPage
+                      ?.instagramName ||
                     "Instagram connected through Facebook Page."
                 : "Connect Instagram through your Facebook Page."
             }
@@ -1195,7 +1857,8 @@ export default function MetaIntegrationPanel() {
                 : "Not connected"
             }
             description={
-              googleConnected && googleAccount
+              googleConnected &&
+              googleAccount
                 ? googleAccount.customerName ||
                   `Customer ID: ${googleAccount.customerId}`
                 : "Connect your Google Ads account to receive leads in SaleVitals."
@@ -1204,15 +1867,23 @@ export default function MetaIntegrationPanel() {
               googleConnected ? (
                 <>
                   <OutlineButton
-                    onClick={openGoogleAccountSelector}
-                    disabled={googleBusy}
+                    onClick={
+                      openGoogleAccountSelector
+                    }
+                    disabled={
+                      googleBusy
+                    }
                   >
                     Change
                   </OutlineButton>
 
                   <OutlineButton
-                    onClick={disconnectGoogleAds}
-                    disabled={googleDisconnecting}
+                    onClick={
+                      disconnectGoogleAds
+                    }
+                    disabled={
+                      googleDisconnecting
+                    }
                     danger
                   >
                     {googleDisconnecting
@@ -1222,8 +1893,12 @@ export default function MetaIntegrationPanel() {
                 </>
               ) : (
                 <PrimaryButton
-                  onClick={connectGoogleAds}
-                  disabled={googleBusy}
+                  onClick={
+                    connectGoogleAds
+                  }
+                  disabled={
+                    googleBusy
+                  }
                 >
                   {googleBusy
                     ? "Connecting..."
@@ -1232,17 +1907,22 @@ export default function MetaIntegrationPanel() {
               )
             }
           >
-            {googleConnected && googleAccount && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  color: "#64748b",
-                }}
-              >
-                Customer ID: {googleAccount.customerId}
-              </div>
-            )}
+            {googleConnected &&
+              googleAccount && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color:
+                      "#64748b",
+                  }}
+                >
+                  Customer ID:{" "}
+                  {
+                    googleAccount.customerId
+                  }
+                </div>
+              )}
           </SourceCard>
 
           <SourceCard
@@ -1252,30 +1932,62 @@ export default function MetaIntegrationPanel() {
             disabled
           />
         </div>
+
+        {metaConnected && (
+          <MetaDebugPanel
+            data={metaDebug}
+            loading={
+              metaDebugLoading
+            }
+            onCheck={
+              checkMetaPermissions
+            }
+          />
+        )}
       </div>
 
       {showMetaPageModal && (
         <MetaPageModal
           pages={metaPages}
-          selectedId={selectedMetaPage}
-          setSelectedId={setSelectedMetaPage}
-          onClose={() =>
-            setShowMetaPageModal(false)
+          selectedId={
+            selectedMetaPage
           }
-          onSelect={selectMetaPage}
-          busy={connectingMeta}
+          setSelectedId={
+            setSelectedMetaPage
+          }
+          onClose={() =>
+            setShowMetaPageModal(
+              false
+            )
+          }
+          onSelect={
+            selectMetaPage
+          }
+          busy={
+            connectingMeta
+          }
         />
       )}
 
       {showGoogleModal && (
         <GoogleAccountModal
-          accounts={googleAccounts}
-          selectedId={selectedGoogleAccount}
-          setSelectedId={setSelectedGoogleAccount}
-          onClose={() =>
-            setShowGoogleModal(false)
+          accounts={
+            googleAccounts
           }
-          onSelect={selectGoogleAccount}
+          selectedId={
+            selectedGoogleAccount
+          }
+          setSelectedId={
+            setSelectedGoogleAccount
+          }
+          onClose={() =>
+            setShowGoogleModal(
+              false
+            )
+          }
+          onSelect={
+            selectGoogleAccount
+          }
           busy={googleBusy}
         />
       )}
