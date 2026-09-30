@@ -1,4 +1,3 @@
-const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
@@ -6,74 +5,109 @@ const FormData = require("form-data");
 const Invoice = require("../models/Invoice");
 const User = require("../models/User");
 
-function getUserId(req) {
-    const authorization = req.headers.authorization || "";
+const {
+    getWorkspaceContext,
+    hasPermission,
+} = require("../utils/workspace");
 
-    if (!authorization.startsWith("Bearer ")) {
-        return null;
+const getContext = async (req) => {
+    return await getWorkspaceContext(req);
+};
+
+const requirePermission = (
+    context,
+    permission,
+    res
+) => {
+    if (!context) {
+        res.status(401).json({
+            success: false,
+            message: "Authentication required",
+        });
+
+        return false;
     }
 
-    try {
-        const decoded = jwt.verify(
-            authorization.slice(7),
-            process.env.JWT_SECRET
-        );
+    if (!hasPermission(context, permission)) {
+        res.status(403).json({
+            success: false,
+            message:
+                "You do not have permission to perform this action.",
+            permission,
+        });
 
-        return (
-            decoded.id ||
-            decoded._id ||
-            decoded.userId ||
-            null
-        );
-    } catch (error) {
-        console.error("INVOICE JWT ERROR:", error.message);
-        return null;
+        return false;
     }
-}
 
-exports.getInvoices = async (req, res) => {
+    return true;
+};
+
+exports.getInvoices = async (
+    req,
+    res
+) => {
     try {
-        const userId = getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "invoices.view",
+                res
+            )
+        ) {
+            return;
         }
 
-        const invoices = await Invoice.find({
-            userId,
-        })
-            .sort({
-                createdAt: -1,
+        const invoices =
+            await Invoice.find({
+                userId:
+                    context.workspaceOwnerId,
             })
-            .lean();
+                .sort({
+                    createdAt: -1,
+                })
+                .lean();
 
         return res.json({
             success: true,
             invoices,
         });
     } catch (error) {
-        console.error("GET INVOICES ERROR:", error);
+        console.error(
+            "GET INVOICES ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Unable to load invoices.",
+            message:
+                "Unable to load invoices.",
         });
     }
 };
 
-exports.createInvoice = async (req, res) => {
+exports.createInvoice = async (
+    req,
+    res
+) => {
     try {
-        const userId = getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "invoices.create",
+                res
+            )
+        ) {
+            return;
         }
+
+        const userId =
+            context.workspaceOwnerId;
 
         const {
             invoiceNumber,
@@ -92,100 +126,135 @@ exports.createInvoice = async (req, res) => {
             status,
         } = req.body;
 
-        if (!customerName || !String(customerName).trim()) {
+        if (
+            !customerName ||
+            !String(customerName).trim()
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Customer name is required.",
+                message:
+                    "Customer name is required.",
             });
         }
 
-        if (!Array.isArray(items) || items.length === 0) {
+        if (
+            !Array.isArray(items) ||
+            items.length === 0
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "At least one invoice item is required.",
+                message:
+                    "At least one invoice item is required.",
             });
         }
 
-        const invoice = await Invoice.create({
-            userId,
+        const invoice =
+            await Invoice.create({
+                userId,
 
-            invoiceNumber:
-                invoiceNumber ||
-                `INV-${Date.now()}`,
+                invoiceNumber:
+                    invoiceNumber ||
+                    `INV-${Date.now()}`,
 
-            invoiceDate:
-                invoiceDate
-                    ? new Date(invoiceDate)
-                    : new Date(),
+                invoiceDate:
+                    invoiceDate
+                        ? new Date(invoiceDate)
+                        : new Date(),
 
-            customerId:
-                customerId || "",
+                customerId:
+                    customerId || "",
 
-            customerName:
-                String(customerName).trim(),
+                customerName:
+                    String(
+                        customerName
+                    ).trim(),
 
-            customerEmail:
-                customerEmail || "",
+                customerEmail:
+                    customerEmail || "",
 
-            customerPhone:
-                customerPhone || "",
+                customerPhone:
+                    customerPhone || "",
 
-            customerAddress:
-                customerAddress || "",
+                customerAddress:
+                    customerAddress || "",
 
-            notes:
-                notes || "",
+                notes:
+                    notes || "",
 
-            billedBy:
-                billedBy || {},
+                billedBy:
+                    billedBy || {},
 
-            items: items.map((item) => ({
-                serviceId:
-                    item.serviceId || "",
+                items:
+                    items.map(
+                        (item) => ({
+                            serviceId:
+                                item.serviceId ||
+                                "",
 
-                serviceName:
-                    item.serviceName ||
-                    "Service",
+                            serviceName:
+                                item.serviceName ||
+                                "Service",
 
-                quantity:
-                    Number(item.quantity) || 1,
+                            quantity:
+                                Number(
+                                    item.quantity
+                                ) || 1,
 
-                cost:
-                    Number(item.cost) || 0,
+                            cost:
+                                Number(
+                                    item.cost
+                                ) || 0,
 
-                gst:
-                    Number(item.gst) || 0,
+                            gst:
+                                Number(
+                                    item.gst
+                                ) || 0,
 
-                baseAmount:
-                    Number(item.baseAmount) || 0,
+                            baseAmount:
+                                Number(
+                                    item.baseAmount
+                                ) || 0,
+
+                            gstAmount:
+                                Number(
+                                    item.gstAmount
+                                ) || 0,
+
+                            total:
+                                Number(
+                                    item.total
+                                ) || 0,
+                        })
+                    ),
+
+                subtotal:
+                    Number(
+                        subtotal
+                    ) || 0,
 
                 gstAmount:
-                    Number(item.gstAmount) || 0,
+                    Number(
+                        gstAmount
+                    ) || 0,
 
                 total:
-                    Number(item.total) || 0,
-            })),
+                    Number(total) || 0,
 
-            subtotal:
-                Number(subtotal) || 0,
-
-            gstAmount:
-                Number(gstAmount) || 0,
-
-            total:
-                Number(total) || 0,
-
-            status:
-                status || "Draft",
-        });
+                status:
+                    status || "Draft",
+            });
 
         return res.status(201).json({
             success: true,
-            message: "Invoice created successfully.",
+            message:
+                "Invoice created successfully.",
             invoice,
         });
     } catch (error) {
-        console.error("CREATE INVOICE ERROR:", error);
+        console.error(
+            "CREATE INVOICE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
@@ -196,408 +265,530 @@ exports.createInvoice = async (req, res) => {
     }
 };
 
-exports.deleteInvoice = async (req, res) => {
+exports.deleteInvoice = async (
+    req,
+    res
+) => {
     try {
-        const userId = getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "invoices.delete",
+                res
+            )
+        ) {
+            return;
         }
 
-        const invoiceId = req.params.invoiceId;
+        const invoiceId =
+            req.params.invoiceId;
 
-        const invoice = await Invoice.findOne({
-            _id: invoiceId,
-            userId,
-        });
+        const invoice =
+            await Invoice.findOne({
+                _id: invoiceId,
+                userId:
+                    context.workspaceOwnerId,
+            });
 
         if (!invoice) {
             return res.status(404).json({
                 success: false,
-                message: "Invoice not found.",
+                message:
+                    "Invoice not found.",
             });
         }
 
         await Invoice.deleteOne({
             _id: invoiceId,
-            userId,
+            userId:
+                context.workspaceOwnerId,
         });
 
         return res.json({
             success: true,
-            message: "Invoice deleted successfully.",
+            message:
+                "Invoice deleted successfully.",
         });
     } catch (error) {
-        console.error("DELETE INVOICE ERROR:", error);
+        console.error(
+            "DELETE INVOICE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Unable to delete invoice.",
+            message:
+                "Unable to delete invoice.",
         });
     }
 };
 
-function generateInvoicePDF(invoice, user) {
-    return new Promise((resolve, reject) => {
-        try {
-            const doc = new PDFDocument({
-                size: "A4",
-                margin: 45,
-            });
+function generateInvoicePDF(
+    invoice,
+    user
+) {
+    return new Promise(
+        (resolve, reject) => {
+            try {
+                const doc =
+                    new PDFDocument({
+                        size: "A4",
+                        margin: 45,
+                    });
 
-            const chunks = [];
+                const chunks = [];
 
-            doc.on("data", (chunk) => {
-                chunks.push(chunk);
-            });
+                doc.on(
+                    "data",
+                    (chunk) => {
+                        chunks.push(chunk);
+                    }
+                );
 
-            doc.on("end", () => {
-                resolve(Buffer.concat(chunks));
-            });
+                doc.on(
+                    "end",
+                    () => {
+                        resolve(
+                            Buffer.concat(
+                                chunks
+                            )
+                        );
+                    }
+                );
 
-            doc.on("error", reject);
+                doc.on(
+                    "error",
+                    reject
+                );
 
-            const businessName =
-                invoice.billedBy?.displayName ||
-                invoice.billedBy?.businessName ||
-                user?.displayName ||
-                user?.clinicName ||
-                user?.businessName ||
-                user?.name ||
-                "SaleVitals";
+                const businessName =
+                    invoice.billedBy
+                        ?.displayName ||
+                    invoice.billedBy
+                        ?.businessName ||
+                    user?.displayName ||
+                    user?.clinicName ||
+                    user?.businessName ||
+                    user?.name ||
+                    "SaleVitals";
 
-            const businessPhone =
-                invoice.billedBy?.phone ||
-                user?.phone ||
-                "";
+                const businessPhone =
+                    invoice.billedBy
+                        ?.phone ||
+                    user?.phone ||
+                    "";
 
-            const businessEmail =
-                invoice.billedBy?.email ||
-                user?.email ||
-                "";
+                const businessEmail =
+                    invoice.billedBy
+                        ?.email ||
+                    user?.email ||
+                    "";
 
-            const businessAddress =
-                invoice.billedBy?.address ||
-                user?.address ||
-                "";
+                const businessAddress =
+                    invoice.billedBy
+                        ?.address ||
+                    user?.address ||
+                    "";
 
-            const gstin =
-                invoice.billedBy?.gstin ||
-                user?.gstin ||
-                "";
+                const gstin =
+                    invoice.billedBy
+                        ?.gstin ||
+                    user?.gstin ||
+                    "";
 
-            const money = (value) => {
-                return `₹${Number(
-                    value || 0
-                ).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                })}`;
-            };
-
-            const customerName =
-                invoice.customerName ||
-                "Customer";
-
-            const invoiceNumber =
-                invoice.invoiceNumber ||
-                "";
-
-            const invoiceDate =
-                invoice.invoiceDate
-                    ? new Date(
-                        invoice.invoiceDate
-                    ).toLocaleDateString(
+                const money = (
+                    value
+                ) => {
+                    return `₹${Number(
+                        value || 0
+                    ).toLocaleString(
                         "en-IN",
                         {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                         }
-                    )
-                    : "-";
+                    )}`;
+                };
 
-            doc
-                .fontSize(22)
-                .font("Helvetica-Bold")
-                .fillColor("#173766")
-                .text(businessName);
+                const customerName =
+                    invoice.customerName ||
+                    "Customer";
 
-            doc
-                .fontSize(9)
-                .font("Helvetica")
-                .fillColor("#666666")
-                .text("TAX INVOICE");
+                const invoiceNumber =
+                    invoice.invoiceNumber ||
+                    "";
 
-            if (businessPhone) {
-                doc.text(`Phone: ${businessPhone}`);
-            }
-
-            if (businessEmail) {
-                doc.text(`Email: ${businessEmail}`);
-            }
-
-            if (businessAddress) {
-                doc.text(businessAddress);
-            }
-
-            if (gstin) {
-                doc.text(`GSTIN: ${gstin}`);
-            }
-
-            doc.moveDown();
-
-            doc
-                .fillColor("#000000")
-                .fontSize(10)
-                .font("Helvetica-Bold")
-                .text(
-                    `Invoice Number: ${invoiceNumber}`
-                );
-
-            doc
-                .font("Helvetica")
-                .text(
-                    `Invoice Date: ${invoiceDate}`
-                );
-
-            doc.moveDown();
-
-            doc
-                .fontSize(11)
-                .font("Helvetica-Bold")
-                .text("Bill To");
-
-            doc
-                .fontSize(10)
-                .font("Helvetica")
-                .text(customerName);
-
-            if (invoice.customerPhone) {
-                doc.text(
-                    `Phone: ${invoice.customerPhone}`
-                );
-            }
-
-            if (invoice.customerEmail) {
-                doc.text(
-                    `Email: ${invoice.customerEmail}`
-                );
-            }
-
-            if (invoice.customerAddress) {
-                doc.text(
-                    invoice.customerAddress
-                );
-            }
-
-            doc.moveDown();
-
-            let y = doc.y;
-
-            doc
-                .rect(
-                    45,
-                    y,
-                    502,
-                    28
-                )
-                .fill("#173766");
-
-            doc
-                .fillColor("#ffffff")
-                .fontSize(9)
-                .font("Helvetica-Bold");
-
-            doc.text(
-                "Service",
-                55,
-                y + 9
-            );
-
-            doc.text(
-                "Qty",
-                330,
-                y + 9
-            );
-
-            doc.text(
-                "GST",
-                385,
-                y + 9
-            );
-
-            doc.text(
-                "Amount",
-                455,
-                y + 9
-            );
-
-            y += 38;
-
-            const items =
-                Array.isArray(invoice.items)
-                    ? invoice.items
-                    : [];
-
-            items.forEach((item) => {
-                const serviceName =
-                    item.serviceName ||
-                    "Service";
-
-                const quantity =
-                    Number(item.quantity) || 1;
-
-                const gst =
-                    Number(item.gst) || 0;
-
-                const amount =
-                    Number(item.total) || 0;
+                const invoiceDate =
+                    invoice.invoiceDate
+                        ? new Date(
+                              invoice.invoiceDate
+                          ).toLocaleDateString(
+                              "en-IN",
+                              {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                              }
+                          )
+                        : "-";
 
                 doc
-                    .fillColor("#000000")
+                    .fontSize(22)
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fillColor(
+                        "#173766"
+                    )
+                    .text(
+                        businessName
+                    );
+
+                doc
                     .fontSize(9)
                     .font("Helvetica")
+                    .fillColor(
+                        "#666666"
+                    )
                     .text(
-                        serviceName,
-                        55,
+                        "TAX INVOICE"
+                    );
+
+                if (businessPhone) {
+                    doc.text(
+                        `Phone: ${businessPhone}`
+                    );
+                }
+
+                if (businessEmail) {
+                    doc.text(
+                        `Email: ${businessEmail}`
+                    );
+                }
+
+                if (businessAddress) {
+                    doc.text(
+                        businessAddress
+                    );
+                }
+
+                if (gstin) {
+                    doc.text(
+                        `GSTIN: ${gstin}`
+                    );
+                }
+
+                doc.moveDown();
+
+                doc
+                    .fillColor(
+                        "#000000"
+                    )
+                    .fontSize(10)
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .text(
+                        `Invoice Number: ${invoiceNumber}`
+                    );
+
+                doc
+                    .font("Helvetica")
+                    .text(
+                        `Invoice Date: ${invoiceDate}`
+                    );
+
+                doc.moveDown();
+
+                doc
+                    .fontSize(11)
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .text("Bill To");
+
+                doc
+                    .fontSize(10)
+                    .font("Helvetica")
+                    .text(
+                        customerName
+                    );
+
+                if (
+                    invoice.customerPhone
+                ) {
+                    doc.text(
+                        `Phone: ${invoice.customerPhone}`
+                    );
+                }
+
+                if (
+                    invoice.customerEmail
+                ) {
+                    doc.text(
+                        `Email: ${invoice.customerEmail}`
+                    );
+                }
+
+                if (
+                    invoice.customerAddress
+                ) {
+                    doc.text(
+                        invoice.customerAddress
+                    );
+                }
+
+                doc.moveDown();
+
+                let y = doc.y;
+
+                doc
+                    .rect(
+                        45,
                         y,
-                        {
-                            width: 250,
-                        }
+                        502,
+                        28
+                    )
+                    .fill(
+                        "#173766"
+                    );
+
+                doc
+                    .fillColor(
+                        "#ffffff"
+                    )
+                    .fontSize(9)
+                    .font(
+                        "Helvetica-Bold"
                     );
 
                 doc.text(
-                    String(quantity),
+                    "Service",
+                    55,
+                    y + 9
+                );
+
+                doc.text(
+                    "Qty",
                     330,
-                    y
+                    y + 9
                 );
 
                 doc.text(
-                    `${gst}%`,
+                    "GST",
                     385,
-                    y
+                    y + 9
                 );
 
                 doc.text(
-                    money(amount),
+                    "Amount",
                     455,
+                    y + 9
+                );
+
+                y += 38;
+
+                const items =
+                    Array.isArray(
+                        invoice.items
+                    )
+                        ? invoice.items
+                        : [];
+
+                items.forEach(
+                    (item) => {
+                        const serviceName =
+                            item.serviceName ||
+                            "Service";
+
+                        const quantity =
+                            Number(
+                                item.quantity
+                            ) || 1;
+
+                        const gst =
+                            Number(
+                                item.gst
+                            ) || 0;
+
+                        const amount =
+                            Number(
+                                item.total
+                            ) || 0;
+
+                        doc
+                            .fillColor(
+                                "#000000"
+                            )
+                            .fontSize(9)
+                            .font(
+                                "Helvetica"
+                            )
+                            .text(
+                                serviceName,
+                                55,
+                                y,
+                                {
+                                    width: 250,
+                                }
+                            );
+
+                        doc.text(
+                            String(
+                                quantity
+                            ),
+                            330,
+                            y
+                        );
+
+                        doc.text(
+                            `${gst}%`,
+                            385,
+                            y
+                        );
+
+                        doc.text(
+                            money(
+                                amount
+                            ),
+                            455,
+                            y
+                        );
+
+                        y += 28;
+
+                        doc
+                            .moveTo(
+                                45,
+                                y - 8
+                            )
+                            .lineTo(
+                                547,
+                                y - 8
+                            )
+                            .strokeColor(
+                                "#dddddd"
+                            )
+                            .stroke();
+                    }
+                );
+
+                y += 15;
+
+                doc
+                    .fontSize(10)
+                    .font("Helvetica")
+                    .fillColor(
+                        "#000000"
+                    )
+                    .text(
+                        `Subtotal: ${money(
+                            invoice.subtotal
+                        )}`,
+                        350,
+                        y
+                    );
+
+                y += 20;
+
+                doc.text(
+                    `GST: ${money(
+                        invoice.gstAmount
+                    )}`,
+                    350,
                     y
                 );
 
                 y += 28;
 
                 doc
-                    .moveTo(
-                        45,
-                        y - 8
+                    .fontSize(13)
+                    .font(
+                        "Helvetica-Bold"
                     )
-                    .lineTo(
-                        547,
-                        y - 8
-                    )
-                    .strokeColor("#dddddd")
-                    .stroke();
-            });
-
-            y += 15;
-
-            doc
-                .fontSize(10)
-                .font("Helvetica")
-                .fillColor("#000000")
-                .text(
-                    `Subtotal: ${money(
-                        invoice.subtotal
-                    )}`,
-                    350,
-                    y
-                );
-
-            y += 20;
-
-            doc.text(
-                `GST: ${money(
-                    invoice.gstAmount
-                )}`,
-                350,
-                y
-            );
-
-            y += 28;
-
-            doc
-                .fontSize(13)
-                .font("Helvetica-Bold")
-                .text(
-                    `Grand Total: ${money(
-                        invoice.total
-                    )}`,
-                    330,
-                    y
-                );
-
-            if (invoice.notes) {
-                y += 45;
-
-                doc
-                    .fontSize(10)
-                    .font("Helvetica-Bold")
                     .text(
-                        "Notes",
-                        45,
+                        `Grand Total: ${money(
+                            invoice.total
+                        )}`,
+                        330,
                         y
                     );
 
-                y += 18;
+                if (invoice.notes) {
+                    y += 45;
+
+                    doc
+                        .fontSize(10)
+                        .font(
+                            "Helvetica-Bold"
+                        )
+                        .text(
+                            "Notes",
+                            45,
+                            y
+                        );
+
+                    y += 18;
+
+                    doc
+                        .fontSize(9)
+                        .font(
+                            "Helvetica"
+                        )
+                        .text(
+                            invoice.notes,
+                            45,
+                            y,
+                            {
+                                width: 500,
+                            }
+                        );
+                }
 
                 doc
-                    .fontSize(9)
-                    .font("Helvetica")
+                    .fontSize(8)
+                    .fillColor(
+                        "#777777"
+                    )
                     .text(
-                        invoice.notes,
+                        "This is a computer generated invoice.",
                         45,
-                        y,
+                        760,
                         {
-                            width: 500,
+                            align: "center",
+                            width: 502,
                         }
                     );
+
+                doc.end();
+            } catch (error) {
+                reject(error);
             }
-
-            doc
-                .fontSize(8)
-                .fillColor("#777777")
-                .text(
-                    "This is a computer generated invoice.",
-                    45,
-                    760,
-                    {
-                        align: "center",
-                        width: 502,
-                    }
-                );
-
-            doc.end();
-        } catch (error) {
-            reject(error);
         }
-    });
+    );
 }
 
 exports.sendInvoiceToWhatsApp =
     async (req, res) => {
         try {
-            const userId = getUserId(req);
+            const context =
+                await getContext(req);
 
-            if (!userId) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Authentication required",
-                });
+            if (
+                !requirePermission(
+                    context,
+                    "invoices.send",
+                    res
+                )
+            ) {
+                return;
             }
+
+            const workspaceOwnerId =
+                context.workspaceOwnerId;
 
             const invoiceId =
                 req.params.invoiceId;
@@ -605,20 +796,26 @@ exports.sendInvoiceToWhatsApp =
             const invoice =
                 await Invoice.findOne({
                     _id: invoiceId,
-                    userId,
+                    userId:
+                        workspaceOwnerId,
                 });
 
             if (!invoice) {
                 return res.status(404).json({
                     success: false,
-                    message: "Invoice not found.",
+                    message:
+                        "Invoice not found.",
                 });
             }
 
             let phone =
                 String(
-                    invoice.customerPhone || ""
-                ).replace(/\D/g, "");
+                    invoice.customerPhone ||
+                        ""
+                ).replace(
+                    /\D/g,
+                    ""
+                );
 
             if (!phone) {
                 return res.status(400).json({
@@ -663,6 +860,16 @@ exports.sendInvoiceToWhatsApp =
                 phone
             );
 
+            console.log(
+                "Workspace Owner:",
+                workspaceOwnerId
+            );
+
+            console.log(
+                "Requested By:",
+                context.userId
+            );
+
             const accessToken =
                 process.env.WHATSAPP_ACCESS_TOKEN ||
                 process.env.META_WHATSAPP_ACCESS_TOKEN ||
@@ -690,7 +897,9 @@ exports.sendInvoiceToWhatsApp =
 
             console.log(
                 "WhatsApp Access Token Present:",
-                Boolean(accessToken)
+                Boolean(
+                    accessToken
+                )
             );
 
             if (
@@ -710,8 +919,16 @@ exports.sendInvoiceToWhatsApp =
 
             const user =
                 await User.findById(
-                    userId
+                    workspaceOwnerId
                 ).lean();
+
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "Workspace owner account not found.",
+                });
+            }
 
             console.log(
                 "Generating invoice PDF..."
@@ -742,7 +959,10 @@ exports.sendInvoiceToWhatsApp =
                 pdfBuffer,
                 {
                     filename:
-                        `${invoice.invoiceNumber || "invoice"}.pdf`,
+                        `${
+                            invoice.invoiceNumber ||
+                            "invoice"
+                        }.pdf`,
                     contentType:
                         "application/pdf",
                 }
@@ -790,8 +1010,7 @@ exports.sendInvoiceToWhatsApp =
 
             const mediaId =
                 uploadResponse
-                    ?.data
-                    ?.id;
+                    ?.data?.id;
 
             if (!mediaId) {
                 throw new Error(
@@ -805,8 +1024,10 @@ exports.sendInvoiceToWhatsApp =
             );
 
             const businessName =
-                invoice.billedBy?.displayName ||
-                invoice.billedBy?.businessName ||
+                invoice.billedBy
+                    ?.displayName ||
+                invoice.billedBy
+                    ?.businessName ||
                 user?.displayName ||
                 user?.clinicName ||
                 user?.businessName ||
@@ -815,24 +1036,30 @@ exports.sendInvoiceToWhatsApp =
 
             const message =
                 req.body?.message ||
-                `Hello ${invoice.customerName || "Customer"}, 👋
+                `Hello ${
+                    invoice.customerName ||
+                    "Customer"
+                }, 👋
 
 Thank you for choosing ${businessName}.
 
-Your invoice ${invoice.invoiceNumber || ""} is ready. Please find the invoice PDF attached with this message.
+Your invoice ${
+                    invoice.invoiceNumber ||
+                    ""
+                } is ready. Please find the invoice PDF attached with this message.
 
 Invoice Date: ${
                     invoice.invoiceDate
                         ? new Date(
-                            invoice.invoiceDate
-                        ).toLocaleDateString(
-                            "en-IN",
-                            {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                            }
-                        )
+                              invoice.invoiceDate
+                          ).toLocaleDateString(
+                              "en-IN",
+                              {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                              }
+                          )
                         : "-"
                 }
 
@@ -890,7 +1117,10 @@ ${businessName}`;
                                 message,
 
                             filename:
-                                `${invoice.invoiceNumber || "invoice"}.pdf`,
+                                `${
+                                    invoice.invoiceNumber ||
+                                    "invoice"
+                                }.pdf`,
                         },
                     },
                     {
@@ -992,12 +1222,14 @@ ${businessName}`;
             );
 
             return res.status(
-                error.response?.status || 500
+                error.response?.status ||
+                    500
             ).json({
                 success: false,
 
                 message:
-                    error.response?.data?.error?.message ||
+                    error.response?.data?.error
+                        ?.message ||
                     error.message ||
                     "Unable to send invoice on WhatsApp.",
             });

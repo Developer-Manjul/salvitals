@@ -660,11 +660,9 @@ export default function AIAssistant({ initialConversationId = "", initialTab = "
           <div className="ai-assistant-breadcrumb">
             Engage <span>/</span> AI Assistant
           </div>
-
           <h1>
             AI Assistant
           </h1>
-
           <p>
             Configure your website AI assistant,
             knowledge and visitor conversations.
@@ -725,62 +723,37 @@ export default function AIAssistant({ initialConversationId = "", initialTab = "
 
       {}
 
-      <div className="ai-tabs">
+      {tab !== "conversations" && (
+        <div className="ai-tabs">
 
-        <button
-          className={
-            tab === "settings"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setTab("settings")
-          }
-        >
-          Settings
-        </button>
+          <button
+            className={
+              tab === "settings"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setTab("settings")
+            }
+          >
+            Settings
+          </button>
 
-        <button
-          className={
-            tab === "knowledge"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setTab("knowledge")
-          }
-        >
-          Knowledge Base
-        </button>
+          <button
+            className={
+              tab === "knowledge"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setTab("knowledge")
+            }
+          >
+            Knowledge Base
+          </button>
 
-        <button
-          className={
-            tab === "conversations"
-              ? "active"
-              : ""
-          }
-          onClick={() =>
-            setTab("conversations")
-          }
-        >
-          AI Inbox
-
-          {conversations.filter(
-            (item) =>
-              item.unreadForTeam
-          ).length > 0 && (
-            <em>
-              {
-                conversations.filter(
-                  (item) =>
-                    item.unreadForTeam
-                ).length
-              }
-            </em>
-          )}
-        </button>
-
-      </div>
+        </div>
+      )}
 
       {}
 

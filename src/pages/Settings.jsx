@@ -75,18 +75,55 @@ const PLAN_FEATURES = {
 const CUSTOM_WHATSAPP =
   "https://wa.me/91962598925?text=Hello%20SaleVitals%20team%2C%20I%20am%20interested%20in%20the%20Custom%20CRM%20plan.%20Please%20share%20the%20pricing%2C%20features%2C%20setup%20process%20and%20next%20steps.";
 
-function getSettingsGroups(isHealthcare) {
-  return baseSettingsGroups.map((group) =>
-    group.label === "Profile"
-      ? {
+const SETTINGS_PERMISSION_MAP = {
+  "Business Profile": ["business_profile.view"],
+  Doctors: ["doctors.view"],
+  Team: ["team.view"],
+  "Roles & Permissions": ["roles.view"],
+  "Lead Sources": ["leads.view"],
+  "Lead Stages": ["leads.view"],
+  Services: ["services.view"],
+  WhatsApp: ["whatsapp.view", "whatsapp.use"],
+  Integrations: ["integrations.view"],
+  "Notification Settings": ["notifications.view"],
+  "Invoice Settings": ["invoices.view"],
+  "Plan & Billing": ["billing.view"],
+};
+
+function hasSettingsPermission(user, item) {
+  if (user?.isOwner || user?.role === "owner") return true;
+
+  const permissions = Array.isArray(user?.permissions)
+    ? user.permissions
+    : [];
+
+  if (permissions.includes("*")) return true;
+
+  const required = SETTINGS_PERMISSION_MAP[item] || [];
+  return required.some((permission) => permissions.includes(permission));
+}
+
+function getSettingsGroups(isHealthcare, user) {
+  return baseSettingsGroups
+    .map((group) => {
+      const items =
+        group.label === "Profile"
+          ? isHealthcare
+            ? ["Business Profile", "Doctors", "Team", "Roles & Permissions"]
+            : ["Business Profile", "Team", "Roles & Permissions"]
+          : group.items;
+
+      return {
         ...group,
-        label: isHealthcare ? "Profile" : "BUSINESS",
-        items: isHealthcare
-          ? ["Business Profile", "Doctors", "Team", "Roles & Permissions"]
-          : ["Business Profile", "Team", "Roles & Permissions"],
-      }
-      : group
-  );
+        label: group.label === "Profile"
+          ? isHealthcare
+            ? "Profile"
+            : "BUSINESS"
+          : group.label,
+        items: items.filter((item) => hasSettingsPermission(user, item)),
+      };
+    })
+    .filter((group) => group.items.length > 0);
 }
 
 function getToken() {
@@ -183,70 +220,87 @@ function slugify(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `item-${Date.now()}`;
 }
 
-function LeadSourceModal({ onClose, onSave }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+function LeadSourceModal({ onClose, onSave, initialSource = null }) {
+  const [name, setName] = useState(initialSource?.name || "");
+  const [description, setDescription] = useState(initialSource?.description || "");
   const [saving, setSaving] = useState(false);
+  const editing = Boolean(initialSource);
 
   const submit = (event) => {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
     setSaving(true);
+
     onSave({
-      id: `custom-${slugify(cleanName)}-${Date.now()}`,
+      id: initialSource?.id || `custom-${slugify(cleanName)}-${Date.now()}`,
       name: cleanName,
       description: description.trim() || "Custom lead source",
-      icon: cleanName.charAt(0).toUpperCase(),
-      tone: "blue",
-      defaultStatus: "active",
+      icon: initialSource?.icon || cleanName.charAt(0).toUpperCase(),
+      tone: initialSource?.tone || "blue",
+      defaultStatus: initialSource?.defaultStatus || "active",
       locked: false,
-      custom: true,
+      custom: initialSource?.custom || false,
     });
+
     setSaving(false);
   };
 
   return (
     <div className="sv-modal-backdrop" onMouseDown={onClose}>
       <div className="sv-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="sv-modal-head"><h3>Add Lead Source</h3><button type="button" className="sv-modal-close" onClick={onClose}>×</button></div>
+        <div className="sv-modal-head">
+          <h3>{editing ? "Edit Lead Source" : "Add Lead Source"}</h3>
+          <button type="button" className="sv-modal-close" onClick={onClose}>×</button>
+        </div>
         <form className="sv-modal-form" onSubmit={submit}>
           <label className="sv-field">Source name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Referral" autoFocus required /></label>
           <label className="sv-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Short description" /></label>
-          <div className="sv-modal-actions"><button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button><button type="submit" className="sv-primary-btn" disabled={saving}>{saving ? "Adding..." : "Add Source"}</button></div>
+          <div className="sv-modal-actions">
+            <button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="sv-primary-btn" disabled={saving}>{saving ? "Saving..." : editing ? "Save Changes" : "Add Source"}</button>
+          </div>
         </form>
       </div>
     </div>
   );
 }
 
-function LeadStageModal({ onClose, onSave }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [tone, setTone] = useState("blue");
+function LeadStageModal({ onClose, onSave, initialStage = null }) {
+  const [name, setName] = useState(initialStage?.name || "");
+  const [description, setDescription] = useState(initialStage?.description || "");
+  const [tone, setTone] = useState(initialStage?.tone || "blue");
+  const editing = Boolean(initialStage);
 
   const submit = (event) => {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
+
     onSave({
-      id: `custom-${slugify(cleanName)}-${Date.now()}`,
+      id: initialStage?.id || `custom-${slugify(cleanName)}-${Date.now()}`,
       name: cleanName,
       description: description.trim() || "Custom CRM pipeline stage.",
       tone,
-      custom: true,
+      custom: initialStage?.custom || false,
     });
   };
 
   return (
     <div className="sv-modal-backdrop" onMouseDown={onClose}>
       <div className="sv-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="sv-modal-head"><h3>Add Lead Stage</h3><button type="button" className="sv-modal-close" onClick={onClose}>×</button></div>
+        <div className="sv-modal-head">
+          <h3>{editing ? "Edit Lead Stage" : "Add Lead Stage"}</h3>
+          <button type="button" className="sv-modal-close" onClick={onClose}>×</button>
+        </div>
         <form className="sv-modal-form" onSubmit={submit}>
           <label className="sv-field">Stage name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Negotiation" autoFocus required /></label>
           <label className="sv-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What happens in this stage?" /></label>
           <label className="sv-field">Color<select value={tone} onChange={(event) => setTone(event.target.value)}><option value="blue">Blue</option><option value="orange">Orange</option><option value="purple">Purple</option><option value="green">Green</option><option value="red">Red</option><option value="gray">Gray</option></select></label>
-          <div className="sv-modal-actions"><button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button><button type="submit" className="sv-primary-btn">Add Stage</button></div>
+          <div className="sv-modal-actions">
+            <button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="sv-primary-btn">{editing ? "Save Changes" : "Add Stage"}</button>
+          </div>
         </form>
       </div>
     </div>
@@ -258,6 +312,7 @@ function LeadSourcesContent() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
+  const [editingSource, setEditingSource] = useState(null);
   const [sources, setSources] = useState(() => {
     const saved = readStoredJson("salevitals_lead_sources", null);
     return Array.isArray(saved) && saved.length ? saved : DEFAULT_LEAD_SOURCES;
@@ -315,10 +370,49 @@ function LeadSourcesContent() {
     return !Number.isNaN(date.getTime()) && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length;
 
-  const addSource = (source) => {
-    setSources((previous) => [...previous, source]);
-    setEnabled((previous) => ({ ...previous, [source.id]: true }));
+  const saveSource = (source) => {
+    setSources((previous) =>
+      editingSource
+        ? previous.map((item) =>
+            item.id === source.id ? { ...item, ...source } : item
+          )
+        : [...previous, source]
+    );
+
+    setEnabled((previous) => ({
+      ...previous,
+      [source.id]: editingSource ? previous[source.id] ?? true : true,
+    }));
+
     setShowModal(false);
+    setEditingSource(null);
+  };
+
+  const openEditSource = (source) => {
+    setEditingSource(source);
+    setShowModal(true);
+  };
+
+  const deleteSource = (source) => {
+    if (!window.confirm(`Delete lead source "${source.name}"?`)) return;
+
+    setSources((previous) =>
+      previous.filter((item) => item.id !== source.id)
+    );
+
+    setEnabled((previous) => {
+      const next = { ...previous };
+      delete next[source.id];
+      return next;
+    });
+
+    setEditingSource(null);
+    setShowModal(false);
+  };
+
+  const closeSourceModal = () => {
+    setShowModal(false);
+    setEditingSource(null);
   };
 
   const toggleSource = (item) => {
@@ -329,7 +423,7 @@ function LeadSourcesContent() {
   return (
     <div className="sv-settings-section">
       <ModernSettingsStyles />
-      <div className="sv-section-head"><div><h2>Lead Sources</h2><p>Manage where your leads come from and monitor connected channels.</p></div><button type="button" className="sv-primary-btn" onClick={() => setShowModal(true)}>＋ Add Source</button></div>
+      <div className="sv-section-head"><div><h2>Lead Sources</h2><p>Manage where your leads come from and monitor connected channels.</p></div><button type="button" className="sv-primary-btn" onClick={() => { setEditingSource(null); setShowModal(true); }}>＋ Add Source</button></div>
       <div className="sv-summary-grid">
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon">♧</span></div><strong className="sv-summary-value">{totalLeads.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">From all sources</small></div>
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Active Sources</span><span className="sv-summary-icon">↗</span></div><strong className="sv-summary-value">{activeSources}</strong><small className="sv-summary-meta">Currently enabled</small></div>
@@ -348,11 +442,16 @@ function LeadSourcesContent() {
             <td><span className="sv-source-count">{["meta", "whatsapp", "website", "manual"].includes(item.id) ? sourceCount(item.id).toLocaleString("en-IN") : "—"}</span></td>
             <td><span className="sv-source-muted">{item.id === "meta" ? "Connected" : isOn ? "Enabled" : "—"}</span></td>
             <td><button type="button" className={`sv-toggle ${isOn ? "on" : ""} ${item.locked ? "soon" : ""}`} onClick={() => toggleSource(item)} disabled={item.locked} aria-label={`${label} ${item.name}`} /></td>
-            <td><button type="button" className="sv-more" onClick={() => window.alert(`${item.name} is ${label.toLowerCase()}.`)}>⋮</button></td>
+            <td>
+  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+    <button type="button" className="sv-more" onClick={() => openEditSource(item)} title="Edit source">✎</button>
+    <button type="button" className="sv-more" onClick={() => deleteSource(item)} title="Delete source">×</button>
+  </div>
+</td>
           </tr>;
         })}
       </tbody></table></div>
-      {showModal && <LeadSourceModal onClose={() => setShowModal(false)} onSave={addSource} />}
+      {showModal && <LeadSourceModal onClose={closeSourceModal} onSave={saveSource} initialSource={editingSource} />}
     </div>
   );
 }
@@ -360,6 +459,7 @@ function LeadSourcesContent() {
 function LeadStagesContent() {
   const [leads, setLeads] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingStage, setEditingStage] = useState(null);
   const [stages, setStages] = useState(() => {
     const saved = readStoredJson("salevitals_lead_stages", null);
     return Array.isArray(saved) && saved.length ? saved : DEFAULT_LEAD_STAGES;
@@ -382,20 +482,52 @@ function LeadStagesContent() {
 
   const getCount = (stage) => leads.filter((lead) => String(lead.stage || "New").trim().toLowerCase() === stage.toLowerCase()).length;
   const total = leads.length;
-  const addStage = (stage) => { setStages((previous) => [...previous, stage]); setShowModal(false); };
+  const saveStage = (stage) => {
+    setStages((previous) =>
+      editingStage
+        ? previous.map((item) =>
+            item.id === stage.id ? { ...item, ...stage } : item
+          )
+        : [...previous, stage]
+    );
+
+    setShowModal(false);
+    setEditingStage(null);
+  };
+
+  const openEditStage = (stage) => {
+    setEditingStage(stage);
+    setShowModal(true);
+  };
+
+  const deleteStage = (stage) => {
+    if (!window.confirm(`Delete lead stage "${stage.name}"?`)) return;
+
+    setStages((previous) =>
+      previous.filter((item) => item.id !== stage.id)
+    );
+
+    setEditingStage(null);
+    setShowModal(false);
+  };
+
+  const closeStageModal = () => {
+    setShowModal(false);
+    setEditingStage(null);
+  };
 
   return (
     <div className="sv-settings-section">
       <ModernSettingsStyles />
-      <div className="sv-section-head"><div><h2>Lead Stages</h2><p>Track every lead through your CRM pipeline from new enquiry to conversion.</p></div><button type="button" className="sv-primary-btn" onClick={() => setShowModal(true)}>＋ Add Stage</button></div>
+      <div className="sv-section-head"><div><h2>Lead Stages</h2><p>Track every lead through your CRM pipeline from new enquiry to conversion.</p></div><button type="button" className="sv-primary-btn" onClick={() => { setEditingStage(null); setShowModal(true); }}>＋ Add Stage</button></div>
       <div className="sv-summary-grid">
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon">♧</span></div><strong className="sv-summary-value">{total.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">Current CRM leads</small></div>
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">New</span><span className="sv-summary-icon">＋</span></div><strong className="sv-summary-value">{getCount("New")}</strong><small className="sv-summary-meta">Fresh enquiries</small></div>
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Qualified</span><span className="sv-summary-icon">✓</span></div><strong className="sv-summary-value">{getCount("Qualified")}</strong><small className="sv-summary-meta">Sales qualified</small></div>
         <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Converted</span><span className="sv-summary-icon">↗</span></div><strong className="sv-summary-value">{getCount("Converted")}</strong><small className="sv-summary-meta">Successfully converted</small></div>
       </div>
-      <div className="sv-stage-grid">{stages.map((stage) => { const count = getCount(stage.name); const percent = total ? Math.min((count / total) * 100, 100) : 0; return <div className={`sv-stage-card ${stage.tone}`} key={stage.id || stage.name}><div className="sv-stage-head"><h3>{stage.name}</h3><span className="sv-stage-count">{count}</span></div><p className="sv-stage-desc">{stage.description}</p><div className="sv-stage-bar"><i style={{ width: `${percent}%` }} /></div><div className="sv-stage-foot"><span>Lead share</span><strong>{Math.round(percent)}%</strong></div></div>; })}</div>
-      {showModal && <LeadStageModal onClose={() => setShowModal(false)} onSave={addStage} />}
+      <div className="sv-stage-grid">{stages.map((stage) => { const count = getCount(stage.name); const percent = total ? Math.min((count / total) * 100, 100) : 0; return <div className={`sv-stage-card ${stage.tone}`} key={stage.id || stage.name}><div className="sv-stage-head"><h3>{stage.name}</h3><span className="sv-stage-count">{count}</span></div><p className="sv-stage-desc">{stage.description}</p><div className="sv-stage-bar"><i style={{ width: `${percent}%` }} /></div><div className="sv-stage-foot"><span>Lead share</span><strong>{Math.round(percent)}%</strong></div><div style={{ display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "12px" }}><button type="button" className="sv-secondary-btn" style={{ padding: "6px 10px", fontSize: "10px" }} onClick={() => openEditStage(stage)}>Edit</button><button type="button" className="sv-secondary-btn" style={{ padding: "6px 10px", fontSize: "10px", color: "#d74b4b" }} onClick={() => deleteStage(stage)}>Delete</button></div></div>; })}</div>
+      {showModal && <LeadStageModal onClose={closeStageModal} onSave={saveStage} initialStage={editingStage} />}
     </div>
   );
 }
@@ -1866,22 +1998,26 @@ export default function Settings({
     useState("Business Profile");
 
   useEffect(() => {
-    setActiveTab(
-      initialTab || "Business Profile"
-    );
+    const groups = getSettingsGroups(isHealthcare, user);
+    const visibleTabs = groups.flatMap((group) => group.items);
 
     const params = new URLSearchParams(
       window.location.search
     );
 
-    if (
+    const requestedTab =
       params.get("metaSelectPage") === "true" ||
       params.get("metaError") ||
       params.get("google")
-    ) {
-      setActiveTab("Integrations");
-    }
-  }, [isHealthcare, initialTab]);
+        ? "Integrations"
+        : initialTab || "Business Profile";
+
+    setActiveTab(
+      visibleTabs.includes(requestedTab)
+        ? requestedTab
+        : visibleTabs[0] || ""
+    );
+  }, [isHealthcare, initialTab, user]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -1982,7 +2118,7 @@ export default function Settings({
 
       <div className="settings-layout">
         <aside className="settings-sidebar">
-          {getSettingsGroups(isHealthcare).map(
+          {getSettingsGroups(isHealthcare, user).map(
             (group) => (
               <div
                 className="settings-group"

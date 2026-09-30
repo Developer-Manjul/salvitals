@@ -1,4 +1,3 @@
-const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
 const User = require("../models/User");
@@ -24,32 +23,47 @@ const {
   syncAILead,
 } = require("../services/aiLeadService");
 
-function getUserId(req) {
-  const authorization =
-    req.headers.authorization || "";
+const {
+  getWorkspaceContext,
+  hasPermission,
+} = require("../utils/workspace");
 
-  if (!authorization.startsWith("Bearer ")) {
-    return null;
+const getContext = async (req) => {
+  return await getWorkspaceContext(req);
+};
+
+const requirePermission = (
+  context,
+  permission,
+  res
+) => {
+  if (!context) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+
+    return false;
   }
 
-  try {
-    const decoded = jwt.verify(
-      authorization.slice(7),
-      process.env.JWT_SECRET
-    );
+  if (!hasPermission(context, permission)) {
+    res.status(403).json({
+      success: false,
+      message:
+        "You do not have permission to perform this action.",
+      permission,
+    });
 
-    return (
-      decoded.id ||
-      decoded._id ||
-      decoded.userId ||
-      null
-    );
-  } catch (_) {
-    return null;
+    return false;
   }
-}
 
-function safeText(value, max = 5000) {
+  return true;
+};
+
+function safeText(
+  value,
+  max = 5000
+) {
   return String(value || "")
     .trim()
     .slice(0, max);
@@ -71,7 +85,8 @@ function normalizeMessage(value) {
 }
 
 function isGreeting(text) {
-  const value = normalizeMessage(text);
+  const value =
+    normalizeMessage(text);
 
   return new Set([
     "hi",
@@ -93,7 +108,8 @@ function isGreeting(text) {
 }
 
 function isYes(text) {
-  const value = normalizeMessage(text);
+  const value =
+    normalizeMessage(text);
 
   return new Set([
     "yes",
@@ -122,7 +138,8 @@ function isYes(text) {
 }
 
 function isNo(text) {
-  const value = normalizeMessage(text);
+  const value =
+    normalizeMessage(text);
 
   return new Set([
     "no",
@@ -140,8 +157,11 @@ function isNo(text) {
   ]).has(value);
 }
 
-function isDirectAppointmentRequest(text) {
-  const value = normalizeMessage(text);
+function isDirectAppointmentRequest(
+  text
+) {
+  const value =
+    normalizeMessage(text);
 
   if (!value) {
     return false;
@@ -176,15 +196,19 @@ function isDirectAppointmentRequest(text) {
   );
 }
 
-function getGreeting(assistant) {
-  const assistantName = String(
-    assistant?.assistantName ||
-      "AI Assistant"
-  ).trim();
+function getGreeting(
+  assistant
+) {
+  const assistantName =
+    String(
+      assistant?.assistantName ||
+        "AI Assistant"
+    ).trim();
 
-  const fromName = String(
-    assistant?.fromName || ""
-  ).trim();
+  const fromName =
+    String(
+      assistant?.fromName || ""
+    ).trim();
 
   if (fromName) {
     return `Hi 👋 I'm ${assistantName} from ${fromName}. How can I help you today?`;
@@ -205,7 +229,9 @@ function getAppointmentConfirmationMessage() {
   return "Thanks. Our team will contact you shortly to confirm the appointment.";
 }
 
-function getNoAppointmentMessage(phone) {
+function getNoAppointmentMessage(
+  phone
+) {
   if (phone) {
     return `No problem. You can contact our team directly on ${phone} for a call or WhatsApp.`;
   }
@@ -214,7 +240,8 @@ function getNoAppointmentMessage(phone) {
 }
 
 function extractPhoneNumbers(text) {
-  const source = String(text || "");
+  const source =
+    String(text || "");
 
   const matches =
     source.match(
@@ -223,34 +250,48 @@ function extractPhoneNumbers(text) {
 
   const numbers = [];
 
-  matches.forEach((match) => {
-    const cleaned =
-      match.replace(/\D/g, "");
+  matches.forEach(
+    (match) => {
+      const cleaned =
+        match.replace(
+          /\D/g,
+          ""
+        );
 
-    if (
-      cleaned.length >= 8 &&
-      cleaned.length <= 15 &&
-      !numbers.includes(cleaned)
-    ) {
-      numbers.push(cleaned);
+      if (
+        cleaned.length >= 8 &&
+        cleaned.length <= 15 &&
+        !numbers.includes(
+          cleaned
+        )
+      ) {
+        numbers.push(cleaned);
+      }
     }
-  });
+  );
 
   return numbers;
 }
 
-function isAppointmentOfferText(text) {
-  const value = String(text || "")
-    .trim()
-    .toLowerCase();
+function isAppointmentOfferText(
+  text
+) {
+  const value =
+    String(text || "")
+      .trim()
+      .toLowerCase();
 
   if (!value) {
     return false;
   }
 
   const hasAppointment =
-    value.includes("appointment") ||
-    value.includes("booking") ||
+    value.includes(
+      "appointment"
+    ) ||
+    value.includes(
+      "booking"
+    ) ||
     value.includes("book");
 
   if (!hasAppointment) {
@@ -258,45 +299,90 @@ function isAppointmentOfferText(text) {
   }
 
   return (
-    value.includes("would you like") ||
-    value.includes("shall i") ||
-    value.includes("can i") ||
-    value.includes("do you want") ||
-    value.includes("aap chahein") ||
-    value.includes("aap chahte") ||
-    value.includes("aap chahenge") ||
-    value.includes("kar du") ||
-    value.includes("kar doon") ||
-    value.includes("kar dun") ||
-    value.includes("karna chahenge") ||
-    value.includes("lena chahenge") ||
-    value.includes("book kar du") ||
-    value.includes("book kar doon") ||
-    value.includes("book kar dun")
+    value.includes(
+      "would you like"
+    ) ||
+    value.includes(
+      "shall i"
+    ) ||
+    value.includes(
+      "can i"
+    ) ||
+    value.includes(
+      "do you want"
+    ) ||
+    value.includes(
+      "aap chahein"
+    ) ||
+    value.includes(
+      "aap chahte"
+    ) ||
+    value.includes(
+      "aap chahenge"
+    ) ||
+    value.includes(
+      "kar du"
+    ) ||
+    value.includes(
+      "kar doon"
+    ) ||
+    value.includes(
+      "kar dun"
+    ) ||
+    value.includes(
+      "karna chahenge"
+    ) ||
+    value.includes(
+      "lena chahenge"
+    ) ||
+    value.includes(
+      "book kar du"
+    ) ||
+    value.includes(
+      "book kar doon"
+    ) ||
+    value.includes(
+      "book kar dun"
+    )
   );
 }
 
-function hasAppointmentOffer(messages) {
+function hasAppointmentOffer(
+  messages
+) {
   if (
-    !Array.isArray(messages) ||
+    !Array.isArray(
+      messages
+    ) ||
     !messages.length
   ) {
     return false;
   }
 
-  return messages.some((message) => {
-    if (message?.sender !== "ai") {
-      return false;
-    }
+  return messages.some(
+    (message) => {
+      if (
+        message?.sender !==
+        "ai"
+      ) {
+        return false;
+      }
 
-    return isAppointmentOfferText(
-      message?.message
-    );
-  });
+      return isAppointmentOfferText(
+        message?.message
+      );
+    }
+  );
 }
 
-function getLastAIMessage(messages) {
-  if (!Array.isArray(messages)) {
+function getLastAIMessage(
+  messages
+) {
+  if (
+    !Array.isArray(
+      messages
+    )
+  ) {
     return null;
   }
 
@@ -305,41 +391,58 @@ function getLastAIMessage(messages) {
       .reverse()
       .find(
         (message) =>
-          message?.sender === "ai"
+          message?.sender ===
+          "ai"
       ) || null
   );
 }
 
-function hasNameRequest(messages) {
+function hasNameRequest(
+  messages
+) {
   const lastAI =
-    getLastAIMessage(messages);
+    getLastAIMessage(
+      messages
+    );
 
   if (!lastAI) {
     return false;
   }
 
   return /share your name|your name/i.test(
-    String(lastAI.message || "")
+    String(
+      lastAI.message || ""
+    )
   );
 }
 
-function hasPhoneRequest(messages) {
+function hasPhoneRequest(
+  messages
+) {
   const lastAI =
-    getLastAIMessage(messages);
+    getLastAIMessage(
+      messages
+    );
 
   if (!lastAI) {
     return false;
   }
 
   return /mobile number|phone number|mobile|phone/i.test(
-    String(lastAI.message || "")
+    String(
+      lastAI.message || ""
+    )
   );
 }
 
 function looksLikeName(text) {
-  const value = String(text || "").trim();
+  const value =
+    String(text || "").trim();
 
-  if (!value || value.length > 100) {
+  if (
+    !value ||
+    value.length > 100
+  ) {
     return false;
   }
 
@@ -347,7 +450,11 @@ function looksLikeName(text) {
     return false;
   }
 
-  if (/https?:\/\//i.test(value)) {
+  if (
+    /https?:\/\//i.test(
+      value
+    )
+  ) {
     return false;
   }
 
@@ -359,34 +466,38 @@ function looksLikeName(text) {
     .split(/\s+/)
     .filter(Boolean);
 
-  if (words.length < 1 || words.length > 5) {
+  if (
+    words.length < 1 ||
+    words.length > 5
+  ) {
     return false;
   }
 
-  const invalidNameWords = new Set([
-    "yes",
-    "no",
-    "okay",
-    "ok",
-    "thanks",
-    "thank",
-    "hello",
-    "hi",
-    "hey",
-    "number",
-    "phone",
-    "mobile",
-    "appointment",
-    "book",
-    "booking",
-    "cost",
-    "price",
-    "how",
-    "what",
-    "why",
-    "when",
-    "where",
-  ]);
+  const invalidNameWords =
+    new Set([
+      "yes",
+      "no",
+      "okay",
+      "ok",
+      "thanks",
+      "thank",
+      "hello",
+      "hi",
+      "hey",
+      "number",
+      "phone",
+      "mobile",
+      "appointment",
+      "book",
+      "booking",
+      "cost",
+      "price",
+      "how",
+      "what",
+      "why",
+      "when",
+      "where",
+    ]);
 
   if (
     words.some((word) =>
@@ -441,9 +552,13 @@ function buildKnowledgeSearchQuery(
     .slice(0, 2500);
 }
 
-async function getOwnerProfile(ownerId) {
+async function getOwnerProfile(
+  ownerId
+) {
   try {
-    return await User.findById(ownerId)
+    return await User.findById(
+      ownerId
+    )
       .select(
         "clinicName businessName name phone mobile whatsappNumber"
       )
@@ -481,20 +596,28 @@ async function findClientContactNumber({
     ownerProfile?.mobile,
   ];
 
-  for (const candidate of directCandidates) {
+  for (
+    const candidate of directCandidates
+  ) {
     const numbers =
-      extractPhoneNumbers(candidate);
+      extractPhoneNumbers(
+        candidate
+      );
 
     if (numbers.length) {
       return numbers[0];
     }
 
     const normalized =
-      normalizePhone(candidate);
+      normalizePhone(
+        candidate
+      );
 
     if (
-      normalized.replace(/\D/g, "")
-        .length >= 8
+      normalized.replace(
+        /\D/g,
+        ""
+      ).length >= 8
     ) {
       return normalized;
     }
@@ -517,30 +640,38 @@ async function findClientContactNumber({
     knowledge = [];
   }
 
-  const text = knowledge
-    .map(
-      (item) =>
-        `${item?.title || ""}\n${item?.content || ""}\n${item?.sourceUrl || ""}`
-    )
-    .join("\n");
+  const text =
+    knowledge
+      .map(
+        (item) =>
+          `${item?.title || ""}\n${item?.content || ""}\n${item?.sourceUrl || ""}`
+      )
+      .join("\n");
 
   const numbers =
-    extractPhoneNumbers(text);
+    extractPhoneNumbers(
+      text
+    );
 
   return numbers.length
     ? numbers[0]
     : "";
 }
 
-async function reserveUsage(ownerId) {
+async function reserveUsage(
+  ownerId
+) {
   const plan =
-    await getAIPlan(ownerId);
+    await getAIPlan(
+      ownerId
+    );
 
-  const totalLimit = Number(
-    plan.totalLimit ??
-      plan.limit ??
-      0
-  );
+  const totalLimit =
+    Number(
+      plan.totalLimit ??
+        plan.limit ??
+        0
+    );
 
   if (!totalLimit) {
     return {
@@ -548,11 +679,13 @@ async function reserveUsage(ownerId) {
       plan,
       used: 0,
       remaining: 0,
-      monthKey: getMonthKey(),
+      monthKey:
+        getMonthKey(),
     };
   }
 
-  const monthKey = getMonthKey();
+  const monthKey =
+    getMonthKey();
 
   let usage =
     await AIUsage.findOne({
@@ -570,7 +703,10 @@ async function reserveUsage(ownerId) {
           limit: totalLimit,
         });
     } catch (error) {
-      if (error?.code === 11000) {
+      if (
+        error?.code ===
+        11000
+      ) {
         usage =
           await AIUsage.findOne({
             ownerId,
@@ -592,9 +728,13 @@ async function reserveUsage(ownerId) {
     };
   }
 
-  usage.limit = totalLimit;
+  usage.limit =
+    totalLimit;
 
-  if (usage.count >= totalLimit) {
+  if (
+    usage.count >=
+    totalLimit
+  ) {
     await usage.save();
 
     return {
@@ -641,10 +781,12 @@ async function reserveUsage(ownerId) {
     allowed: true,
     plan,
     used: updated.count,
-    remaining: Math.max(
-      totalLimit - updated.count,
-      0
-    ),
+    remaining:
+      Math.max(
+        totalLimit -
+          updated.count,
+        0
+      ),
     monthKey,
   };
 }
@@ -656,7 +798,8 @@ async function getOrCreatePublicConversation({
 }) {
   let conversation =
     await AIConversation.findOne({
-      assistantId: assistant._id,
+      assistantId:
+        assistant._id,
       sessionId,
       status: {
         $ne: "closed",
@@ -668,28 +811,35 @@ async function getOrCreatePublicConversation({
   if (!conversation) {
     conversation =
       await AIConversation.create({
-        ownerId: assistant.ownerId,
-        assistantId: assistant._id,
-        visitorId: safeText(
-          visitor?.visitorId,
-          120
-        ),
-        sessionId: safeText(
-          sessionId,
-          200
-        ),
-        visitorName: safeText(
-          visitor?.name,
-          120
-        ),
-        visitorPhone: safeText(
-          visitor?.phone,
-          50
-        ),
-        visitorEmail: safeText(
-          visitor?.email,
-          160
-        ),
+        ownerId:
+          assistant.ownerId,
+        assistantId:
+          assistant._id,
+        visitorId:
+          safeText(
+            visitor?.visitorId,
+            120
+          ),
+        sessionId:
+          safeText(
+            sessionId,
+            200
+          ),
+        visitorName:
+          safeText(
+            visitor?.name,
+            120
+          ),
+        visitorPhone:
+          safeText(
+            visitor?.phone,
+            50
+          ),
+        visitorEmail:
+          safeText(
+            visitor?.email,
+            160
+          ),
         status: "active",
         mode: "ai",
         source: "Website",
@@ -722,7 +872,11 @@ async function getOrCreatePublicConversation({
         );
     }
 
-    if (Object.keys(updates).length) {
+    if (
+      Object.keys(
+        updates
+      ).length
+    ) {
       conversation =
         await AIConversation.findByIdAndUpdate(
           conversation._id,
@@ -759,361 +913,296 @@ async function saveAIReply({
 }) {
   const reply =
     await AIMessage.create({
-      ownerId: assistant.ownerId,
-      assistantId: assistant._id,
-      conversationId: conversation._id,
+      ownerId:
+        assistant.ownerId,
+      assistantId:
+        assistant._id,
+      conversationId:
+        conversation._id,
       sender: "ai",
       message: text,
     });
 
-  conversation.mode = "ai";
-  conversation.status = "active";
-  conversation.lastMessage = text;
-  conversation.lastMessageAt = new Date();
-  conversation.unreadForTeam = false;
+  conversation.mode =
+    "ai";
+
+  conversation.status =
+    "active";
+
+  conversation.lastMessage =
+    text;
+
+  conversation.lastMessageAt =
+    new Date();
+
+  conversation.unreadForTeam =
+    false;
 
   await conversation.save();
 
   return reply;
 }
 
-exports.publicStart = async (req, res) => {
-  try {
-    const assistantId = String(
-      req.body?.assistantId ||
-        req.query?.assistantId ||
-        ""
-    );
+exports.publicStart =
+  async (req, res) => {
+    try {
+      const assistantId =
+        String(
+          req.body
+            ?.assistantId ||
+            req.query
+              ?.assistantId ||
+            ""
+        );
 
-    const sessionId = safeText(
-      req.body?.sessionId || "",
-      200
-    );
+      const sessionId =
+        safeText(
+          req.body
+            ?.sessionId ||
+            "",
+          200
+        );
 
-    if (
-      !mongoose.isValidObjectId(
-        assistantId
-      ) ||
-      !sessionId
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid assistant or session",
-      });
-    }
+      if (
+        !mongoose.isValidObjectId(
+          assistantId
+        ) ||
+        !sessionId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid assistant or session",
+        });
+      }
 
-    const assistant =
-      await AIAssistant.findById(
-        assistantId
-      ).lean();
+      const assistant =
+        await AIAssistant.findById(
+          assistantId
+        ).lean();
 
-    if (
-      !assistant ||
-      !assistant.enabled ||
-      assistant.status !== "active"
-    ) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "AI Assistant is unavailable",
-      });
-    }
+      if (
+        !assistant ||
+        !assistant.enabled ||
+        assistant.status !==
+          "active"
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "AI Assistant is unavailable",
+        });
+      }
 
-    const ownerProfile =
-      await getOwnerProfile(
-        assistant.ownerId
-      );
+      const ownerProfile =
+        await getOwnerProfile(
+          assistant.ownerId
+        );
 
-    const clientName =
-      await getClientName(
-        assistant,
-        ownerProfile
-      );
+      const clientName =
+        await getClientName(
+          assistant,
+          ownerProfile
+        );
 
-    const conversation =
-      await getOrCreatePublicConversation({
-        assistant,
-        sessionId,
-        visitor:
-          req.body?.visitor || {},
-      });
+      const conversation =
+        await getOrCreatePublicConversation(
+          {
+            assistant,
+            sessionId,
+            visitor:
+              req.body
+                ?.visitor ||
+              {},
+          }
+        );
 
-    const messages =
-      await AIMessage.find({
-        conversationId:
-          conversation._id,
-      })
-        .sort({
-          createdAt: 1,
-        })
-        .limit(100)
-        .lean();
-
-    return res.json({
-      success: true,
-      assistant: {
-        id: assistant._id,
-        assistantName:
-          assistant.assistantName ||
-          "AI Assistant",
-        fromName:
-          assistant.fromName || "",
-        clientName,
-        welcomeMessage:
-          assistant.welcomeMessage ||
-          getGreeting(assistant),
-        enabled:
-          assistant.enabled,
-      },
-      conversation,
-      messages,
-    });
-  } catch (error) {
-    console.error(
-      "AI PUBLIC START ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Unable to start chat",
-    });
-  }
-};
-
-exports.publicMessage = async (req, res) => {
-  try {
-    const assistantId = String(
-      req.body?.assistantId || ""
-    );
-
-    const sessionId = safeText(
-      req.body?.sessionId || "",
-      200
-    );
-
-    const messageText = safeText(
-      req.body?.message,
-      5000
-    );
-
-    if (
-      !mongoose.isValidObjectId(
-        assistantId
-      ) ||
-      !sessionId ||
-      !messageText
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Assistant, session and message are required",
-      });
-    }
-
-    const assistant =
-      await AIAssistant.findById(
-        assistantId
-      );
-
-    if (
-      !assistant ||
-      !assistant.enabled ||
-      assistant.status !== "active"
-    ) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "AI Assistant is unavailable",
-      });
-    }
-
-    const conversation =
-      await getOrCreatePublicConversation({
-        assistant,
-        sessionId,
-        visitor:
-          req.body?.visitor || {},
-      });
-
-    if (
-      conversation.status ===
-      "closed"
-    ) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "This conversation is closed",
-      });
-    }
-
-    const visitorMessage =
-      await AIMessage.create({
-        ownerId: assistant.ownerId,
-        assistantId: assistant._id,
-        conversationId:
-          conversation._id,
-        sender: "visitor",
-        message: messageText,
-      });
-
-    if (req.body?.visitor) {
-      await syncAILead({
-        ownerId: assistant.ownerId,
-        conversation: {
-          ...conversation.toObject(),
-          ...req.body.visitor,
-        },
-        service: safeText(
-          req.body?.service,
-          160
-        ),
-      });
-    }
-
-    if (
-      conversation.mode === "human" ||
-      conversation.status ===
-        "waiting_human"
-    ) {
-      const replyText =
-        "Thanks. Your message has been sent to our team. A team member will reply shortly.";
-
-      const reply =
-        await AIMessage.create({
-          ownerId: assistant.ownerId,
-          assistantId: assistant._id,
+      const messages =
+        await AIMessage.find({
           conversationId:
             conversation._id,
-          sender: "system",
-          message: replyText,
-        });
-
-      conversation.lastMessage =
-        replyText;
-
-      conversation.lastMessageAt =
-        new Date();
-
-      conversation.unreadForTeam =
-        true;
-
-      await conversation.save();
-
-      const updatedConversation =
-        await AIConversation.findById(
-          conversation._id
-        ).lean();
+        })
+          .sort({
+            createdAt: 1,
+          })
+          .limit(100)
+          .lean();
 
       return res.json({
         success: true,
-        message: reply,
-        conversation:
-          updatedConversation,
-        visitorMessage,
+        assistant: {
+          id: assistant._id,
+          assistantName:
+            assistant.assistantName ||
+            "AI Assistant",
+          fromName:
+            assistant.fromName ||
+            "",
+          clientName,
+          welcomeMessage:
+            assistant.welcomeMessage ||
+            getGreeting(
+              assistant
+            ),
+          enabled:
+            assistant.enabled,
+        },
+        conversation,
+        messages,
       });
-    }
-
-    const usage =
-      await reserveUsage(
-        assistant.ownerId
+    } catch (error) {
+      console.error(
+        "AI PUBLIC START ERROR:",
+        error
       );
 
-    if (!usage.allowed) {
-      return res.status(429).json({
+      return res.status(500).json({
         success: false,
-        code:
-          usage.plan.limit
-            ? "MONTHLY_LIMIT_REACHED"
-            : "NO_ACTIVE_PLAN",
         message:
-          usage.plan.limit
-            ? `Your monthly AI chatbot limit of ${usage.plan.limit} messages has been reached.`
-            : "An active Starter, Growth or Scale plan is required to use the AI chatbot.",
+          "Unable to start chat",
       });
     }
+  };
 
-    const ownerProfile =
-      await getOwnerProfile(
-        assistant.ownerId
-      );
+exports.publicMessage =
+  async (req, res) => {
+    try {
+      const assistantId =
+        String(
+          req.body?.assistantId ||
+            ""
+        );
 
-    const history =
-      await getConversationHistory(
-        conversation._id
-      );
+      const sessionId =
+        safeText(
+          req.body?.sessionId ||
+            "",
+          200
+        );
 
-    const previousMessages =
-      history.filter(
-        (message) =>
-          String(message?._id) !==
-          String(visitorMessage._id)
-      );
+      const messageText =
+        safeText(
+          req.body?.message,
+          5000
+        );
 
-    if (isGreeting(messageText)) {
-      const reply =
-        await saveAIReply({
-          assistant,
-          conversation,
-          text: getGreeting(
-            assistant
-          ),
+      if (
+        !mongoose.isValidObjectId(
+          assistantId
+        ) ||
+        !sessionId ||
+        !messageText
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Assistant, session and message are required",
         });
+      }
 
-      const updatedConversation =
-        await AIConversation.findById(
-          conversation._id
-        ).lean();
+      const assistant =
+        await AIAssistant.findById(
+          assistantId
+        );
 
-      return res.json({
-        success: true,
-        message: reply,
-        conversation:
-          updatedConversation,
-        visitorMessage,
-      });
-    }
-
-    if (
-      isDirectAppointmentRequest(
-        messageText
-      )
-    ) {
-      const reply =
-        await saveAIReply({
-          assistant,
-          conversation,
-          text: getAskNameMessage(),
+      if (
+        !assistant ||
+        !assistant.enabled ||
+        assistant.status !==
+          "active"
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "AI Assistant is unavailable",
         });
+      }
 
-      const updatedConversation =
-        await AIConversation.findById(
-          conversation._id
-        ).lean();
-
-      return res.json({
-        success: true,
-        message: reply,
-        conversation:
-          updatedConversation,
-        visitorMessage,
-      });
-    }
-
-    if (
-      hasAppointmentOffer(
-        previousMessages
-      )
-    ) {
-      if (isYes(messageText)) {
-        const reply =
-          await saveAIReply({
+      const conversation =
+        await getOrCreatePublicConversation(
+          {
             assistant,
-            conversation,
-            text: getAskNameMessage(),
+            sessionId,
+            visitor:
+              req.body
+                ?.visitor ||
+              {},
+          }
+        );
+
+      if (
+        conversation.status ===
+        "closed"
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "This conversation is closed",
+        });
+      }
+
+      const visitorMessage =
+        await AIMessage.create({
+          ownerId:
+            assistant.ownerId,
+          assistantId:
+            assistant._id,
+          conversationId:
+            conversation._id,
+          sender: "visitor",
+          message:
+            messageText,
+        });
+
+      if (req.body?.visitor) {
+        await syncAILead({
+          ownerId:
+            assistant.ownerId,
+          conversation: {
+            ...conversation.toObject(),
+            ...req.body
+              .visitor,
+          },
+          service:
+            safeText(
+              req.body?.service,
+              160
+            ),
+        });
+      }
+
+      if (
+        conversation.mode ===
+          "human" ||
+        conversation.status ===
+          "waiting_human"
+      ) {
+        const replyText =
+          "Thanks. Your message has been sent to our team. A team member will reply shortly.";
+
+        const reply =
+          await AIMessage.create({
+            ownerId:
+              assistant.ownerId,
+            assistantId:
+              assistant._id,
+            conversationId:
+              conversation._id,
+            sender: "system",
+            message:
+              replyText,
           });
+
+        conversation.lastMessage =
+          replyText;
+
+        conversation.lastMessageAt =
+          new Date();
+
+        conversation.unreadForTeam =
+          true;
+
+        await conversation.save();
 
         const updatedConversation =
           await AIConversation.findById(
@@ -1129,20 +1218,58 @@ exports.publicMessage = async (req, res) => {
         });
       }
 
-      if (isNo(messageText)) {
-        const contactNumber =
-          await findClientContactNumber({
-            assistant,
-            ownerProfile,
-          });
+      const usage =
+        await reserveUsage(
+          assistant.ownerId
+        );
 
+      if (!usage.allowed) {
+        return res.status(429).json({
+          success: false,
+          code:
+            usage.plan.limit
+              ? "MONTHLY_LIMIT_REACHED"
+              : "NO_ACTIVE_PLAN",
+          message:
+            usage.plan.limit
+              ? `Your monthly AI chatbot limit of ${usage.plan.limit} messages has been reached.`
+              : "An active Starter, Growth or Scale plan is required to use the AI chatbot.",
+        });
+      }
+
+      const ownerProfile =
+        await getOwnerProfile(
+          assistant.ownerId
+        );
+
+      const history =
+        await getConversationHistory(
+          conversation._id
+        );
+
+      const previousMessages =
+        history.filter(
+          (message) =>
+            String(
+              message?._id
+            ) !==
+            String(
+              visitorMessage._id
+            )
+        );
+
+      if (
+        isGreeting(
+          messageText
+        )
+      ) {
         const reply =
           await saveAIReply({
             assistant,
             conversation,
             text:
-              getNoAppointmentMessage(
-                contactNumber
+              getGreeting(
+                assistant
               ),
           });
 
@@ -1159,85 +1286,18 @@ exports.publicMessage = async (req, res) => {
           visitorMessage,
         });
       }
-    }
 
-    if (
-      hasNameRequest(
-        previousMessages
-      ) &&
-      looksLikeName(messageText)
-    ) {
-      conversation.visitorName =
-        safeText(
-          messageText,
-          120
-        );
-
-      await conversation.save();
-
-      const reply =
-        await saveAIReply({
-          assistant,
-          conversation,
-          text: getAskPhoneMessage(),
-        });
-
-      await syncAILead({
-        ownerId: assistant.ownerId,
-        conversation:
-          conversation.toObject(),
-        service: safeText(
-          req.body?.service,
-          160
-        ),
-      });
-
-      const updatedConversation =
-        await AIConversation.findById(
-          conversation._id
-        ).lean();
-
-      return res.json({
-        success: true,
-        message: reply,
-        conversation:
-          updatedConversation,
-        visitorMessage,
-      });
-    }
-
-    if (
-      hasPhoneRequest(
-        previousMessages
-      )
-    ) {
-      const phoneNumbers =
-        extractPhoneNumbers(
+      if (
+        isDirectAppointmentRequest(
           messageText
-        );
-
-      if (phoneNumbers.length) {
-        conversation.visitorPhone =
-          phoneNumbers[0];
-
-        await conversation.save();
-
-        await syncAILead({
-          ownerId: assistant.ownerId,
-          conversation:
-            conversation.toObject(),
-          service: safeText(
-            req.body?.service,
-            160
-          ),
-        });
-
+        )
+      ) {
         const reply =
           await saveAIReply({
             assistant,
             conversation,
             text:
-              getAppointmentConfirmationMessage(),
+              getAskNameMessage(),
           });
 
         const updatedConversation =
@@ -1253,127 +1313,308 @@ exports.publicMessage = async (req, res) => {
           visitorMessage,
         });
       }
-    }
 
-    const knowledgeSearchQuery =
-      buildKnowledgeSearchQuery(
-        messageText,
-        previousMessages
-      );
+      if (
+        hasAppointmentOffer(
+          previousMessages
+        )
+      ) {
+        if (
+          isYes(
+            messageText
+          )
+        ) {
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getAskNameMessage(),
+            });
 
-    console.log(
-      "AI KNOWLEDGE QUERY:",
-      knowledgeSearchQuery
-    );
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
 
-    let knowledge = [];
+          return res.json({
+            success: true,
+            message: reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
 
-    try {
-      knowledge =
-        await searchKnowledge({
+        if (
+          isNo(
+            messageText
+          )
+        ) {
+          const contactNumber =
+            await findClientContactNumber(
+              {
+                assistant,
+                ownerProfile,
+              }
+            );
+
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getNoAppointmentMessage(
+                  contactNumber
+                ),
+            });
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
+      }
+
+      if (
+        hasNameRequest(
+          previousMessages
+        ) &&
+        looksLikeName(
+          messageText
+        )
+      ) {
+        conversation.visitorName =
+          safeText(
+            messageText,
+            120
+          );
+
+        await conversation.save();
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
+              getAskPhoneMessage(),
+          });
+
+        await syncAILead({
           ownerId:
             assistant.ownerId,
-          assistantId:
-            assistant._id,
-          query:
-            knowledgeSearchQuery,
-          limit: 5,
+          conversation:
+            conversation.toObject(),
+          service:
+            safeText(
+              req.body?.service,
+              160
+            ),
         });
-    } catch (knowledgeError) {
-      console.error(
-        "AI KNOWLEDGE SEARCH ERROR:",
-        knowledgeError
+
+        const updatedConversation =
+          await AIConversation.findById(
+            conversation._id
+          ).lean();
+
+        return res.json({
+          success: true,
+          message: reply,
+          conversation:
+            updatedConversation,
+          visitorMessage,
+        });
+      }
+
+      if (
+        hasPhoneRequest(
+          previousMessages
+        )
+      ) {
+        const phoneNumbers =
+          extractPhoneNumbers(
+            messageText
+          );
+
+        if (
+          phoneNumbers.length
+        ) {
+          conversation.visitorPhone =
+            phoneNumbers[0];
+
+          await conversation.save();
+
+          await syncAILead({
+            ownerId:
+              assistant.ownerId,
+            conversation:
+              conversation.toObject(),
+            service:
+              safeText(
+                req.body?.service,
+                160
+              ),
+          });
+
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                getAppointmentConfirmationMessage(),
+            });
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation:
+              updatedConversation,
+            visitorMessage,
+          });
+        }
+      }
+
+      const knowledgeSearchQuery =
+        buildKnowledgeSearchQuery(
+          messageText,
+          previousMessages
+        );
+
+      console.log(
+        "AI KNOWLEDGE QUERY:",
+        knowledgeSearchQuery
       );
 
-      knowledge = [];
-    }
+      let knowledge = [];
 
-    const aiResult =
-      await generateAIReply({
-        assistant,
-        history: previousMessages,
-        userMessage: messageText,
-        knowledge,
-      });
+      try {
+        knowledge =
+          await searchKnowledge({
+            ownerId:
+              assistant.ownerId,
+            assistantId:
+              assistant._id,
+            query:
+              knowledgeSearchQuery,
+            limit: 5,
+          });
+      } catch (
+        knowledgeError
+      ) {
+        console.error(
+          "AI KNOWLEDGE SEARCH ERROR:",
+          knowledgeError
+        );
 
-    if (
-      !aiResult?.shouldReply ||
-      !aiResult?.text
-    ) {
+        knowledge = [];
+      }
+
+      const aiResult =
+        await generateAIReply({
+          assistant,
+          history:
+            previousMessages,
+          userMessage:
+            messageText,
+          knowledge,
+        });
+
+      if (
+        !aiResult?.shouldReply ||
+        !aiResult?.text
+      ) {
+        return res.json({
+          success: true,
+          message: null,
+          conversation,
+          visitorMessage,
+          silent: false,
+          aiError:
+            aiResult?.error ||
+            "AI_REPLY_NOT_GENERATED",
+        });
+      }
+
+      const replyText =
+        String(
+          aiResult.text
+        ).trim();
+
+      if (!replyText) {
+        return res.json({
+          success: true,
+          message: null,
+          conversation,
+          visitorMessage,
+          silent: false,
+          aiError:
+            "EMPTY_AI_RESPONSE",
+        });
+      }
+
+      const reply =
+        await saveAIReply({
+          assistant,
+          conversation,
+          text: replyText,
+        });
+
+      const updatedConversation =
+        await AIConversation.findById(
+          conversation._id
+        ).lean();
+
       return res.json({
         success: true,
-        message: null,
-        conversation,
+        message: reply,
+        conversation:
+          updatedConversation,
         visitorMessage,
-        silent: false,
-        aiError:
-          aiResult?.error ||
-          "AI_REPLY_NOT_GENERATED",
+      });
+    } catch (error) {
+      console.error(
+        "AI PUBLIC MESSAGE ERROR:",
+        error?.response?.data ||
+          error?.message ||
+          error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to process AI message",
       });
     }
-
-    const replyText = String(
-      aiResult.text
-    ).trim();
-
-    if (!replyText) {
-      return res.json({
-        success: true,
-        message: null,
-        conversation,
-        visitorMessage,
-        silent: false,
-        aiError:
-          "EMPTY_AI_RESPONSE",
-      });
-    }
-
-    const reply =
-      await saveAIReply({
-        assistant,
-        conversation,
-        text: replyText,
-      });
-
-    const updatedConversation =
-      await AIConversation.findById(
-        conversation._id
-      ).lean();
-
-    return res.json({
-      success: true,
-      message: reply,
-      conversation:
-        updatedConversation,
-      visitorMessage,
-    });
-  } catch (error) {
-    console.error(
-      "AI PUBLIC MESSAGE ERROR:",
-      error?.response?.data ||
-        error?.message ||
-        error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Unable to process AI message",
-    });
-  }
-};
+  };
 
 exports.publicMessages =
   async (req, res) => {
     try {
-      const assistantId = String(
-        req.query?.assistantId || ""
-      );
+      const assistantId =
+        String(
+          req.query?.assistantId ||
+            ""
+        );
 
-      const sessionId = safeText(
-        req.query?.sessionId || "",
-        200
-      );
+      const sessionId =
+        safeText(
+          req.query?.sessionId ||
+            "",
+          200
+        );
 
       if (
         !mongoose.isValidObjectId(
@@ -1383,7 +1624,8 @@ exports.publicMessages =
       ) {
         return res.status(400).json({
           success: false,
-          message: "Invalid chat",
+          message:
+            "Invalid chat",
         });
       }
 
@@ -1438,16 +1680,21 @@ exports.publicMessages =
 exports.listConversations =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.view",
+          res
+        )
+      ) {
+        return;
       }
+
+      const ownerId =
+        context.workspaceOwnerId;
 
       const conversations =
         await AIConversation.find({
@@ -1480,16 +1727,21 @@ exports.listConversations =
 exports.getConversation =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.view",
+          res
+        )
+      ) {
+        return;
       }
+
+      const ownerId =
+        context.workspaceOwnerId;
 
       let conversation =
         await AIConversation.findOne({
@@ -1523,7 +1775,8 @@ exports.getConversation =
         },
         {
           $set: {
-            unreadForTeam: false,
+            unreadForTeam:
+              false,
           },
         }
       );
@@ -1556,25 +1809,32 @@ exports.getConversation =
 exports.unreadCount =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.view",
+          res
+        )
+      ) {
+        return;
       }
 
+      const ownerId =
+        context.workspaceOwnerId;
+
       const count =
-        await AIConversation.countDocuments({
-          ownerId,
-          unreadForTeam: true,
-          status: {
-            $ne: "closed",
-          },
-        });
+        await AIConversation.countDocuments(
+          {
+            ownerId,
+            unreadForTeam: true,
+            status: {
+              $ne: "closed",
+            },
+          }
+        );
 
       return res.json({
         success: true,
@@ -1597,16 +1857,21 @@ exports.unreadCount =
 exports.takeOver =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.use",
+          res
+        )
+      ) {
+        return;
       }
+
+      const ownerId =
+        context.workspaceOwnerId;
 
       const conversation =
         await AIConversation.findOneAndUpdate(
@@ -1660,21 +1925,27 @@ exports.takeOver =
 exports.humanReply =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.use",
+          res
+        )
+      ) {
+        return;
       }
 
-      const text = safeText(
-        req.body?.message,
-        5000
-      );
+      const ownerId =
+        context.workspaceOwnerId;
+
+      const text =
+        safeText(
+          req.body?.message,
+          5000
+        );
 
       if (!text) {
         return res.status(400).json({
@@ -1701,12 +1972,18 @@ exports.humanReply =
         });
       }
 
-      conversation.mode = "human";
+      conversation.mode =
+        "human";
+
       conversation.status =
         "waiting_human";
+
       conversation.unreadForTeam =
         false;
-      conversation.lastMessage = text;
+
+      conversation.lastMessage =
+        text;
+
       conversation.lastMessageAt =
         new Date();
 
@@ -1745,16 +2022,21 @@ exports.humanReply =
 exports.closeConversation =
   async (req, res) => {
     try {
-      const ownerId =
-        getUserId(req);
+      const context =
+        await getContext(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required",
-        });
+      if (
+        !requirePermission(
+          context,
+          "ai.use",
+          res
+        )
+      ) {
+        return;
       }
+
+      const ownerId =
+        context.workspaceOwnerId;
 
       const conversation =
         await AIConversation.findOneAndUpdate(

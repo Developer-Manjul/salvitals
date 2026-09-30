@@ -29,9 +29,9 @@ body:has(.dashboard-shell),
   flex: 0 0 270px;
 }
 
-.dash-brand {
-  flex: 0 0 auto;
-}
+// .dash-brand {
+//   flex: 0 0 auto;
+// }
 
 .dash-nav {
   flex: 1 1 auto;
@@ -40,6 +40,7 @@ body:has(.dashboard-shell),
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  margin-top: 20px;
 }
 
 .dash-nav::-webkit-scrollbar {

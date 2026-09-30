@@ -222,6 +222,16 @@ function getNextFollowUp(lead) {
   );
 }
 
+const LEAD_STAGES = [
+  "New",
+  "Pending follow-up",
+  "Contacted",
+  "Qualified",
+  "Proposal",
+  "Converted",
+  "Lost",
+];
+
 function getSavedNotes(lead) {
   if (!lead?.notes?.length) return [];
 
@@ -246,6 +256,7 @@ export default function LeadDetails({
   const [followUpNote, setFollowUpNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [savingStage, setSavingStage] = useState(false);
 
   const loadLead = async () => {
     const token = getToken();
@@ -428,6 +439,58 @@ export default function LeadDetails({
     }
   };
 
+  const updateLeadStage = async (stage) => {
+    if (!stage || stage === lead?.stage || savingStage) return;
+
+    setSavingStage(true);
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/leads/${leadId}`),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({
+            name: lead?.name || "",
+            email: lead?.email || "",
+            phone: lead?.phone || "",
+            source: lead?.source || "",
+            service: lead?.service || "",
+            owner: lead?.owner || user?.name || "",
+            stage,
+            preferredDoctor: lead?.preferredDoctor || "",
+            landingPage: lead?.landingPage || "",
+            pageUrl: lead?.pageUrl || "",
+            utmSource: lead?.utmSource || "",
+            utmMedium: lead?.utmMedium || "",
+            utmCampaign: lead?.utmCampaign || "",
+            utmTerm: lead?.utmTerm || "",
+            utmContent: lead?.utmContent || "",
+            ipAddress: lead?.ipAddress || "",
+            firstNote: lead?.firstNote || "",
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to update status");
+      }
+
+      setLead(data.lead);
+      setNotice("Lead status updated successfully.");
+    } catch (updateError) {
+      setNotice(updateError.message || "Unable to update status");
+    } finally {
+      setSavingStage(false);
+    }
+  };
+
   const openFollowUpModal = () => {
     setNotice("");
     setFollowUpDate("");
@@ -479,9 +542,21 @@ export default function LeadDetails({
             <div className="lead-detail-title-row">
               <h1>{lead.name}</h1>
 
-              <span className="lead-stage-pill">
-                {lead.stage || "—"}
-              </span>
+              <select
+                className="lead-stage-pill lead-stage-select"
+                value={lead.stage || "New"}
+                onChange={(event) =>
+                  updateLeadStage(event.target.value)
+                }
+                disabled={savingStage}
+                aria-label="Lead status"
+              >
+                {LEAD_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
 
               {lead.priority && (
                 <span className="lead-priority-pill">
@@ -499,7 +574,6 @@ export default function LeadDetails({
             <div className="lead-detail-meta">
               <span>{lead.source || "—"}</span>
               <span>{serviceName}</span>
-              <span>{lead.preferredDoctor || "—"}</span>
               <span>{getOwner(lead, user)}</span>
             </div>
           </div>

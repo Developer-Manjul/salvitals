@@ -1,54 +1,63 @@
-const jwt = require("jsonwebtoken");
 const Service = require("../models/Service");
+const {
+    getWorkspaceContext,
+    hasPermission,
+} = require("../utils/workspace");
 
-function getUserId(req) {
-    const authorization =
-        req.headers.authorization || "";
+const getContext = async (req) => {
+    return await getWorkspaceContext(req);
+};
 
-    if (!authorization.startsWith("Bearer ")) {
-        return null;
+const requirePermission = (
+    context,
+    permission,
+    res
+) => {
+    if (!context) {
+        res.status(401).json({
+            success: false,
+            message: "Authentication required",
+        });
+
+        return false;
     }
 
-    const token =
-        authorization.slice(7);
+    if (!hasPermission(context, permission)) {
+        res.status(403).json({
+            success: false,
+            message:
+                "You do not have permission to perform this action.",
+            permission,
+        });
 
-    try {
-        const decoded =
-            jwt.verify(
-                token,
-                process.env.JWT_SECRET
-            );
-
-        return (
-            decoded.id ||
-            decoded._id ||
-            decoded.userId ||
-            null
-        );
-    } catch (error) {
-        return null;
+        return false;
     }
-}
+
+    return true;
+};
 
 exports.getServices = async (
     req,
     res
 ) => {
     try {
-        const userId =
-            getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "services.view",
+                res
+            )
+        ) {
+            return;
         }
 
         const services =
             await Service.find({
-                userId,
+                userId:
+                    context.workspaceOwnerId,
             }).sort({
                 createdAt: -1,
             });
@@ -57,7 +66,6 @@ exports.getServices = async (
             success: true,
             services,
         });
-
     } catch (error) {
         console.error(
             "GET SERVICES ERROR:",
@@ -77,22 +85,25 @@ exports.createService = async (
     res
 ) => {
     try {
-        const userId =
-            getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "services.create",
+                res
+            )
+        ) {
+            return;
         }
 
-        const {
-            name,
-        } = req.body;
+        const name =
+            String(
+                req.body?.name || ""
+            ).trim();
 
-        if (!name?.trim()) {
+        if (!name) {
             return res.status(400).json({
                 success: false,
                 message:
@@ -102,8 +113,9 @@ exports.createService = async (
 
         const service =
             await Service.create({
-                userId,
-                name: name.trim(),
+                userId:
+                    context.workspaceOwnerId,
+                name,
             });
 
         return res.status(201).json({
@@ -112,7 +124,6 @@ exports.createService = async (
                 "Service added successfully",
             service,
         });
-
     } catch (error) {
         console.error(
             "CREATE SERVICE ERROR:",
@@ -132,22 +143,25 @@ exports.updateService = async (
     res
 ) => {
     try {
-        const userId =
-            getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "services.edit",
+                res
+            )
+        ) {
+            return;
         }
 
-        const {
-            name,
-        } = req.body;
+        const name =
+            String(
+                req.body?.name || ""
+            ).trim();
 
-        if (!name?.trim()) {
+        if (!name) {
             return res.status(400).json({
                 success: false,
                 message:
@@ -159,11 +173,11 @@ exports.updateService = async (
             await Service.findOneAndUpdate(
                 {
                     _id: req.params.id,
-                    userId,
+                    userId:
+                        context.workspaceOwnerId,
                 },
                 {
-                    name:
-                        name.trim(),
+                    name,
                 },
                 {
                     new: true,
@@ -185,7 +199,6 @@ exports.updateService = async (
                 "Service updated successfully",
             service,
         });
-
     } catch (error) {
         console.error(
             "UPDATE SERVICE ERROR:",
@@ -205,21 +218,24 @@ exports.deleteService = async (
     res
 ) => {
     try {
-        const userId =
-            getUserId(req);
+        const context =
+            await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "services.delete",
+                res
+            )
+        ) {
+            return;
         }
 
         const service =
             await Service.findOneAndDelete({
                 _id: req.params.id,
-                userId,
+                userId:
+                    context.workspaceOwnerId,
             });
 
         if (!service) {
@@ -235,7 +251,6 @@ exports.deleteService = async (
             message:
                 "Service deleted successfully",
         });
-
     } catch (error) {
         console.error(
             "DELETE SERVICE ERROR:",

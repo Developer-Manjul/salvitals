@@ -1,64 +1,62 @@
 const express = require("express");
 
-const controller =
-    require("../controllers/metaIntegrationController");
+const controller = require("../controllers/metaIntegrationController");
 
-const router =
-    express.Router();
+const router = express.Router();
 
 router.get(
-    "/connect",
-    controller.connect
+  "/connect",
+  controller.connect
 );
 
 router.get(
-    "/callback",
-    controller.callback
+  "/callback",
+  controller.callback
 );
 
 router.get(
-    "/status",
-    controller.status
+  "/status",
+  controller.status
 );
 
 router.get(
-    "/pages",
-    controller.pages
+  "/pages",
+  controller.pages
 );
 
 router.post(
-    "/select-page",
-    controller.selectPage
+  "/select-page",
+  controller.selectPage
 );
 
 router.post(
-    "/disconnect",
-    controller.disconnect
+  "/disconnect",
+  controller.disconnect
 );
 
 router.post(
-    "/refresh",
-    controller.refresh
+  "/refresh",
+  controller.refresh
 );
 
 router.get(
-    "/debug/leadgen-subscription",
-    controller.debugLeadgenSubscription
+  "/debug/leadgen-subscription",
+  controller.debugLeadgenSubscription
 );
 
 router.get(
-    "/debug/permissions",
-    controller.debugMetaPermissions
+  "/debug/permissions",
+  controller.debugMetaPermissions
 );
 
 router.get(
-    "/webhook",
-    controller.verifyWebhook
+  "/webhook",
+  controller.verifyWebhook
 );
 
 router.post(
-    "/webhook",
-    controller.receiveWebhook
+  "/webhook",
+  controller.receiveWebhook
 );
 
 module.exports = router;

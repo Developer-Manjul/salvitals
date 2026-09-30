@@ -19,7 +19,7 @@ const navGroups = [
     items: [
       ["Leads", "users"],
       ["Follow-ups", "calendar"],
-      ["Chat", "chat"],
+      ["AI Chat", "chat"],
     ],
   },
   {
@@ -50,6 +50,19 @@ const navGroups = [
     ],
   },
 ];
+
+const NAV_PERMISSIONS = {
+  Leads: "leads.view",
+  "Follow-ups": "followups.view",
+  Chat: "ai.view",
+  Contacts: "contacts.view",
+  Calendar: "calendar.view",
+  "AI Assistant": "ai.view",
+  WhatsApp: "whatsapp.view",
+  Invoices: "invoices.view",
+  Integrations: "integrations.view",
+  Settings: null,
+};
 
 function normalizeSource(source = "") {
   const value = String(source || "").trim().toLowerCase();
@@ -474,7 +487,7 @@ function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFoll
   const greeting = getGreeting();
   const data = dashboardData || buildDashboardData([]);
   const maxPipeline = Math.max(1, ...data.pipeline.map(([, count]) => count));
-  const recentLeads = dashboardLeads.slice(0, 15);
+  const recentLeads = dashboardLeads.slice(0, 5);
   const visibleFollowUps = todayFollowUps.slice(0, 5);
 
   return (
@@ -1437,7 +1450,36 @@ export default function Dashboard() {
       }
     };
 
+  const userPermissions = Array.isArray(user?.permissions)
+    ? user.permissions
+    : [];
+
+  const isOwnerUser =
+    user?.isOwner === true ||
+    userPermissions.includes("*");
+
+  const hasPermission = (permission) =>
+    isOwnerUser ||
+    !permission ||
+    userPermissions.includes(permission);
+
+  const canAccessNav = (name) =>
+    hasPermission(NAV_PERMISSIONS[name]);
+
+  const visibleNavGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(([name]) =>
+        canAccessNav(name)
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
   const selectNav = (name) => {
+    if (!canAccessNav(name)) {
+      return;
+    }
+
     setActive(name);
 
     if (name === "Settings") {
@@ -1504,6 +1546,16 @@ export default function Dashboard() {
     });
   };
 
+  useEffect(() => {
+    if (active === "Dashboard" || active === "LeadDetails") {
+      return;
+    }
+
+    if (!canAccessNav(active)) {
+      setActive("Dashboard");
+    }
+  }, [active, user?.permissions, user?.isOwner]);
+
   const renderDashboardSection = () => {
     if (active === "Settings") {
       return (
@@ -1556,12 +1608,22 @@ export default function Dashboard() {
       return <Contacts user={user} />;
     }
 
-    if (active === "Chat") {
-      return <AIAssistant initialTab="conversations" />;
-    }
+    if (active === "AI Chat") {
+  return (
+    <AIAssistant
+      key="ai-chat"
+      initialTab="conversations"
+    />
+  );
+}
 
     if (active === "AI Assistant") {
-      return <AIAssistant initialTab="settings" />;
+      return (
+        <AIAssistant
+          key="ai-assistant"
+          initialTab="settings"
+        />
+      );
     }
 
     if (active === "Invoices") {
@@ -1657,7 +1719,7 @@ export default function Dashboard() {
 
           </button>
 
-          {navGroups.map(
+          {visibleNavGroups.map(
             (group) => (
               <div
                 className="dash-nav-group"
@@ -1735,77 +1797,57 @@ export default function Dashboard() {
 
         </nav>
 
-        <div className="dash-plan">
-          {showPlans || billingLoading ? (
-            <>
-              <div className="dash-plan-top">
-                <strong>Choose your plan</strong>
-                <span>Get started</span>
-              </div>
+        {hasPermission("billing.view") && (
+          <div className="dash-plan">
+            {showPlans || billingLoading ? (
+              <>
+                <div className="dash-plan-top">
+                  <strong>Choose your plan</strong>
+                  <span>Get started</span>
+                </div>
 
-              <div className="dash-plan-copy">
-                Choose a plan to unlock your workspace
-              </div>
-
-              <div className="dash-plan-bar">
-                <i style={{ width: "0%" }} />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSettingsTab("Plan & Billing");
-                  setActive("Settings");
-                  setMobileOpen(false);
-                  setProfileOpen(false);
-                }}
-              >
-                Choose plan
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="dash-plan-top">
-                <strong>
-                  {billing?.subscription?.planName ||
-                    "Active plan"}
-                </strong>
-
-                <span>Active</span>
-              </div>
-
-              <div className="dash-plan-copy">
-                {billing?.subscription?.daysRemaining !==
-                  undefined
-                  ? `${billing.subscription.daysRemaining} days remaining`
-                  : "Your Vitals workspace is active"}
-              </div>
-
-              <div className="dash-plan-usage">
-                <div className="dash-plan-usage-row">
-                  <strong>
-                    {(() => {
-                      const used = Number(
-                        billing?.usage?.contacts?.used || 0
-                      );
-
-                      const total =
-                        billing?.usage?.contacts?.totalLimit ??
-                        billing?.usage?.contacts?.planLimit ??
-                        billing?.usage?.contacts?.limit;
-
-                      return total === null ||
-                        total === undefined
-                        ? `${used} contacts`
-                        : `${used} / ${Number(total) || 0}`;
-                    })()}
-                  </strong>
+                <div className="dash-plan-copy">
+                  Choose a plan to unlock your workspace
                 </div>
 
                 <div className="dash-plan-bar">
-                  <i
-                    style={{
-                      width: `${(() => {
+                  <i style={{ width: "0%" }} />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab("Plan & Billing");
+                    setActive("Settings");
+                    setMobileOpen(false);
+                    setProfileOpen(false);
+                  }}
+                >
+                  Choose plan
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="dash-plan-top">
+                  <strong>
+                    {billing?.subscription?.planName ||
+                      "Active plan"}
+                  </strong>
+
+                  <span>Active</span>
+                </div>
+
+                <div className="dash-plan-copy">
+                  {billing?.subscription?.daysRemaining !==
+                    undefined
+                    ? `${billing.subscription.daysRemaining} days remaining`
+                    : "Your Vitals workspace is active"}
+                </div>
+
+                <div className="dash-plan-usage">
+                  <div className="dash-plan-usage-row">
+                    <strong>
+                      {(() => {
                         const used = Number(
                           billing?.usage?.contacts?.used || 0
                         );
@@ -1815,41 +1857,63 @@ export default function Dashboard() {
                           billing?.usage?.contacts?.planLimit ??
                           billing?.usage?.contacts?.limit;
 
-                        if (
-                          total === null ||
-                          total === undefined ||
-                          Number(total) <= 0
-                        ) {
-                          return 0;
-                        }
+                        return total === null ||
+                          total === undefined
+                          ? `${used} contacts`
+                          : `${used} / ${Number(total) || 0}`;
+                      })()}
+                    </strong>
+                  </div>
 
-                        return Math.min(
-                          100,
-                          Math.max(
-                            0,
-                            (used / Number(total)) * 100
-                          )
-                        );
-                      })()}%`,
-                    }}
-                  />
+                  <div className="dash-plan-bar">
+                    <i
+                      style={{
+                        width: `${(() => {
+                          const used = Number(
+                            billing?.usage?.contacts?.used || 0
+                          );
+
+                          const total =
+                            billing?.usage?.contacts?.totalLimit ??
+                            billing?.usage?.contacts?.planLimit ??
+                            billing?.usage?.contacts?.limit;
+
+                          if (
+                            total === null ||
+                            total === undefined ||
+                            Number(total) <= 0
+                          ) {
+                            return 0;
+                          }
+
+                          return Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              (used / Number(total)) * 100
+                            )
+                          );
+                        })()}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSettingsTab("Plan & Billing");
-                  setActive("Settings");
-                  setMobileOpen(false);
-                  setProfileOpen(false);
-                }}
-              >
-                Upgrade plan
-              </button>
-            </>
-          )}
-        </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab("Plan & Billing");
+                    setActive("Settings");
+                    setMobileOpen(false);
+                    setProfileOpen(false);
+                  }}
+                >
+                  Upgrade plan
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
       </aside>
 
@@ -2260,71 +2324,77 @@ export default function Dashboard() {
 
         </button>
 
-        <button
-          className={
-            active === "Leads"
-              ? "on"
-              : ""
-          }
-          onClick={() =>
-            selectNav("Leads")
-          }
-        >
+        {canAccessNav("Leads") && (
+          <button
+            className={
+              active === "Leads"
+                ? "on"
+                : ""
+            }
+            onClick={() =>
+              selectNav("Leads")
+            }
+          >
 
-          <Icon
-            name="users"
-            size={18}
-          />
+            <Icon
+              name="users"
+              size={18}
+            />
 
-          <span>
-            Leads
-          </span>
+            <span>
+              Leads
+            </span>
 
-        </button>
+          </button>
+        )}
 
-        <button
-          className={
-            active === "Follow-ups"
-              ? "on"
-              : ""
-          }
-          onClick={() =>
-            selectNav("Follow-ups")
-          }
-        >
+        {canAccessNav("Follow-ups") && (
+          <button
+            className={
+              active === "Follow-ups"
+                ? "on"
+                : ""
+            }
+            onClick={() =>
+              selectNav("Follow-ups")
+            }
+          >
 
-          <Icon
-            name="pipeline"
-            size={18}
-          />
+            <Icon
+              name="pipeline"
+              size={18}
+            />
 
-          <span>
-            Follow-ups
-          </span>
+            <span>
+              Follow-ups
+            </span>
 
-        </button>
+          </button>
+        )}
 
-        <button
-          className={
-            active === "Calendar"
-              ? "on"
-              : ""
-          }
-          onClick={() =>
-            selectNav("Calendar")
-          }
-        >
+        {canAccessNav("Calendar") && (
+          <button
+            className={
+              active === "Calendar"
+                ? "on"
+                : ""
+            }
+            onClick={() =>
+              selectNav("Calendar")
+            }
+          >
 
-          <Icon
-            name="calendar"
-            size={18}
-          />
+            <Icon
+              name="calendar"
+              size={18}
+            />
 
-          <span>
-            Calendar
-          </span>
+            <span>
+              Calendar
+            </span>
 
-        </button>
+          </button>
+        )}
 
         <button
           onClick={() =>

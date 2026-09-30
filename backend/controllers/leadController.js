@@ -1,44 +1,50 @@
-const jwt = require("jsonwebtoken");
 const Lead = require("../models/Lead");
-const { processNewLead } = require("../services/leadProcessingService");
+const {
+    getWorkspaceContext,
+    hasPermission,
+} = require("../utils/workspace");
 
-function getUserId(req) {
-    const authorization = req.headers.authorization || "";
+const getContext = async (req) => {
+    return await getWorkspaceContext(req);
+};
 
-    if (!authorization.startsWith("Bearer ")) {
-        return null;
+const requirePermission = (context, permission, res) => {
+    if (!context) {
+        res.status(401).json({
+            success: false,
+            message: "Authentication required",
+        });
+        return false;
     }
 
-    try {
-        const decoded = jwt.verify(
-            authorization.slice(7),
-            process.env.JWT_SECRET
-        );
-
-        return (
-            decoded.id ||
-            decoded._id ||
-            decoded.userId ||
-            null
-        );
-    } catch (error) {
-        return null;
+    if (!hasPermission(context, permission)) {
+        res.status(403).json({
+            success: false,
+            message: "You do not have permission to perform this action.",
+            permission,
+        });
+        return false;
     }
-}
+
+    return true;
+};
 
 exports.getLeads = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "leads.view",
+                res
+            )
+        ) {
+            return;
         }
 
         const leads = await Lead.find({
-            userId,
+            userId: context.workspaceOwnerId,
         }).sort({
             createdAt: -1,
         });
@@ -59,13 +65,16 @@ exports.getLeads = async (req, res) => {
 
 exports.createLead = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "leads.create",
+                res
+            )
+        ) {
+            return;
         }
 
         const {
@@ -103,7 +112,7 @@ exports.createLead = async (req, res) => {
         }
 
         const lead = await Lead.create({
-            userId,
+            userId: context.workspaceOwnerId,
             name: name.trim(),
             email: email?.trim() || "",
             phone: phone.trim(),
@@ -111,19 +120,29 @@ exports.createLead = async (req, res) => {
             service: service?.trim() || "",
             owner: owner?.trim() || "",
             stage: stage?.trim() || "New",
-            preferredDoctor: preferredDoctor?.trim() || "",
-            landingPage: landingPage?.trim() || "",
-            pageUrl: pageUrl?.trim() || "",
-            utmSource: utmSource?.trim() || "",
-            utmMedium: utmMedium?.trim() || "",
-            utmCampaign: utmCampaign?.trim() || "",
-            utmTerm: utmTerm?.trim() || "",
-            utmContent: utmContent?.trim() || "",
-            ipAddress: ipAddress?.trim() || "",
-            firstNote: firstNote?.trim() || "",
+            preferredDoctor:
+                preferredDoctor?.trim() || "",
+            landingPage:
+                landingPage?.trim() || "",
+            pageUrl:
+                pageUrl?.trim() || "",
+            utmSource:
+                utmSource?.trim() || "",
+            utmMedium:
+                utmMedium?.trim() || "",
+            utmCampaign:
+                utmCampaign?.trim() || "",
+            utmTerm:
+                utmTerm?.trim() || "",
+            utmContent:
+                utmContent?.trim() || "",
+            ipAddress:
+                ipAddress?.trim() || "",
+            firstNote:
+                firstNote?.trim() || "",
         });
 
-        await processNewLead(lead);
+        await processNewLeadSafely(lead);
 
         return res.status(201).json({
             success: true,
@@ -142,13 +161,16 @@ exports.createLead = async (req, res) => {
 
 exports.updateLead = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "leads.edit",
+                res
+            )
+        ) {
+            return;
         }
 
         const {
@@ -188,7 +210,7 @@ exports.updateLead = async (req, res) => {
         const lead = await Lead.findOneAndUpdate(
             {
                 _id: req.params.id,
-                userId,
+                userId: context.workspaceOwnerId,
             },
             {
                 name: name.trim(),
@@ -198,16 +220,26 @@ exports.updateLead = async (req, res) => {
                 service: service?.trim() || "",
                 owner: owner?.trim() || "",
                 stage: stage?.trim() || "New",
-                preferredDoctor: preferredDoctor?.trim() || "",
-                landingPage: landingPage?.trim() || "",
-                pageUrl: pageUrl?.trim() || "",
-                utmSource: utmSource?.trim() || "",
-                utmMedium: utmMedium?.trim() || "",
-                utmCampaign: utmCampaign?.trim() || "",
-                utmTerm: utmTerm?.trim() || "",
-                utmContent: utmContent?.trim() || "",
-                ipAddress: ipAddress?.trim() || "",
-                firstNote: firstNote?.trim() || "",
+                preferredDoctor:
+                    preferredDoctor?.trim() || "",
+                landingPage:
+                    landingPage?.trim() || "",
+                pageUrl:
+                    pageUrl?.trim() || "",
+                utmSource:
+                    utmSource?.trim() || "",
+                utmMedium:
+                    utmMedium?.trim() || "",
+                utmCampaign:
+                    utmCampaign?.trim() || "",
+                utmTerm:
+                    utmTerm?.trim() || "",
+                utmContent:
+                    utmContent?.trim() || "",
+                ipAddress:
+                    ipAddress?.trim() || "",
+                firstNote:
+                    firstNote?.trim() || "",
             },
             {
                 new: true,
@@ -239,18 +271,21 @@ exports.updateLead = async (req, res) => {
 
 exports.deleteLead = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "leads.delete",
+                res
+            )
+        ) {
+            return;
         }
 
         const lead = await Lead.findOneAndDelete({
             _id: req.params.id,
-            userId,
+            userId: context.workspaceOwnerId,
         });
 
         if (!lead) {
@@ -276,18 +311,21 @@ exports.deleteLead = async (req, res) => {
 
 exports.getLead = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "leads.view",
+                res
+            )
+        ) {
+            return;
         }
 
         const lead = await Lead.findOne({
             _id: req.params.id,
-            userId,
+            userId: context.workspaceOwnerId,
         });
 
         if (!lead) {
@@ -313,18 +351,21 @@ exports.getLead = async (req, res) => {
 
 exports.addLeadNote = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
+
+        if (
+            !requirePermission(
+                context,
+                "leads.edit",
+                res
+            )
+        ) {
+            return;
+        }
 
         const text = String(
             req.body?.text || ""
         ).trim();
-
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
-        }
 
         if (!text) {
             return res.status(400).json({
@@ -336,13 +377,14 @@ exports.addLeadNote = async (req, res) => {
         const lead = await Lead.findOneAndUpdate(
             {
                 _id: req.params.id,
-                userId,
+                userId: context.workspaceOwnerId,
             },
             {
                 $push: {
                     notes: {
                         text,
-                        userName: req.body?.userName || "",
+                        userName:
+                            req.body?.userName || "",
                     },
                 },
             },
@@ -364,7 +406,10 @@ exports.addLeadNote = async (req, res) => {
             lead,
         });
     } catch (error) {
-        console.error("ADD LEAD NOTE ERROR:", error);
+        console.error(
+            "ADD LEAD NOTE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
@@ -375,13 +420,16 @@ exports.addLeadNote = async (req, res) => {
 
 exports.addLeadFollowUp = async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "followups.create",
+                res
+            )
+        ) {
+            return;
         }
 
         const date = new Date(req.body?.date);
@@ -389,7 +437,8 @@ exports.addLeadFollowUp = async (req, res) => {
         if (Number.isNaN(date.getTime())) {
             return res.status(400).json({
                 success: false,
-                message: "Follow-up date is required",
+                message:
+                    "Follow-up date is required",
             });
         }
 
@@ -433,19 +482,23 @@ exports.addLeadFollowUp = async (req, res) => {
         ];
 
         const finalPriority =
-            allowedPriorities.includes(priority)
+            allowedPriorities.includes(
+                priority
+            )
                 ? priority
                 : "Medium";
 
         const finalChannel =
-            allowedChannels.includes(channel)
+            allowedChannels.includes(
+                channel
+            )
                 ? channel
                 : "Call";
 
         const lead = await Lead.findOneAndUpdate(
             {
                 _id: req.params.id,
-                userId,
+                userId: context.workspaceOwnerId,
             },
             {
                 $push: {
@@ -477,7 +530,8 @@ exports.addLeadFollowUp = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: "Follow-up scheduled successfully",
+            message:
+                "Follow-up scheduled successfully",
             lead,
         });
     } catch (error) {
@@ -488,25 +542,32 @@ exports.addLeadFollowUp = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Unable to schedule follow-up",
+            message:
+                "Unable to schedule follow-up",
         });
     }
 };
 
-exports.updateLeadFollowUp = async (req, res) => {
+exports.updateLeadFollowUp = async (
+    req,
+    res
+) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "followups.edit",
+                res
+            )
+        ) {
+            return;
         }
 
         const lead = await Lead.findOne({
             _id: req.params.id,
-            userId,
+            userId: context.workspaceOwnerId,
         });
 
         if (!lead) {
@@ -528,12 +589,15 @@ exports.updateLeadFollowUp = async (req, res) => {
         }
 
         if (req.body.date !== undefined) {
-            const date = new Date(req.body.date);
+            const date = new Date(
+                req.body.date
+            );
 
             if (Number.isNaN(date.getTime())) {
                 return res.status(400).json({
                     success: false,
-                    message: "Valid follow-up date is required",
+                    message:
+                        "Valid follow-up date is required",
                 });
             }
 
@@ -558,7 +622,11 @@ exports.updateLeadFollowUp = async (req, res) => {
                 "In person",
             ];
 
-            if (allowedChannels.includes(channel)) {
+            if (
+                allowedChannels.includes(
+                    channel
+                )
+            ) {
                 followUp.channel = channel;
             }
         }
@@ -585,7 +653,8 @@ exports.updateLeadFollowUp = async (req, res) => {
                     priority
                 )
             ) {
-                followUp.priority = priority;
+                followUp.priority =
+                    priority;
             }
         }
 
@@ -600,7 +669,10 @@ exports.updateLeadFollowUp = async (req, res) => {
                 req.body.reminder === true;
         }
 
-        if (req.body.repeatWeekly !== undefined) {
+        if (
+            req.body.repeatWeekly !==
+            undefined
+        ) {
             followUp.repeatWeekly =
                 req.body.repeatWeekly === true;
         }
@@ -629,7 +701,8 @@ exports.updateLeadFollowUp = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Follow-up updated successfully",
+            message:
+                "Follow-up updated successfully",
             lead,
         });
     } catch (error) {
@@ -640,25 +713,32 @@ exports.updateLeadFollowUp = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Unable to update follow-up",
+            message:
+                "Unable to update follow-up",
         });
     }
 };
 
-exports.deleteLeadFollowUp = async (req, res) => {
+exports.deleteLeadFollowUp = async (
+    req,
+    res
+) => {
     try {
-        const userId = getUserId(req);
+        const context = await getContext(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required",
-            });
+        if (
+            !requirePermission(
+                context,
+                "followups.delete",
+                res
+            )
+        ) {
+            return;
         }
 
         const lead = await Lead.findOne({
             _id: req.params.id,
-            userId,
+            userId: context.workspaceOwnerId,
         });
 
         if (!lead) {
@@ -685,7 +765,8 @@ exports.deleteLeadFollowUp = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Follow-up deleted successfully",
+            message:
+                "Follow-up deleted successfully",
             lead,
         });
     } catch (error) {
@@ -696,7 +777,19 @@ exports.deleteLeadFollowUp = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Unable to delete follow-up",
+            message:
+                "Unable to delete follow-up",
         });
     }
 };
+
+async function processNewLeadSafely(lead) {
+    try {
+        await processNewLead(lead);
+    } catch (error) {
+        console.error(
+            "PROCESS NEW LEAD ERROR:",
+            error
+        );
+    }
+}

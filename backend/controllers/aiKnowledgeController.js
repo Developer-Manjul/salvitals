@@ -1,46 +1,69 @@
-const jwt = require("jsonwebtoken");
 const AIAssistant = require("../models/AIAssistant");
 const AIKnowledge = require("../models/AIKnowledge");
 const { crawlWebsite } = require("../services/websiteCrawler");
 
-function getUserId(req) {
-  const authorization = req.headers.authorization || "";
+const {
+  getWorkspaceContext,
+  hasPermission,
+} = require("../utils/workspace");
 
-  if (!authorization.startsWith("Bearer ")) {
-    return null;
+const getContext = async (req) => {
+  return await getWorkspaceContext(req);
+};
+
+const requirePermission = (
+  context,
+  permission,
+  res
+) => {
+  if (!context) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+
+    return false;
   }
 
-  try {
-    const decoded = jwt.verify(
-      authorization.slice(7),
-      process.env.JWT_SECRET
-    );
+  if (!hasPermission(context, permission)) {
+    res.status(403).json({
+      success: false,
+      message:
+        "You do not have permission to perform this action.",
+      permission,
+    });
 
-    return (
-      decoded.id ||
-      decoded._id ||
-      decoded.userId ||
-      null
-    );
-  } catch (_) {
-    return null;
+    return false;
   }
-}
 
-exports.listKnowledge = async (req, res) => {
+  return true;
+};
+
+exports.listKnowledge = async (
+  req,
+  res
+) => {
   try {
-    const ownerId = getUserId(req);
+    const context =
+      await getContext(req);
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
+    if (
+      !requirePermission(
+        context,
+        "ai.view",
+        res
+      )
+    ) {
+      return;
     }
 
-    const assistant = await AIAssistant.findOne({
-      ownerId,
-    });
+    const ownerId =
+      context.workspaceOwnerId;
+
+    const assistant =
+      await AIAssistant.findOne({
+        ownerId,
+      });
 
     if (!assistant) {
       return res.json({
@@ -49,12 +72,16 @@ exports.listKnowledge = async (req, res) => {
       });
     }
 
-    const knowledge = await AIKnowledge.find({
-      ownerId,
-      assistantId: assistant._id,
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const knowledge =
+      await AIKnowledge.find({
+        ownerId,
+        assistantId:
+          assistant._id,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .lean();
 
     return res.json({
       success: true,
@@ -68,30 +95,43 @@ exports.listKnowledge = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to load knowledge",
+      message:
+        "Unable to load knowledge",
     });
   }
 };
 
-exports.createKnowledge = async (req, res) => {
+exports.createKnowledge = async (
+  req,
+  res
+) => {
   try {
-    const ownerId = getUserId(req);
+    const context =
+      await getContext(req);
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
+    if (
+      !requirePermission(
+        context,
+        "ai.use",
+        res
+      )
+    ) {
+      return;
     }
 
-    const assistant = await AIAssistant.findOne({
-      ownerId,
-    });
+    const ownerId =
+      context.workspaceOwnerId;
+
+    const assistant =
+      await AIAssistant.findOne({
+        ownerId,
+      });
 
     if (!assistant) {
       return res.status(404).json({
         success: false,
-        message: "AI Assistant not configured",
+        message:
+          "AI Assistant not configured",
       });
     }
 
@@ -99,44 +139,52 @@ exports.createKnowledge = async (req, res) => {
       "faq",
       "service",
       "custom",
-    ].includes(req.body?.type)
+    ].includes(
+      req.body?.type
+    )
       ? req.body.type
       : "custom";
 
-    const title = String(
-      req.body?.title || ""
-    )
-      .trim()
-      .slice(0, 200);
+    const title =
+      String(
+        req.body?.title || ""
+      )
+        .trim()
+        .slice(0, 200);
 
-    const content = String(
-      req.body?.content || ""
-    )
-      .trim()
-      .slice(0, 20000);
+    const content =
+      String(
+        req.body?.content || ""
+      )
+        .trim()
+        .slice(0, 20000);
 
     if (!content) {
       return res.status(400).json({
         success: false,
-        message: "Knowledge content is required",
+        message:
+          "Knowledge content is required",
       });
     }
 
-    const sourceUrl = String(
-      req.body?.sourceUrl || ""
-    )
-      .trim()
-      .slice(0, 500);
+    const sourceUrl =
+      String(
+        req.body?.sourceUrl || ""
+      )
+        .trim()
+        .slice(0, 500);
 
-    const knowledge = await AIKnowledge.create({
-      ownerId,
-      assistantId: assistant._id,
-      type,
-      title,
-      content,
-      sourceUrl,
-      active: true,
-    });
+    const knowledge =
+      await AIKnowledge.create({
+        ownerId,
+        assistantId:
+          assistant._id,
+        type,
+        title,
+        content,
+        sourceUrl,
+        active: true,
+      });
 
     return res.status(201).json({
       success: true,
@@ -150,49 +198,66 @@ exports.createKnowledge = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to save knowledge",
+      message:
+        "Unable to save knowledge",
     });
   }
 };
 
-exports.deleteKnowledge = async (req, res) => {
+exports.deleteKnowledge = async (
+  req,
+  res
+) => {
   try {
-    const ownerId = getUserId(req);
+    const context =
+      await getContext(req);
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
+    if (
+      !requirePermission(
+        context,
+        "ai.use",
+        res
+      )
+    ) {
+      return;
     }
 
-    const assistant = await AIAssistant.findOne({
-      ownerId,
-    });
+    const ownerId =
+      context.workspaceOwnerId;
+
+    const assistant =
+      await AIAssistant.findOne({
+        ownerId,
+      });
 
     if (!assistant) {
       return res.status(404).json({
         success: false,
-        message: "AI Assistant not configured",
+        message:
+          "AI Assistant not configured",
       });
     }
 
-    const result = await AIKnowledge.deleteOne({
-      _id: req.params.id,
-      ownerId,
-      assistantId: assistant._id,
-    });
+    const result =
+      await AIKnowledge.deleteOne({
+        _id: req.params.id,
+        ownerId,
+        assistantId:
+          assistant._id,
+      });
 
     if (!result.deletedCount) {
       return res.status(404).json({
         success: false,
-        message: "Knowledge not found",
+        message:
+          "Knowledge not found",
       });
     }
 
     return res.json({
       success: true,
-      message: "Knowledge deleted",
+      message:
+        "Knowledge deleted",
     });
   } catch (error) {
     console.error(
@@ -202,59 +267,80 @@ exports.deleteKnowledge = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to delete knowledge",
+      message:
+        "Unable to delete knowledge",
     });
   }
 };
 
-exports.crawlWebsite = async (req, res) => {
+exports.crawlWebsite = async (
+  req,
+  res
+) => {
   try {
-    const ownerId = getUserId(req);
+    const context =
+      await getContext(req);
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
+    if (
+      !requirePermission(
+        context,
+        "ai.use",
+        res
+      )
+    ) {
+      return;
     }
 
-    const assistant = await AIAssistant.findOne({
-      ownerId,
-    });
+    const ownerId =
+      context.workspaceOwnerId;
+
+    const assistant =
+      await AIAssistant.findOne({
+        ownerId,
+      });
 
     if (!assistant) {
       return res.status(404).json({
         success: false,
-        message: "AI Assistant not configured",
+        message:
+          "AI Assistant not configured",
       });
     }
 
-    const websiteUrl = String(
-      req.body?.websiteUrl ||
-        assistant.websiteUrl ||
-        ""
-    ).trim();
+    const websiteUrl =
+      String(
+        req.body?.websiteUrl ||
+          assistant.websiteUrl ||
+          ""
+      ).trim();
 
     if (!websiteUrl) {
       return res.status(400).json({
         success: false,
-        message: "Website URL is required",
+        message:
+          "Website URL is required",
       });
     }
 
     let parsed;
 
     try {
-      parsed = new URL(websiteUrl);
+      parsed = new URL(
+        websiteUrl
+      );
     } catch (_) {
       return res.status(400).json({
         success: false,
-        message: "Enter a valid website URL",
+        message:
+          "Enter a valid website URL",
       });
     }
 
     if (
-      !["http:", "https:"].includes(
+      ![
+        "http:",
+        "https:",
+      ].includes(
         parsed.protocol
       )
     ) {
@@ -265,12 +351,14 @@ exports.crawlWebsite = async (req, res) => {
       });
     }
 
-    const result = await crawlWebsite({
-      ownerId,
-      assistantId: assistant._id,
-      websiteUrl,
-      maxPages: 30,
-    });
+    const result =
+      await crawlWebsite({
+        ownerId,
+        assistantId:
+          assistant._id,
+        websiteUrl,
+        maxPages: 30,
+      });
 
     await AIAssistant.updateOne(
       {
@@ -297,7 +385,8 @@ exports.crawlWebsite = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to crawl website",
+      message:
+        "Unable to crawl website",
     });
   }
 };

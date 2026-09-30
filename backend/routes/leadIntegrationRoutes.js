@@ -1,39 +1,38 @@
 const express = require("express");
 
 const {
-    createWebsiteApiKey,
-    getWebsiteApiKeys,
-    toggleWebsiteApiKey,
-    deleteWebsiteApiKey,
-    createWebsiteLead,
+  createWebsiteApiKey,
+  getWebsiteApiKeys,
+  toggleWebsiteApiKey,
+  deleteWebsiteApiKey,
+  createWebsiteLead,
 } = require("../controllers/leadIntegrationController");
 
-const router =
-    express.Router();
+const router = express.Router();
 
 router.post(
-    "/website/api-key",
-    createWebsiteApiKey
+  "/website/api-key",
+  createWebsiteApiKey
 );
 
 router.get(
-    "/website/api-keys",
-    getWebsiteApiKeys
+  "/website/api-keys",
+  getWebsiteApiKeys
 );
 
 router.patch(
-    "/website/api-key/:id",
-    toggleWebsiteApiKey
+  "/website/api-key/:id",
+  toggleWebsiteApiKey
 );
 
 router.delete(
-    "/website/api-key/:id",
-    deleteWebsiteApiKey
+  "/website/api-key/:id",
+  deleteWebsiteApiKey
 );
 
 router.post(
-    "/website/lead",
-    createWebsiteLead
+  "/website/lead",
+  createWebsiteLead
 );
 
 module.exports = router;

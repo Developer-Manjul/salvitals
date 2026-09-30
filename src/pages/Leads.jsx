@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApiUrl } from "../config/api";
 
-const LEAD_SOURCES = [
+const DEFAULT_LEAD_SOURCES = [
   "Google",
   "Instagram",
   "Website",
@@ -14,7 +14,7 @@ const LEAD_SOURCES = [
   "Other",
 ];
 
-const LEAD_STAGES = [
+const DEFAULT_LEAD_STAGES = [
   "New",
   "Pending follow-up",
   "Contacted",
@@ -24,15 +24,39 @@ const LEAD_STAGES = [
   "Lost",
 ];
 
+function readStoredList(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    if (!value) return fallback;
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getConfiguredSourceNames() {
+  const saved = readStoredList("salevitals_lead_sources", []);
+  if (!saved.length) return DEFAULT_LEAD_SOURCES;
+  const names = saved
+    .map((item) => typeof item === "string" ? item : item?.name)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  return names.length ? names : DEFAULT_LEAD_SOURCES;
+}
+
+function getConfiguredStageNames() {
+  const saved = readStoredList("salevitals_lead_stages", []);
+  if (!saved.length) return DEFAULT_LEAD_STAGES;
+  const names = saved
+    .map((item) => typeof item === "string" ? item : item?.name)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  return names.length ? names : DEFAULT_LEAD_STAGES;
+}
+
 const DEFAULT_OWNERS = [
-  "Karan",
-  "Meera",
-  "Sneha",
-  "Divya",
-  "Aditya",
-  "Nisha",
-  "Aarav",
-  "Rhea",
+ 
 ];
 
 function getToken() {
@@ -90,10 +114,10 @@ function getLeadName(lead) {
 
   return getDisplayName(
     lead.name ||
-      lead.visitorName ||
-      lead.visitor?.name ||
-      lead.contactName ||
-      ""
+    lead.visitorName ||
+    lead.visitor?.name ||
+    lead.contactName ||
+    ""
   );
 }
 
@@ -102,129 +126,57 @@ function getLeadPhone(lead) {
 
   return String(
     lead.phone ||
-      lead.visitorPhone ||
-      lead.visitor?.phone ||
-      lead.contactPhone ||
-      ""
+    lead.visitorPhone ||
+    lead.visitor?.phone ||
+    lead.contactPhone ||
+    ""
   ).trim();
 }
 
-function normalizeSource(value = "") {
-  const source = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+function normalizeSource(value = "", configuredSources = DEFAULT_LEAD_SOURCES) {
+  const raw = String(value || "").trim();
+  const source = raw.toLowerCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
 
-  if (
-    source === "instagram" ||
-    source === "ig" ||
-    source.includes("instagram") ||
-    source.includes("instagram ads") ||
-    source.includes("instagram lead")
-  ) {
-    return "Instagram";
-  }
+  if (source === "instagram" || source === "ig" || source.includes("instagram") || source.includes("instagram ads") || source.includes("instagram lead")) return "Instagram";
+  if (source === "facebook" || source === "fb" || source === "meta" || source.includes("facebook") || source.includes("facebook ads") || source.includes("facebook lead")) return "Facebook";
+  if (source === "whatsapp" || source.includes("whatsapp")) return "WhatsApp";
+  if (source === "website" || source.includes("website") || source.includes("web site")) return "Website";
+  if (source === "google" || source.includes("google") || source.includes("google ads") || source.includes("google lead")) return "Google";
+  if (source === "referral" || source.includes("referral")) return "Referral";
+  if (source === "walk in" || source === "walkin") return "Walk-in";
+  if (source === "campaign" || source.includes("campaign")) return "Campaign";
+  if (source === "manual") return "Manual";
 
-  if (
-    source === "facebook" ||
-    source.includes("facebook") ||
-    source.includes("facebook ads") ||
-    source.includes("facebook lead")
-  ) {
-    return "Facebook";
-  }
+  const customMatch = configuredSources.find(
+    (item) => String(item || "").trim().toLowerCase() === raw.toLowerCase()
+  );
 
-  if (
-    source === "whatsapp" ||
-    source.includes("whatsapp")
-  ) {
-    return "WhatsApp";
-  }
-
-  if (
-    source === "website" ||
-    source.includes("website") ||
-    source.includes("web site")
-  ) {
-    return "Website";
-  }
-
-  if (
-    source === "google" ||
-    source.includes("google") ||
-    source.includes("google ads") ||
-    source.includes("google lead")
-  ) {
-    return "Google";
-  }
-
-  if (
-    source === "referral" ||
-    source.includes("referral")
-  ) {
-    return "Referral";
-  }
-
-  if (
-    source === "walk in" ||
-    source === "walkin"
-  ) {
-    return "Walk-in";
-  }
-
-  if (
-    source === "campaign" ||
-    source.includes("campaign")
-  ) {
-    return "Campaign";
-  }
-
-  if (source === "manual") {
-    return "Manual";
-  }
-
-  return "Other";
+  return customMatch || raw || "Other";
 }
 
-function getLeadSource(lead) {
+function getLeadSource(lead, configuredSources = DEFAULT_LEAD_SOURCES) {
   if (!lead) return "Other";
 
-  const platformCandidates = [
+  const candidates = [
     lead.metaPlatform,
     lead.platform,
     lead.leadPlatform,
     lead.metaSource,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  for (const candidate of platformCandidates) {
-    const normalized = normalizeSource(candidate);
-
-    if (LEAD_SOURCES.includes(normalized)) {
-      return normalized;
-    }
-  }
-
-  const detailCandidates = [
     lead.sourceDetails,
     lead.metaSourceDetails,
     lead.adSource,
     lead.utmSource,
+    lead.source,
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
 
-  for (const candidate of detailCandidates) {
-    const normalized = normalizeSource(candidate);
-
-    if (LEAD_SOURCES.includes(normalized)) {
-      return normalized;
-    }
+  for (const candidate of candidates) {
+    const normalized = normalizeSource(candidate, configuredSources);
+    if (normalized) return normalized;
   }
 
-  return normalizeSource(lead.source);
+  return "Other";
 }
 
 function getInitials(name = "") {
@@ -351,6 +303,14 @@ export default function Leads({
   const [unreadLeadIds, setUnreadLeadIds] = useState(new Set());
   const [availableServices, setAvailableServices] =
     useState([]);
+
+  const [leadSources, setLeadSources] = useState(() =>
+    getConfiguredSourceNames()
+  );
+
+  const [leadStages, setLeadStages] = useState(() =>
+    getConfiguredStageNames()
+  );
 
   const [loadingLeads, setLoadingLeads] =
     useState(true);
@@ -597,6 +557,20 @@ export default function Leads({
   };
 
   useEffect(() => {
+    const syncLeadSettings = () => {
+      setLeadSources(getConfiguredSourceNames());
+      setLeadStages(getConfiguredStageNames());
+    };
+
+    syncLeadSettings();
+    window.addEventListener("storage", syncLeadSettings);
+
+    return () => {
+      window.removeEventListener("storage", syncLeadSettings);
+    };
+  }, []);
+
+  useEffect(() => {
     loadLeads();
     loadServices();
 
@@ -652,11 +626,18 @@ export default function Leads({
         previous.owner ||
         user?.name ||
         "",
+      source:
+        previous.source ||
+        (leadSources.includes("Website")
+          ? "Website"
+          : leadSources[0] || "Website"),
+      stage: previous.stage || "New",
     }));
   }, [
     user,
     isHealthcare,
     availableServices,
+    leadSources,
     showAddModal,
   ]);
 
@@ -697,7 +678,7 @@ export default function Leads({
         getLeadName(lead);
 
       const displaySource =
-        getLeadSource(lead);
+        getLeadSource(lead, leadSources);
 
       const searchText = [
         displayName,
@@ -793,6 +774,7 @@ export default function Leads({
     enquiryFilter,
     ownerFilter,
     serviceFilter,
+    leadSources,
   ]);
 
   const openAddLeadModal = () => {
@@ -807,6 +789,11 @@ export default function Leads({
         availableServices[0] || "",
       owner:
         user?.name || "",
+      source:
+        leadSources.includes("Website")
+          ? "Website"
+          : leadSources[0] || "Website",
+      stage: "New",
     });
 
     setShowAddModal(true);
@@ -833,7 +820,7 @@ export default function Leads({
         getLeadPhone(lead) || "",
 
       source:
-        getLeadSource(lead),
+        getLeadSource(lead, leadSources),
 
       service:
         lead.service ||
@@ -1311,7 +1298,7 @@ export default function Leads({
                     "",
 
                   source:
-                    getLeadSource(lead),
+                    getLeadSource(lead, leadSources),
 
                   service:
                     lead.service ||
@@ -1745,7 +1732,7 @@ export default function Leads({
               Stage
             </option>
 
-            {LEAD_STAGES.map(
+            {leadStages.map(
               (stage) => (
                 <option
                   value={stage}
@@ -1774,7 +1761,7 @@ export default function Leads({
               Lead Source
             </option>
 
-            {LEAD_SOURCES.map(
+            {leadSources.map(
               (source) => (
                 <option
                   value={source}
@@ -1786,7 +1773,7 @@ export default function Leads({
             )}
           </select>
 
-          <select
+          {/* <select
             value={
               ownerFilter
             }
@@ -1813,9 +1800,9 @@ export default function Leads({
                 </option>
               )
             )}
-          </select>
+          </select> */}
 
-          <select
+          {/* <select
             value={
               serviceFilter
             }
@@ -1842,7 +1829,7 @@ export default function Leads({
                 </option>
               )
             )}
-          </select>
+          </select> */}
 
           <button
             type="button"
@@ -2008,25 +1995,24 @@ export default function Leads({
                         getLeadName(lead);
 
                       const displaySource =
-                        getLeadSource(lead);
+                        getLeadSource(lead, leadSources);
 
                       return (
                         <tr
                           key={
                             lead._id
                           }
-                          className={`lead-clickable-row ${
-                            unreadLeadIds.has(String(lead._id))
+                          className={`lead-clickable-row ${unreadLeadIds.has(String(lead._id))
                               ? "lead-new-row"
                               : ""
-                          }`}
+                            }`}
                           style={
                             unreadLeadIds.has(String(lead._id))
                               ? {
-                                  fontWeight: 700,
-                                  background: "#f4f7ff",
-                                  boxShadow: "inset 4px 0 0 #2563eb",
-                                }
+                                fontWeight: 700,
+                                background: "#f4f7ff",
+                                boxShadow: "inset 4px 0 0 #2563eb",
+                              }
                               : undefined
                           }
                           onClick={() =>
@@ -2141,33 +2127,11 @@ export default function Leads({
                               }
                             >
 
-                              <option value="New">
-                                New
-                              </option>
-
-                              <option value="Pending follow-up">
-                                Pending follow-up
-                              </option>
-
-                              <option value="Contacted">
-                                Contacted
-                              </option>
-
-                              <option value="Qualified">
-                                Qualified
-                              </option>
-
-                              <option value="Proposal">
-                                Proposal
-                              </option>
-
-                              <option value="Converted">
-                                Converted
-                              </option>
-
-                              <option value="Lost">
-                                Mark as lost
-                              </option>
+                              {leadStages.map((stage) => (
+                                <option value={stage} key={stage}>
+                                  {stage === "Lost" ? "Mark as lost" : stage}
+                                </option>
+                              ))}
 
                             </select>
 
@@ -2233,7 +2197,7 @@ export default function Leads({
                                     >
                                       Edit lead
                                     </button>
-{/* 
+                                    {/* 
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -2269,7 +2233,7 @@ export default function Leads({
         "kanban" && (
           <div className="lead-kanban-board">
 
-            {LEAD_STAGES.map(
+            {leadStages.map(
               (stage) => {
                 const items =
                   filteredLeads.filter(
@@ -2386,7 +2350,7 @@ export default function Leads({
                     getLeadName(lead);
 
                   const displaySource =
-                    getLeadSource(lead);
+                    getLeadSource(lead, leadSources);
 
                   return (
                     <div
@@ -2633,7 +2597,7 @@ export default function Leads({
                     }
                   >
 
-                    {LEAD_SOURCES.map(
+                    {leadSources.map(
                       (source) => (
                         <option
                           value={

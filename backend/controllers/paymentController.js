@@ -1,10 +1,13 @@
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
-
 const Order = require("../models/Order");
 const User = require("../models/User");
 const sendInvoiceEmail = require("../utils/sendInvoiceEmail");
+
+const {
+    getWorkspaceContext,
+    hasPermission,
+} = require("../utils/workspace");
 
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -52,34 +55,6 @@ const ADDONS = {
         unitLabel: "AI conversations",
     },
 };
-
-function getUserId(req) {
-    const authorization = req.headers.authorization || "";
-
-    const token = authorization.startsWith("Bearer ")
-        ? authorization.slice(7)
-        : "";
-
-    if (!token) {
-        return null;
-    }
-
-    try {
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        );
-
-        return (
-            decoded.id ||
-            decoded._id ||
-            decoded.userId ||
-            null
-        );
-    } catch (error) {
-        return null;
-    }
-}
 
 function normalizePlanId(value) {
     const normalized = String(value || "")
@@ -597,13 +572,10 @@ async function activateAddon(
     };
 
     order.addonMonths = 1;
-
     order.addonStartsAt =
         startsAt;
-
     order.addonExpiresAt =
         expiresAt;
-
     order.addonQuotaUsed =
         used;
 
@@ -638,10 +610,13 @@ async function ensureSubscriptionForPaidOrder(
     userId,
     paidOrder
 ) {
+    if (!paidOrder) {
+        return null;
+    }
+
     if (
-        !paidOrder ||
         paidOrder.orderType !==
-            "subscription"
+        "subscription"
     ) {
         return null;
     }
@@ -660,8 +635,7 @@ async function ensureSubscriptionForPaidOrder(
 
     const orderMatches =
         String(
-            subscription.orderId ||
-                ""
+            subscription.orderId || ""
         ) ===
         String(
             paidOrder._id
@@ -773,10 +747,10 @@ exports.getPaymentStatus =
         res
     ) => {
         try {
-            const userId =
-                getUserId(req);
+            const context =
+                await getWorkspaceContext(req);
 
-            if (!userId) {
+            if (!context) {
                 return res.status(401).json({
                     success: false,
                     message:
@@ -789,6 +763,22 @@ exports.getPaymentStatus =
                         "unauthorized",
                 });
             }
+
+            if (
+                !hasPermission(
+                    context,
+                    "billing.view"
+                )
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "You do not have permission to view billing",
+                });
+            }
+
+            const userId =
+                context.workspaceOwnerId;
 
             let user =
                 await User.findById(
@@ -901,11 +891,12 @@ exports.getPaymentStatus =
                         nextBillingAt:
                             subscription.nextBillingAt ||
                             null,
-                        amount: Number(
-                            subscription.amount ||
+                        amount:
+                            Number(
+                                subscription.amount ||
                                 paidOrder.planAmount ||
                                 0
-                        ),
+                            ),
                         currency:
                             subscription.currency ||
                             paidOrder.currency ||
@@ -956,8 +947,7 @@ exports.getPaymentStatus =
             }
 
             const subscription =
-                user.subscription ||
-                {};
+                user.subscription || {};
 
             const subscriptionIsActive =
                 subscription.status ===
@@ -1001,10 +991,11 @@ exports.getPaymentStatus =
                         nextBillingAt:
                             subscription.nextBillingAt ||
                             null,
-                        amount: Number(
-                            subscription.amount ||
+                        amount:
+                            Number(
+                                subscription.amount ||
                                 0
-                        ),
+                            ),
                         currency:
                             subscription.currency ||
                             "INR",
@@ -1055,10 +1046,11 @@ exports.getPaymentStatus =
                     nextBillingAt:
                         subscription.nextBillingAt ||
                         null,
-                    amount: Number(
-                        subscription.amount ||
+                    amount:
+                        Number(
+                            subscription.amount ||
                             0
-                    ),
+                        ),
                     currency:
                         subscription.currency ||
                         "INR",
@@ -1094,16 +1086,27 @@ exports.createOrder =
         res
     ) => {
         try {
-            const userId =
-                getUserId(req);
+            const context =
+                await getWorkspaceContext(req);
 
-            if (!userId) {
+            if (!context) {
                 return res.status(401).json({
                     success: false,
                     message:
                         "Please sign in before payment",
                 });
             }
+
+            if (!context.isOwner) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "Only the workspace owner can purchase or change the CRM plan",
+                });
+            }
+
+            const userId =
+                context.workspaceOwnerId;
 
             const user =
                 await User.findById(
@@ -1158,8 +1161,7 @@ exports.createOrder =
                 "addon"
             ) {
                 if (
-                    curr !==
-                    "INR"
+                    curr !== "INR"
                 ) {
                     return res.status(400).json({
                         success: false,
@@ -1169,7 +1171,8 @@ exports.createOrder =
                 }
 
                 if (
-                    user.subscription?.status !==
+                    user.subscription
+                        ?.status !==
                     "active"
                 ) {
                     return res.status(400).json({
@@ -1281,7 +1284,8 @@ exports.createOrder =
                         planId:
                             addonCalculation.addonType,
                         planName:
-                            user.subscription?.planName ||
+                            user.subscription
+                                ?.planName ||
                             "",
                         addonType:
                             addonCalculation.addonType,
@@ -1608,6 +1612,25 @@ exports.verifyPayment =
                 });
             }
 
+            const context =
+                await getWorkspaceContext(req);
+
+            if (!context) {
+                return res.status(401).json({
+                    success: false,
+                    message:
+                        "Authentication required",
+                });
+            }
+
+            if (!context.isOwner) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "Only the workspace owner can verify a payment",
+                });
+            }
+
             const generatedSignature =
                 crypto
                     .createHmac(
@@ -1644,6 +1667,17 @@ exports.verifyPayment =
                     success: false,
                     message:
                         "Order not found",
+                });
+            }
+
+            if (
+                String(order.userId) !==
+                String(context.workspaceOwnerId)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "Payment order does not belong to this workspace",
                 });
             }
 

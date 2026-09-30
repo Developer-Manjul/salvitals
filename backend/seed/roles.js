@@ -78,6 +78,8 @@ const roles = [
       "business_profile.view",
 
       "roles.view",
+
+      "billing.view",
     ],
   },
 
@@ -102,6 +104,9 @@ const roles = [
       "calendar.view",
       "calendar.create",
       "calendar.edit",
+
+      "whatsapp.view",
+      "whatsapp.use",
 
       "invoices.view",
       "invoices.create",
@@ -128,6 +133,8 @@ const roles = [
       "notifications.view",
 
       "business_profile.view",
+
+      "billing.view",
     ],
   },
 
@@ -173,9 +180,7 @@ const roles = [
 
 const seedRoles = async () => {
   try {
-    await mongoose.connect(
-      process.env.MONGODB_URI
-    );
+    await mongoose.connect(process.env.MONGODB_URI);
 
     console.log("MongoDB connected.");
 
@@ -192,9 +197,7 @@ const seedRoles = async () => {
 
         await role.save();
 
-        console.log(
-          `Role updated: ${role.name}`
-        );
+        console.log(`Role updated: ${role.name}`);
       } else {
         role = await Role.create({
           name: roleData.name,
@@ -204,27 +207,18 @@ const seedRoles = async () => {
           status: "active",
         });
 
-        console.log(
-          `Role created: ${role.name}`
-        );
+        console.log(`Role created: ${role.name}`);
       }
     }
 
-    console.log(
-      "All system roles seeded successfully."
-    );
+    console.log("All system roles seeded successfully.");
 
     await mongoose.disconnect();
 
     process.exit(0);
   } catch (error) {
-    console.error(
-      "Role seeding failed:"
-    );
-
-    console.error(
-      error.message
-    );
+    console.error("Role seeding failed:");
+    console.error(error.message);
 
     await mongoose.disconnect();
 

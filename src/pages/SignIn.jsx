@@ -30,6 +30,88 @@ export default function SignIn() {
     sessionStorage.removeItem("redirectAfterRegister");
   };
 
+  const clearAuthStorage = () => {
+    const keys = [
+      "token",
+      "user",
+      "vitalsToken",
+      "vitalsUser",
+      "salevitals_token",
+      "salevitals_user",
+      "role",
+      "permissions",
+      "workspaceOwner",
+      "teamMember",
+    ];
+
+    keys.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+  };
+
+  const saveAuthData = (
+    storage,
+    token,
+    userData,
+    teamMember = null
+  ) => {
+    storage.setItem("token", token);
+    storage.setItem("vitalsToken", token);
+    storage.setItem("salevitals_token", token);
+
+    storage.setItem(
+      "user",
+      JSON.stringify(userData)
+    );
+
+    storage.setItem(
+      "vitalsUser",
+      JSON.stringify(userData)
+    );
+
+    storage.setItem(
+      "salevitals_user",
+      JSON.stringify(userData)
+    );
+
+    if (userData?.workspaceOwner) {
+      storage.setItem(
+        "workspaceOwner",
+        userData.workspaceOwner
+      );
+    } else {
+      storage.removeItem("workspaceOwner");
+    }
+
+    if (teamMember) {
+      storage.setItem(
+        "teamMember",
+        JSON.stringify(teamMember)
+      );
+
+      if (teamMember.role) {
+        storage.setItem(
+          "role",
+          JSON.stringify(teamMember.role)
+        );
+      }
+
+      storage.setItem(
+        "permissions",
+        JSON.stringify(
+          Array.isArray(teamMember.permissions)
+            ? teamMember.permissions
+            : []
+        )
+      );
+    } else {
+      storage.removeItem("teamMember");
+      storage.removeItem("role");
+      storage.removeItem("permissions");
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
 
@@ -68,7 +150,8 @@ export default function SignIn() {
 
       if (!response.ok) {
         setError(
-          data.message || "Invalid email or password."
+          data.message ||
+            "Invalid email or password."
         );
 
         setLoading(false);
@@ -77,6 +160,7 @@ export default function SignIn() {
 
       const token = data.token;
       const userData = data.user || {};
+      const teamMember = data.teamMember || null;
 
       if (!token) {
         setError(
@@ -95,44 +179,17 @@ export default function SignIn() {
           "redirectAfterLogin"
         );
 
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("vitalsToken");
-      localStorage.removeItem("vitalsUser");
-      localStorage.removeItem("salevitals_token");
-      localStorage.removeItem("salevitals_user");
-
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      sessionStorage.removeItem("vitalsToken");
-      sessionStorage.removeItem("vitalsUser");
-      sessionStorage.removeItem("salevitals_token");
-      sessionStorage.removeItem("salevitals_user");
+      clearAuthStorage();
 
       const storage = remember
         ? localStorage
         : sessionStorage;
 
-      storage.setItem("token", token);
-      storage.setItem("vitalsToken", token);
-      storage.setItem(
-        "salevitals_token",
-        token
-      );
-
-      storage.setItem(
-        "user",
-        JSON.stringify(userData)
-      );
-
-      storage.setItem(
-        "vitalsUser",
-        JSON.stringify(userData)
-      );
-
-      storage.setItem(
-        "salevitals_user",
-        JSON.stringify(userData)
+      saveAuthData(
+        storage,
+        token,
+        userData,
+        teamMember
       );
 
       let paymentCompleted = false;
@@ -170,21 +227,21 @@ export default function SignIn() {
         subscriptionActive =
           paymentResponse.ok &&
           paymentData?.subscription?.status ===
-          "active";
+            "active";
 
         paymentCompleted =
           paymentResponse.ok &&
           (
             paymentData?.payment_completed ===
-            true ||
+              true ||
             paymentData?.paymentCompleted ===
-            true ||
+              true ||
             paymentData?.paid === true ||
             paymentData?.isPaid === true ||
             paymentData?.payment_status ===
-            "paid" ||
+              "paid" ||
             paymentData?.paymentStatus ===
-            "paid" ||
+              "paid" ||
             paymentData?.status === "paid" ||
             orderStatus === "paid" ||
             subscriptionActive
@@ -201,7 +258,7 @@ export default function SignIn() {
 
       const accountSetupCompleted =
         userData.accountSetupCompleted ===
-        true ||
+          true ||
         userData.profileCompleted === true ||
         userData.setupCompleted === true;
 
@@ -256,13 +313,12 @@ export default function SignIn() {
       if (redirectAfterLogin) {
         window.location.href =
           redirectAfterLogin;
+
         return;
       }
 
       window.location.href =
         "/dashboard";
-
-      return;
     } catch (err) {
       console.error(
         "Login error:",
@@ -304,29 +360,22 @@ export default function SignIn() {
 
   return (
     <div className="auth-page auth-signin-page">
-
       <div className="auth-brand-mobile">
-
         <img
           src="/logo-white.png"
           alt="Vitals"
           className="auth-brand-logo"
         />
-
       </div>
 
       <div className="auth-left auth-left-signin">
-
         <div className="auth-left-inner">
-
           <div className="auth-brand">
-
             <img
               src="/logo-white.png"
               alt="Vitals"
               className="auth-brand-logo"
             />
-
           </div>
 
           <div className="auth-eyebrow">
@@ -338,43 +387,37 @@ export default function SignIn() {
           </h2>
 
           <p>
-            One workspace for leads, conversations,
-            follow-ups, sales pipelines, and customer
-            relationships so your team can focus on
-            growing the business.
+            One workspace for leads,
+            conversations, follow-ups, sales
+            pipelines, and customer relationships
+            so your team can focus on growing the
+            business.
           </p>
 
           <div className="auth-feature-list">
-
             <div className="auth-feature-item">
-
               <span className="auth-feature-check">
                 ✓
               </span>
 
               <div>
-
                 <strong>
                   Capture
                 </strong>
 
                 <p>
-                  Bring leads together from your website,
-                  WhatsApp, ads, and more.
+                  Bring leads together from your
+                  website, WhatsApp, ads, and more.
                 </p>
-
               </div>
-
             </div>
 
             <div className="auth-feature-item">
-
               <span className="auth-feature-check">
                 ✓
               </span>
 
               <div>
-
                 <strong>
                   Engage
                 </strong>
@@ -383,19 +426,15 @@ export default function SignIn() {
                   Keep conversations, activities,
                   and follow-ups connected.
                 </p>
-
               </div>
-
             </div>
 
             <div className="auth-feature-item">
-
               <span className="auth-feature-check">
                 ✓
               </span>
 
               <div>
-
                 <strong>
                   Convert
                 </strong>
@@ -404,23 +443,15 @@ export default function SignIn() {
                   Move opportunities through your
                   pipeline and close more business.
                 </p>
-
               </div>
-
             </div>
-
           </div>
-
         </div>
-
       </div>
 
       <div className="auth-right">
-
         <div className="auth-card">
-
           <div className="auth-top">
-
             <h1>
               Welcome back
             </h1>
@@ -428,22 +459,18 @@ export default function SignIn() {
             <p>
               Manage your business. Keep growing.
             </p>
-
           </div>
 
           <form
             className="auth-form"
             onSubmit={handleLogin}
           >
-
             <label className="auth-field">
-
               <span>
                 Work email
               </span>
 
               <div className="auth-input-wrap">
-
                 <span className="auth-input-icon">
                   ✉
                 </span>
@@ -455,22 +482,17 @@ export default function SignIn() {
                     setEmail(
                       e.target.value
                     );
-
                     setError("");
                   }}
                   placeholder="you@clinic.com"
                   autoComplete="email"
                   required
                 />
-
               </div>
-
             </label>
 
             <label className="auth-field">
-
               <div className="auth-label-row">
-
                 <span>
                   Password
                 </span>
@@ -484,11 +506,9 @@ export default function SignIn() {
                 >
                   Forgot password?
                 </button>
-
               </div>
 
               <div className="auth-input-wrap">
-
                 <span className="auth-input-icon">
                   🔒
                 </span>
@@ -504,7 +524,6 @@ export default function SignIn() {
                     setPassword(
                       e.target.value
                     );
-
                     setError("");
                   }}
                   placeholder="Enter your password"
@@ -516,7 +535,9 @@ export default function SignIn() {
                   type="button"
                   className="auth-eye"
                   onClick={() =>
-                    setShowPassword((value) => !value)
+                    setShowPassword(
+                      (value) => !value
+                    )
                   }
                   aria-label={
                     showPassword
@@ -539,6 +560,7 @@ export default function SignIn() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
+
                       <circle
                         cx="12"
                         cy="12"
@@ -561,6 +583,7 @@ export default function SignIn() {
                         strokeWidth="1.8"
                         strokeLinecap="round"
                       />
+
                       <path
                         d="M10.6 5.7C11.05 5.57 11.52 5.5 12 5.5C18.5 5.5 22 12 22 12C22 12 20.65 14.5 18.2 16.3"
                         stroke="currentColor"
@@ -568,6 +591,7 @@ export default function SignIn() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
+
                       <path
                         d="M6.1 7.3C3.55 9.1 2 12 2 12C2 12 5.5 18.5 12 18.5C13.5 18.5 14.85 18.15 16.05 17.6"
                         stroke="currentColor"
@@ -578,13 +602,10 @@ export default function SignIn() {
                     </svg>
                   )}
                 </button>
-
               </div>
-
             </label>
 
             <label className="auth-remember">
-
               <input
                 type="checkbox"
                 checked={remember}
@@ -599,7 +620,6 @@ export default function SignIn() {
                 Keep me signed in on this
                 device
               </span>
-
             </label>
 
             {error && (
@@ -610,13 +630,11 @@ export default function SignIn() {
 
             {notice && (
               <div className="auth-notice auth-success-notice">
-
                 <span className="auth-notice-icon">
                   ✓
                 </span>
 
                 <div className="auth-notice-content">
-
                   <strong>
                     Email verified successfully
                   </strong>
@@ -624,9 +642,7 @@ export default function SignIn() {
                   <span>
                     {notice}
                   </span>
-
                 </div>
-
               </div>
             )}
 
@@ -639,11 +655,9 @@ export default function SignIn() {
                 ? "Signing in..."
                 : "Sign in →"}
             </button>
-
           </form>
 
           <div className="auth-divider">
-
             <span></span>
 
             <b>
@@ -651,7 +665,6 @@ export default function SignIn() {
             </b>
 
             <span></span>
-
           </div>
 
           <button
@@ -663,17 +676,14 @@ export default function SignIn() {
               );
             }}
           >
-
             <span className="google-icon">
               G
             </span>
 
             Continue with Google
-
           </button>
 
           <div className="auth-switch">
-
             Don't have an account?{" "}
 
             <button
@@ -684,11 +694,9 @@ export default function SignIn() {
             >
               Create account
             </button>
-
           </div>
 
           <div className="auth-security">
-
             <span>
               ♢ ISO 27001
             </span>
@@ -700,13 +708,9 @@ export default function SignIn() {
             <span>
               ▣ Data in India
             </span>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

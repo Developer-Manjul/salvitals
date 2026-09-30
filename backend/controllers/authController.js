@@ -12,6 +12,9 @@ const generateToken = (user) =>
       id: user._id.toString(),
       email: user.email,
       role: user.role,
+      workspaceOwner: user.workspaceOwner
+        ? user.workspaceOwner.toString()
+        : null,
     },
     process.env.JWT_SECRET,
     {
@@ -19,7 +22,7 @@ const generateToken = (user) =>
     }
   );
 
-const formatUserResponse = (user) => ({
+const formatUserResponse = (user, teamMember = null) => ({
   id: user._id.toString(),
   name: user.name || "",
   email: user.email || "",
@@ -39,11 +42,64 @@ const formatUserResponse = (user) => ({
   accountNumber: user.accountNumber || "",
   ifscCode: user.ifscCode || "",
   upiId: user.upiId || "",
+
   accountSetupCompleted:
     user.accountSetupCompleted === true,
+
+  workspaceOwner: user.workspaceOwner
+    ? user.workspaceOwner.toString()
+    : null,
+
   role: user.role,
+
+  teamMember: teamMember
+    ? {
+        id: teamMember._id.toString(),
+
+        owner: teamMember.owner
+          ? teamMember.owner.toString()
+          : null,
+
+        roleId: teamMember.roleId?._id
+          ? teamMember.roleId._id.toString()
+          : null,
+
+        role:
+          teamMember.roleId?.name ||
+          "Team Member",
+
+        roleSlug:
+          teamMember.roleId?.slug ||
+          "",
+
+        permissions:
+          teamMember.roleId?.permissions ||
+          [],
+
+        memberType:
+          teamMember.memberType ||
+          "team",
+
+        status:
+          teamMember.status ||
+          "active",
+
+        invitationStatus:
+          teamMember.invitationStatus ||
+          "accepted",
+      }
+    : null,
+
+  permissions: teamMember
+    ? teamMember.roleId?.permissions || []
+    : ["*"],
+
+  isOwner: !user.workspaceOwner,
+
   isActive: user.isActive,
-  emailVerified: !!user.emailVerified,
+
+  emailVerified:
+    !!user.emailVerified,
 });
 
 const createVerificationToken = () => {
@@ -835,10 +891,128 @@ exports.login = async (req, res) => {
       });
     }
 
+    let teamMember = null;
+
+    if (user.workspaceOwner) {
+      teamMember =
+        await TeamMember.findOne({
+          userId: user._id,
+          owner: user.workspaceOwner,
+          memberType: "team",
+        })
+          .populate(
+  "roleId",
+  "name slug permissions status"
+)
+          .lean();
+
+      if (!teamMember) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your team membership could not be found.",
+        });
+      }
+
+      if (teamMember.status !== "active") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your team account is inactive. Please contact the workspace owner.",
+        });
+      }
+
+      if (
+        !teamMember.roleId ||
+        teamMember.roleId.status !== "active"
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your assigned role is inactive. Please contact the workspace owner.",
+        });
+      }
+    }
+
+    const token =
+      generateToken(user);
+
+    const responseUser =
+      formatUserResponse(
+        user,
+        teamMember
+      );
+
     return res.json({
       success: true,
-      token: generateToken(user),
-      user: formatUserResponse(user),
+
+      token,
+
+      user: responseUser,
+
+      workspace: {
+        ownerId: user.workspaceOwner
+          ? user.workspaceOwner.toString()
+          : user._id.toString(),
+
+        isOwner:
+          !user.workspaceOwner,
+
+        role:
+          teamMember?.roleId?.name ||
+          "Owner",
+
+        roleSlug:
+          teamMember?.roleId?.slug ||
+          "owner",
+
+        permissions:
+          teamMember?.roleId?.permissions ||
+          ["*"],
+      },
+
+      teamMember: teamMember
+        ? {
+            id:
+              teamMember._id.toString(),
+
+            owner:
+              teamMember.owner
+                ? teamMember.owner.toString()
+                : user.workspaceOwner
+                  ? user.workspaceOwner.toString()
+                  : null,
+
+            roleId:
+              teamMember.roleId?._id
+                ? teamMember.roleId._id.toString()
+                : null,
+
+            role:
+              teamMember.roleId?.name ||
+              "Team Member",
+
+            roleSlug:
+              teamMember.roleId?.slug ||
+              "",
+
+            permissions:
+              teamMember.roleId?.permissions ||
+              [],
+
+            memberType:
+              teamMember.memberType ||
+              "team",
+
+            status:
+              teamMember.status ||
+              "active",
+
+            invitationStatus:
+              teamMember.invitationStatus ||
+              "accepted",
+          }
+        : null,
     });
   } catch (error) {
     console.error(
@@ -880,11 +1054,7 @@ exports.forgotPassword = async (req, res) => {
     if (!user) {
       console.log("RESET EMAIL ACCOUNT NOT FOUND:", email);
 
-      return res.json({
-        success: true,
-        message:
-          "If an account exists with this email, a password reset link has been sent.",
-      });
+    return res.jso
     }
 
     const rawToken = crypto
@@ -1484,33 +1654,25 @@ exports.completeSetup = async (
   }
 };
 
-exports.getProfile = async (
-  req,
-  res
-) => {
+exports.getProfile = async (req, res) => {
   try {
-    const authorization =
-      req.headers.authorization || "";
+    const authorization = req.headers.authorization || "";
 
     if (!authorization.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        message:
-          "Authentication required",
+        message: "Authentication required",
       });
     }
 
-    const token =
-      authorization.slice(7);
+    const token = authorization.slice(7);
 
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET
     );
 
-    const user = await User.findById(
-      decoded.id
-    ).select(
+    const user = await User.findById(decoded.id).select(
       "-password -emailVerificationToken -emailVerificationExpires"
     );
 
@@ -1521,9 +1683,117 @@ exports.getProfile = async (
       });
     }
 
+    let teamMember = null;
+
+    if (user.workspaceOwner) {
+      teamMember = await TeamMember.findOne({
+        userId: user._id,
+        owner: user.workspaceOwner,
+        memberType: "team",
+      })
+        .populate(
+          "roleId",
+          "name slug permissions status"
+        )
+        .lean();
+
+      if (!teamMember) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your team membership could not be found.",
+        });
+      }
+
+      if (teamMember.status !== "active") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your team account is inactive.",
+        });
+      }
+
+      if (
+        !teamMember.roleId ||
+        teamMember.roleId.status !== "active"
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your assigned role is inactive.",
+        });
+      }
+    }
+
+    const responseUser = formatUserResponse(
+      user,
+      teamMember
+    );
+
     return res.status(200).json({
       success: true,
-      user,
+
+      user: responseUser,
+
+      workspace: {
+        ownerId: user.workspaceOwner
+          ? user.workspaceOwner.toString()
+          : user._id.toString(),
+
+        isOwner: !user.workspaceOwner,
+
+        role:
+          teamMember?.roleId?.name ||
+          "Owner",
+
+        roleSlug:
+          teamMember?.roleId?.slug ||
+          "owner",
+
+        permissions:
+          teamMember?.roleId?.permissions ||
+          ["*"],
+      },
+
+      teamMember: teamMember
+        ? {
+            id: teamMember._id.toString(),
+
+            owner: teamMember.owner
+              ? teamMember.owner.toString()
+              : user.workspaceOwner
+                ? user.workspaceOwner.toString()
+                : null,
+
+            roleId: teamMember.roleId?._id
+              ? teamMember.roleId._id.toString()
+              : null,
+
+            role:
+              teamMember.roleId?.name ||
+              "Team Member",
+
+            roleSlug:
+              teamMember.roleId?.slug ||
+              "",
+
+            permissions:
+              teamMember.roleId?.permissions ||
+              [],
+
+            memberType:
+              teamMember.memberType ||
+              "team",
+
+            status:
+              teamMember.status ||
+              "active",
+
+            invitationStatus:
+              teamMember.invitationStatus ||
+              "accepted",
+          }
+        : null,
     });
   } catch (error) {
     console.error(
@@ -1835,7 +2105,10 @@ exports.acceptTeamInvitation = async (
         },
         invitationStatus: "pending",
         memberType: "team",
-      });
+      }).populate(
+        "roleId",
+        "name permissions status"
+      );
 
     if (!member) {
       return res.status(400).json({
@@ -1869,7 +2142,25 @@ exports.acceptTeamInvitation = async (
     const owner =
       await User.findById(
         member.owner
-      ).select("clinicName");
+      ).select(
+        "clinicName isActive subscription"
+      );
+
+    if (!owner) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Workspace owner account was not found.",
+      });
+    }
+
+    if (owner.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "The workspace owner account is inactive.",
+      });
+    }
 
     const hashedPassword =
       await bcrypt.hash(
@@ -1884,7 +2175,7 @@ exports.acceptTeamInvitation = async (
         password: hashedPassword,
 
         clinicName:
-          owner?.clinicName || "",
+          owner.clinicName || "",
 
         phone:
           member.phone || "",
@@ -1896,6 +2187,9 @@ exports.acceptTeamInvitation = async (
         role: "user",
 
         isActive: true,
+
+        workspaceOwner:
+          owner._id,
       });
 
     member.userId = user._id;
@@ -1906,12 +2200,42 @@ exports.acceptTeamInvitation = async (
 
     await member.save();
 
+    const responseUser =
+  formatUserResponse(
+    user,
+    member
+  );
+
     return res.status(201).json({
       success: true,
+
       message:
         "Invitation accepted successfully. Your account has been created.",
-      token: generateToken(user),
-      user: formatUserResponse(user),
+
+      token:
+        generateToken(user),
+
+      user: responseUser,
+
+      teamMember: {
+        id: member._id.toString(),
+
+        owner:
+          owner._id.toString(),
+
+        roleId:
+          member.roleId?._id
+            ? member.roleId._id.toString()
+            : null,
+
+        role:
+          member.roleId?.name ||
+          "Team Member",
+
+        permissions:
+          member.roleId?.permissions ||
+          [],
+      },
     });
   } catch (error) {
     console.error(
