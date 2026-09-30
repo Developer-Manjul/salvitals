@@ -50,67 +50,85 @@ export default function SignIn() {
     });
   };
 
-  const saveAuthData = (
-    storage,
-    token,
-    userData,
-    teamMember = null
-  ) => {
-    storage.setItem("token", token);
-    storage.setItem("vitalsToken", token);
-    storage.setItem("salevitals_token", token);
+const saveAuthData = (
+  storage,
+  token,
+  userData,
+  teamMember = null
+) => {
+  const isOwner =
+    userData?.isOwner === true ||
+    !userData?.workspaceOwner;
 
-    storage.setItem(
-      "user",
-      JSON.stringify(userData)
-    );
+  const permissions = isOwner
+    ? ["*"]
+    : Array.isArray(teamMember?.permissions)
+      ? teamMember.permissions
+      : Array.isArray(userData?.permissions)
+        ? userData.permissions
+        : [];
 
-    storage.setItem(
-      "vitalsUser",
-      JSON.stringify(userData)
-    );
-
-    storage.setItem(
-      "salevitals_user",
-      JSON.stringify(userData)
-    );
-
-    if (userData?.workspaceOwner) {
-      storage.setItem(
-        "workspaceOwner",
-        userData.workspaceOwner
-      );
-    } else {
-      storage.removeItem("workspaceOwner");
-    }
-
-    if (teamMember) {
-      storage.setItem(
-        "teamMember",
-        JSON.stringify(teamMember)
-      );
-
-      if (teamMember.role) {
-        storage.setItem(
-          "role",
-          JSON.stringify(teamMember.role)
-        );
-      }
-
-      storage.setItem(
-        "permissions",
-        JSON.stringify(
-          Array.isArray(teamMember.permissions)
-            ? teamMember.permissions
-            : []
-        )
-      );
-    } else {
-      storage.removeItem("teamMember");
-      storage.removeItem("role");
-      storage.removeItem("permissions");
-    }
+  const normalizedUser = {
+    ...userData,
+    isOwner,
+    permissions,
   };
+
+  storage.setItem("token", token);
+  storage.setItem("vitalsToken", token);
+  storage.setItem("salevitals_token", token);
+
+  storage.setItem(
+    "user",
+    JSON.stringify(normalizedUser)
+  );
+
+  storage.setItem(
+    "vitalsUser",
+    JSON.stringify(normalizedUser)
+  );
+
+  storage.setItem(
+    "salevitals_user",
+    JSON.stringify(normalizedUser)
+  );
+
+  if (normalizedUser?.workspaceOwner) {
+    storage.setItem(
+      "workspaceOwner",
+      normalizedUser.workspaceOwner
+    );
+  } else {
+    storage.removeItem("workspaceOwner");
+  }
+
+  if (teamMember) {
+    storage.setItem(
+      "teamMember",
+      JSON.stringify(teamMember)
+    );
+
+    if (teamMember.role) {
+      storage.setItem(
+        "role",
+        JSON.stringify(teamMember.role)
+      );
+    }
+
+    storage.setItem(
+      "permissions",
+      JSON.stringify(permissions)
+    );
+  } else {
+    storage.removeItem("teamMember");
+    storage.removeItem("role");
+
+    storage.setItem(
+      "permissions",
+      JSON.stringify(["*"])
+    );
+  }
+};
 
   const handleLogin = async (e) => {
     e.preventDefault();
