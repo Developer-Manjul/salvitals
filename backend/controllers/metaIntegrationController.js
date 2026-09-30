@@ -11,6 +11,7 @@ const { encrypt, decrypt } = require("../utils/encryption");
 const meta = require("../services/metaService");
 
 const { processNewLead } = require("../services/leadProcessingService");
+const Invoice = require("../models/Invoice");
 
 function getUserId(req) {
     const authorization = req.headers.authorization || "";
@@ -817,319 +818,456 @@ function detectMetaLeadSource(
     return "Facebook";
 }
 
-exports.receiveWebhook =
-    async (req, res) => {
-        res.sendStatus(200);
+exports.receiveWebhook = async (req, res) => {
+    res.sendStatus(200);
 
-        try {
-            for (
-                const entry of
-                req.body?.entry || []
-            ) {
-                const pageId =
-                    String(
-                        entry.id || ""
-                    );
+    try {
+        const webhookObject = String(req.body?.object || "");
 
-                if (!pageId) {
-                    continue;
-                }
+        if (webhookObject === "whatsapp_business_account") {
+            console.log("========================================");
+            console.log("WHATSAPP WEBHOOK RECEIVED");
 
-                const integration =
-                    await MetaIntegration.findOne({
-                        pageId,
-                        isActive: true,
-                    });
+            for (const entry of req.body?.entry || []) {
+                for (const change of entry.changes || []) {
+                    const value = change.value || {};
 
-                if (!integration) {
-                    console.log(
-                        "META WEBHOOK PAGE NOT CONNECTED:",
-                        pageId
-                    );
-
-                    continue;
-                }
-
-                for (
-                    const change of
-                    entry.changes || []
-                ) {
-                    const value =
-                        change.value || {};
-
-                    const leadId =
-                        value.leadgen_id ||
-                        value.lead_id;
-
-                    if (!leadId) {
+                    if (change.field !== "messages") {
                         continue;
                     }
 
-                    console.log(
-                        "META WEBHOOK LEAD RECEIVED:",
-                        leadId,
-                        "PAGE:",
-                        pageId,
-                        "USER:",
-                        integration.userId
-                    );
+                    const statuses = Array.isArray(value.statuses)
+                        ? value.statuses
+                        : [];
 
-                    const token =
-                        decrypt(
-                            integration
-                                .accessTokenEncrypted
-                        );
-
-                    const metaLead =
-                        await meta.getLeadDetails(
-                            leadId,
-                            token
-                        );
-
-                    const allowedFrom =
-                        getAllowedMetaLeadStart();
-
-                    const metaCreatedAt =
-                        new Date(
-                            metaLead?.created_time ||
-                                ""
-                        );
-
-                    if (
-                        !Number.isNaN(
-                            metaCreatedAt.getTime()
-                        ) &&
-                        metaCreatedAt <
-                            allowedFrom
-                    ) {
-                        console.log(
-                            "OLD META LEAD IGNORED:",
-                            leadId,
-                            metaLead.created_time
-                        );
-
+                    if (!statuses.length) {
                         continue;
                     }
 
-                    if (
-                        Number.isNaN(
-                            metaCreatedAt.getTime()
-                        )
-                    ) {
-                        console.log(
-                            "META LEAD CREATED TIME MISSING:",
-                            leadId
-                        );
-                    }
-
-                    const fields =
-                        fieldMap(
-                            metaLead.field_data
-                        );
-
-                    const adId =
-                        String(
-                            metaLead?.ad_id ||
-                                value?.ad_id ||
-                                ""
+                    for (const statusData of statuses) {
+                        const messageId = String(
+                            statusData?.id || ""
                         ).trim();
 
-                    const campaignId =
-                        String(
-                            metaLead?.campaign_id ||
-                                value?.campaign_id ||
-                                ""
+                        const status = String(
+                            statusData?.status || ""
+                        ).trim().toLowerCase();
+
+                        const recipientId = String(
+                            statusData?.recipient_id || ""
                         ).trim();
 
-                    const campaignResult =
-                        await getMetaCampaignName(
-                            campaignId,
-                            adId,
-                            token
-                        );
-
-                    const resolvedCampaignId =
-                        campaignResult.campaignId;
-
-                    const serviceName =
-                        campaignResult.serviceName;
-
-                    const existing =
-                        await Lead.findOne({
-                            userId:
-                                integration.userId,
-
-                            metaLeadId:
-                                String(
-                                    leadId
-                                ),
-                        });
-
-                    if (existing) {
-                        let changed = false;
-
-                        if (
-                            serviceName &&
-                            !String(
-                                existing.service || ""
-                            ).trim()
-                        ) {
-                            existing.service =
-                                serviceName;
-
-                            changed = true;
-                        }
-
-                        if (
-                            resolvedCampaignId &&
-                            !String(
-                                existing.metaCampaignId ||
-                                    ""
-                            ).trim()
-                        ) {
-                            existing.metaCampaignId =
-                                resolvedCampaignId;
-
-                            changed = true;
-                        }
-
-                        if (
-                            adId &&
-                            !String(
-                                existing.metaAdId || ""
-                            ).trim()
-                        ) {
-                            existing.metaAdId =
-                                adId;
-
-                            changed = true;
-                        }
-
-                        if (changed) {
-                            await existing.save();
-                        }
-
-                        await processNewLead(
-                            existing
+                        console.log(
+                            "WHATSAPP MESSAGE STATUS:",
+                            status
                         );
 
                         console.log(
-                            "META WEBHOOK DUPLICATE LEAD:",
-                            leadId
+                            "WhatsApp Message ID:",
+                            messageId
                         );
 
-                        continue;
+                        console.log(
+                            "WhatsApp Recipient:",
+                            recipientId
+                        );
+
+                        if (
+                            status === "failed" &&
+                            Array.isArray(statusData?.errors)
+                        ) {
+                            for (const errorItem of statusData.errors) {
+                                console.error(
+                                    "WHATSAPP DELIVERY FAILED"
+                                );
+
+                                console.error(
+                                    "Error Code:",
+                                    errorItem?.code || ""
+                                );
+
+                                console.error(
+                                    "Error Title:",
+                                    errorItem?.title || ""
+                                );
+
+                                console.error(
+                                    "Error Message:",
+                                    errorItem?.message || ""
+                                );
+
+                                if (
+                                    errorItem?.error_data?.details
+                                ) {
+                                    console.error(
+                                        "Error Details:",
+                                        errorItem.error_data.details
+                                    );
+                                }
+                            }
+                        }
+
+                        if (!messageId) {
+                            continue;
+                        }
+
+                        const invoice =
+                            await Invoice.findOne({
+                                whatsappMessageId:
+                                    messageId,
+                            });
+
+                        if (!invoice) {
+                            console.log(
+                                "WHATSAPP STATUS INVOICE NOT FOUND:",
+                                messageId
+                            );
+
+                            continue;
+                        }
+
+                        console.log(
+                            "WHATSAPP STATUS INVOICE FOUND:",
+                            invoice.invoiceNumber
+                        );
+
+                        if (status === "sent") {
+                            console.log(
+                                "WHATSAPP MESSAGE SENT TO META:",
+                                invoice.invoiceNumber
+                            );
+                        }
+
+                        if (status === "delivered") {
+                            console.log(
+                                "WHATSAPP INVOICE DELIVERED:",
+                                invoice.invoiceNumber
+                            );
+                        }
+
+                        if (status === "read") {
+                            console.log(
+                                "WHATSAPP INVOICE READ:",
+                                invoice.invoiceNumber
+                            );
+                        }
+
+                        if (status === "failed") {
+                            console.error(
+                                "WHATSAPP INVOICE DELIVERY FAILED:",
+                                invoice.invoiceNumber
+                            );
+
+                            console.error(
+                                "Customer:",
+                                invoice.customerName
+                            );
+
+                            console.error(
+                                "Customer Phone:",
+                                invoice.customerPhone
+                            );
+                        }
                     }
-
-                    const source =
-                        detectMetaLeadSource(
-                            value,
-                            req,
-                            metaLead
-                        );
-
-                    const name =
-                        fields.full_name ||
-                        [
-                            fields.first_name,
-                            fields.last_name,
-                        ]
-                            .filter(Boolean)
-                            .join(" ") ||
-                        "Unknown";
-
-                    const phone =
-                        fields.phone_number ||
-                        fields.phone ||
-                        "";
-
-                    const email =
-                        fields.email ||
-                        "";
-
-                    const service =
-                        serviceName ||
-                        fields.service ||
-                        fields.treatment ||
-                        "";
-
-                    const landingPage =
-                        fields.form_name ||
-                        integration.pageName ||
-                        "";
-
-                    const lead =
-                        await Lead.create({
-                            userId:
-                                integration.userId,
-
-                            metaLeadId:
-                                String(
-                                    leadId
-                                ),
-
-                            metaPageId:
-                                pageId,
-
-                            metaFormId:
-                                metaLead.form_id ||
-                                value.form_id ||
-                                "",
-
-                            metaAdId:
-                                adId,
-
-                            metaCampaignId:
-                                resolvedCampaignId,
-
-                            name,
-                            email,
-                            phone,
-
-                            source,
-                            stage: "New",
-                            service,
-                            landingPage,
-
-                            pageUrl:
-                                fields.page_url ||
-                                fields.website ||
-                                "",
-
-                            utmSource:
-                                source.toLowerCase(),
-
-                            utmMedium:
-                                "paid_social",
-
-                            firstNote:
-                                `Lead received from ${source} Lead Ads`,
-                        });
-
-                    await processNewLead(
-                        lead
-                    );
-
-                    console.log(
-                        "META WEBHOOK LEAD SAVED:",
-                        leadId,
-                        "SOURCE:",
-                        source,
-                        "PAGE:",
-                        pageId,
-                        "USER:",
-                        integration.userId
-                    );
                 }
             }
-        } catch (error) {
-            console.error(
-                "META WEBHOOK PROCESSING ERROR:",
-                error.response?.data ||
-                    error.message
-            );
+
+            console.log("WHATSAPP WEBHOOK PROCESSING COMPLETE");
+            console.log("========================================");
+
+            return;
         }
-    };
+
+        for (const entry of req.body?.entry || []) {
+            const pageId = String(
+                entry.id || ""
+            );
+
+            if (!pageId) {
+                continue;
+            }
+
+            const integration =
+                await MetaIntegration.findOne({
+                    pageId,
+                    isActive: true,
+                });
+
+            if (!integration) {
+                console.log(
+                    "META WEBHOOK PAGE NOT CONNECTED:",
+                    pageId
+                );
+
+                continue;
+            }
+
+            for (const change of entry.changes || []) {
+                const value = change.value || {};
+
+                const leadId =
+                    value.leadgen_id ||
+                    value.lead_id;
+
+                if (!leadId) {
+                    continue;
+                }
+
+                console.log(
+                    "META WEBHOOK LEAD RECEIVED:",
+                    leadId,
+                    "PAGE:",
+                    pageId,
+                    "USER:",
+                    integration.userId
+                );
+
+                const token = decrypt(
+                    integration.accessTokenEncrypted
+                );
+
+                const metaLead =
+                    await meta.getLeadDetails(
+                        leadId,
+                        token
+                    );
+
+                const allowedFrom =
+                    getAllowedMetaLeadStart();
+
+                const metaCreatedAt =
+                    new Date(
+                        metaLead?.created_time || ""
+                    );
+
+                if (
+                    !Number.isNaN(
+                        metaCreatedAt.getTime()
+                    ) &&
+                    metaCreatedAt < allowedFrom
+                ) {
+                    console.log(
+                        "OLD META LEAD IGNORED:",
+                        leadId,
+                        metaLead.created_time
+                    );
+
+                    continue;
+                }
+
+                if (
+                    Number.isNaN(
+                        metaCreatedAt.getTime()
+                    )
+                ) {
+                    console.log(
+                        "META LEAD CREATED TIME MISSING:",
+                        leadId
+                    );
+                }
+
+                const fields =
+                    fieldMap(
+                        metaLead.field_data
+                    );
+
+                const adId = String(
+                    metaLead?.ad_id ||
+                        value?.ad_id ||
+                        ""
+                ).trim();
+
+                const campaignId = String(
+                    metaLead?.campaign_id ||
+                        value?.campaign_id ||
+                        ""
+                ).trim();
+
+                const campaignResult =
+                    await getMetaCampaignName(
+                        campaignId,
+                        adId,
+                        token
+                    );
+
+                const resolvedCampaignId =
+                    campaignResult.campaignId;
+
+                const serviceName =
+                    campaignResult.serviceName;
+
+                const existing =
+                    await Lead.findOne({
+                        userId:
+                            integration.userId,
+
+                        metaLeadId:
+                            String(leadId),
+                    });
+
+                if (existing) {
+                    let changed = false;
+
+                    if (
+                        serviceName &&
+                        !String(
+                            existing.service || ""
+                        ).trim()
+                    ) {
+                        existing.service =
+                            serviceName;
+
+                        changed = true;
+                    }
+
+                    if (
+                        resolvedCampaignId &&
+                        !String(
+                            existing.metaCampaignId ||
+                                ""
+                        ).trim()
+                    ) {
+                        existing.metaCampaignId =
+                            resolvedCampaignId;
+
+                        changed = true;
+                    }
+
+                    if (
+                        adId &&
+                        !String(
+                            existing.metaAdId || ""
+                        ).trim()
+                    ) {
+                        existing.metaAdId =
+                            adId;
+
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        await existing.save();
+                    }
+
+                    await processNewLead(
+                        existing
+                    );
+
+                    console.log(
+                        "META WEBHOOK DUPLICATE LEAD:",
+                        leadId
+                    );
+
+                    continue;
+                }
+
+                const source =
+                    detectMetaLeadSource(
+                        value,
+                        req,
+                        metaLead
+                    );
+
+                const name =
+                    fields.full_name ||
+                    [
+                        fields.first_name,
+                        fields.last_name,
+                    ]
+                        .filter(Boolean)
+                        .join(" ") ||
+                    "Unknown";
+
+                const phone =
+                    fields.phone_number ||
+                    fields.phone ||
+                    "";
+
+                const email =
+                    fields.email ||
+                    "";
+
+                const service =
+                    serviceName ||
+                    fields.service ||
+                    fields.treatment ||
+                    "";
+
+                const landingPage =
+                    fields.form_name ||
+                    integration.pageName ||
+                    "";
+
+                const lead =
+                    await Lead.create({
+                        userId:
+                            integration.userId,
+
+                        metaLeadId:
+                            String(leadId),
+
+                        metaPageId:
+                            pageId,
+
+                        metaFormId:
+                            metaLead.form_id ||
+                            value.form_id ||
+                            "",
+
+                        metaAdId:
+                            adId,
+
+                        metaCampaignId:
+                            resolvedCampaignId,
+
+                        name,
+                        email,
+                        phone,
+
+                        source,
+                        stage: "New",
+                        service,
+                        landingPage,
+
+                        pageUrl:
+                            fields.page_url ||
+                            fields.website ||
+                            "",
+
+                        utmSource:
+                            source.toLowerCase(),
+
+                        utmMedium:
+                            "paid_social",
+
+                        firstNote:
+                            `Lead received from ${source} Lead Ads`,
+                    });
+
+                await processNewLead(
+                    lead
+                );
+
+                console.log(
+                    "META WEBHOOK LEAD SAVED:",
+                    leadId,
+                    "SOURCE:",
+                    source,
+                    "PAGE:",
+                    pageId,
+                    "USER:",
+                    integration.userId
+                );
+            }
+        }
+    } catch (error) {
+        console.error(
+            "META/WHATSAPP WEBHOOK PROCESSING ERROR:",
+            error.response?.data ||
+                error.message
+        );
+    }
+};
 
 exports.debugLeadgenSubscription =
     async (req, res) => {
