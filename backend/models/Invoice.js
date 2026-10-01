@@ -147,6 +147,12 @@ const invoiceSchema = new mongoose.Schema(
             default: "",
         },
 
+        patientId: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
         customerName: {
             type: String,
             required: true,

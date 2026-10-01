@@ -16,10 +16,10 @@ export default function Services() {
 
     const getToken = () => {
         return (
-            localStorage.getItem("token") ||
-            localStorage.getItem("vitalsToken") ||
             sessionStorage.getItem("token") ||
             sessionStorage.getItem("vitalsToken") ||
+            localStorage.getItem("token") ||
+            localStorage.getItem("vitalsToken") ||
             ""
         );
     };

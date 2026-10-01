@@ -3,10 +3,10 @@ import { buildApiUrl } from "../config/api";
 
 function getToken() {
   return (
-    localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("vitalsToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
     ""
   );
 }

@@ -4,10 +4,12 @@ import "../styles/ai-assistant.scss";
 
 function getToken() {
   return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("token") ||
     sessionStorage.getItem("vitalsToken") ||
+    sessionStorage.getItem("salevitals_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    localStorage.getItem("salevitals_token") ||
     ""
   );
 }

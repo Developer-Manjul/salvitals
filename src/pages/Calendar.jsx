@@ -3,18 +3,20 @@ import { buildApiUrl } from "../config/api";
 
 function getToken() {
     return (
-        localStorage.getItem("token") ||
         sessionStorage.getItem("token") ||
-        localStorage.getItem("vitalsToken") ||
         sessionStorage.getItem("vitalsToken") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("vitalsToken") ||
         ""
     );
 }
 
 function getUser() {
     const saved =
+        sessionStorage.getItem("user") ||
+        sessionStorage.getItem("vitalsUser") ||
         localStorage.getItem("user") ||
-        sessionStorage.getItem("user");
+        localStorage.getItem("vitalsUser");
 
     if (!saved) return null;
 

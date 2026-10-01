@@ -1102,7 +1102,7 @@
 }
 
 .invoice-document-total-box .grand {
-    margin-top: 4px;
+    margin-top: 0px;
     padding: 13px 12px;
     background: #111827;
     color: #ffffff;
@@ -2141,8 +2141,8 @@
 .invoice-document-bottom {
     display: grid;
     grid-template-columns: 1fr 225px;
-    gap: 24px;
-    margin-top: 18px
+    gap: 18px;
+    margin-top: 12px
 }
 
 .invoice-document-notes {
@@ -2169,7 +2169,7 @@
 .invoice-document-total-box {
     display: flex;
     flex-direction: column;
-    gap: 8px
+    gap: 6px
 }
 
 .invoice-document-total-box>div {
@@ -2185,11 +2185,13 @@
 }
 
 .invoice-document-total-box .grand {
-    margin-top: 2px;
+    margin-top: 0;
     padding: 9px;
     border-radius: 5px;
     background: #172033;
-    color: #fff
+    color: #fff;
+    border: 0;
+    justify-content: space-between
 }
 
 .invoice-document-total-box .grand span,

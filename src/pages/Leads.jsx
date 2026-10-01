@@ -61,10 +61,10 @@ const DEFAULT_OWNERS = [
 
 function getToken() {
   return (
-    localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("vitalsToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
     ""
   );
 }
@@ -373,8 +373,9 @@ export default function Leads({
 
     try {
       currentUser = JSON.parse(
-        localStorage.getItem("user") ||
         sessionStorage.getItem("user") ||
+        sessionStorage.getItem("vitalsUser") ||
+        localStorage.getItem("user") ||
         "null"
       );
     } catch {
@@ -1594,13 +1595,6 @@ export default function Leads({
         </div>
 
         <div className="lead-header-actions">
-
-          <button
-            type="button"
-            className="dash-btn"
-          >
-            Import
-          </button>
 
           <button
             type="button"

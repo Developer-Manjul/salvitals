@@ -128,12 +128,12 @@ function getSettingsGroups(isHealthcare, user) {
 
 function getToken() {
   return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
-    localStorage.getItem("salevitals_token") ||
     sessionStorage.getItem("token") ||
     sessionStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("salevitals_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    localStorage.getItem("salevitals_token") ||
     ""
   );
 }

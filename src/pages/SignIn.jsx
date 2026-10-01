@@ -204,11 +204,20 @@ const saveAuthData = (
         : sessionStorage;
 
       saveAuthData(
-        storage,
+        sessionStorage,
         token,
         userData,
         teamMember
       );
+
+      if (remember) {
+        saveAuthData(
+          localStorage,
+          token,
+          userData,
+          teamMember
+        );
+      }
 
       let paymentCompleted = false;
       let subscriptionActive = false;

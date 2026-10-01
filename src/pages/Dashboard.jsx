@@ -11,6 +11,7 @@ import FollowUps from "./FollowUps";
 import Calendar from "./Calendar";
 import Invoice from "./Invoice";
 import AIAssistant from "./AIAssistant";
+import MetaIntegrationPanel from "./MetaIntegrationPanel";
 
 
 const navGroups = [
@@ -19,7 +20,7 @@ const navGroups = [
     items: [
       ["Leads", "users"],
       ["Follow-ups", "calendar"],
-      ["AI Chat", "chat"],
+      ["Chat", "chat"],
     ],
   },
   {
@@ -487,7 +488,7 @@ function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFoll
   const greeting = getGreeting();
   const data = dashboardData || buildDashboardData([]);
   const maxPipeline = Math.max(1, ...data.pipeline.map(([, count]) => count));
-  const recentLeads = dashboardLeads.slice(0, 5);
+  const recentLeads = dashboardLeads.slice(0, 15);
   const visibleFollowUps = todayFollowUps.slice(0, 5);
 
   return (
@@ -731,16 +732,38 @@ export default function Dashboard() {
     const dashboardParams =
       new URLSearchParams(window.location.search);
 
+    const sessionToken = ["token", "vitalsToken", "salevitals_token"]
+      .map((key) => sessionStorage.getItem(key))
+      .find(Boolean);
+    const storedToken = sessionToken || ["token", "vitalsToken", "salevitals_token"]
+      .map((key) => localStorage.getItem(key))
+      .find(Boolean);
+
+    if (!sessionToken && storedToken) {
+      ["token", "vitalsToken", "salevitals_token"].forEach((key) =>
+        sessionStorage.setItem(key, storedToken)
+      );
+    }
+
+    const sessionUser = ["user", "vitalsUser", "salevitals_user"]
+      .map((key) => sessionStorage.getItem(key))
+      .find(Boolean);
+    const savedUser = sessionUser || ["user", "vitalsUser", "salevitals_user"]
+      .map((key) => localStorage.getItem(key))
+      .find(Boolean);
+
+    if (!sessionUser && savedUser) {
+      ["user", "vitalsUser", "salevitals_user"].forEach((key) =>
+        sessionStorage.setItem(key, savedUser)
+      );
+    }
+
     if (
       dashboardParams.get("metaSelectPage") === "true" ||
       dashboardParams.get("metaError")
     ) {
       setActive("Settings");
     }
-
-    const savedUser =
-      localStorage.getItem("user") ||
-      sessionStorage.getItem("user");
 
     if (savedUser) {
       try {
@@ -761,10 +784,12 @@ export default function Dashboard() {
   }, []);
 
   const getAuthToken = () =>
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("vitalsToken") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("salevitals_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    localStorage.getItem("salevitals_token") ||
     "";
 
   const loadBilling = async () => {
@@ -810,8 +835,9 @@ export default function Dashboard() {
 
     try {
       currentUser = JSON.parse(
-        localStorage.getItem("user") ||
         sessionStorage.getItem("user") ||
+        sessionStorage.getItem("vitalsUser") ||
+        localStorage.getItem("user") ||
         "null"
       );
     } catch {
@@ -1238,15 +1264,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadNotifications();
-
-    const intervalId =
-      window.setInterval(
-        loadNotifications,
-        30000
-      );
-
-    return () =>
-      window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -1273,15 +1290,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadSidebarCounts();
-
-    const intervalId =
-      window.setInterval(
-        loadSidebarCounts,
-        30000
-      );
-
-    return () =>
-      window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -1303,14 +1311,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadTodayFollowUps();
-
-    const intervalId = window.setInterval(
-      loadTodayFollowUps,
-      30000
-    );
-
-    return () =>
-      window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -1339,8 +1339,6 @@ export default function Dashboard() {
       }
     };
     loadDashboardLeads();
-    const intervalId = window.setInterval(loadDashboardLeads, 30000);
-    return () => window.clearInterval(intervalId);
   }, []);
 
   const markNotificationAsRead = async (
@@ -1556,7 +1554,318 @@ export default function Dashboard() {
     }
   }, [active, user?.permissions, user?.isOwner]);
 
+
+function ComingSoonPage({ type = "WhatsApp" }) {
+  const isWhatsApp = type === "WhatsApp";
+
+  const title = isWhatsApp
+    ? "WhatsApp Integration"
+    : "Integrations";
+
+  const description = isWhatsApp
+    ? "We are building a powerful WhatsApp integration to help you manage lead conversations, follow-ups and customer communication in one place."
+    : "We are connecting more powerful tools to help you bring your business data, leads and workflows together in one place.";
+
+  const features = isWhatsApp
+    ? [
+        "Send & receive WhatsApp messages",
+        "Auto-create leads from WhatsApp chats",
+        "Manage conversations inside CRM",
+        "Use templates and quick replies",
+        "Track message history and engagement",
+      ]
+    : [
+        "Connect your favorite business tools",
+        "Sync leads and customer data",
+        "Automate your daily workflows",
+        "Keep everything connected in one workspace",
+        "More integrations are coming soon",
+      ];
+
+  return (
+    <section
+      className="dash-coming-soon"
+      style={{
+        minHeight: "calc(100vh - 170px)",
+        padding: "18px 0 50px",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #e3ecec",
+          borderRadius: 24,
+          minHeight: 570,
+          overflow: "hidden",
+          position: "relative",
+          boxShadow: "0 10px 35px rgba(0,101,106,.06)",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            width: 420,
+            height: 420,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(0,101,106,.12), rgba(0,101,106,0) 68%)",
+            right: 70,
+            top: 65,
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 0.95fr",
+            minHeight: 570,
+            alignItems: "center",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <div
+            style={{
+              padding: "58px 42px 58px 48px",
+              maxWidth: 690,
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 14px",
+                borderRadius: 999,
+                background: "#e6f4f4",
+                color: "#00656A",
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: ".04em",
+                marginBottom: 22,
+              }}
+            >
+              <span>🚀</span>
+              COMING SOON
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                color: "#172033",
+                fontSize: "clamp(32px, 4vw, 52px)",
+                lineHeight: 1.08,
+                fontWeight: 800,
+                letterSpacing: "-.04em",
+              }}
+            >
+              {title}
+            </h1>
+
+            <p
+              style={{
+                margin: "18px 0 28px",
+                color: "#66758a",
+                fontSize: 16,
+                lineHeight: 1.75,
+                maxWidth: 610,
+              }}
+            >
+              {description}
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 13,
+                marginBottom: 32,
+              }}
+            >
+              {features.map((feature) => (
+                <div
+                  key={feature}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    color: "#344054",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 22,
+                      height: 22,
+                      minWidth: 22,
+                      borderRadius: "50%",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#dff7e9",
+                      color: "#16a05d",
+                      fontSize: 13,
+                      fontWeight: 900,
+                    }}
+                  >
+                    ✓
+                  </span>
+                  {feature}
+                </div>
+              ))}
+            </div>
+
+            {/* <button
+              type="button"
+              onClick={() => {
+                const message =
+                  "Hello SaleVitals Support, I need help with my CRM. Please assist me.";
+                window.open(
+                  `https://wa.me/919625989258?text=${encodeURIComponent(message)}`,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+              }}
+              style={{
+                border: 0,
+                borderRadius: 11,
+                padding: "13px 20px",
+                background: "#00656A",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: "0 8px 20px rgba(0,101,106,.18)",
+              }}
+            >
+              Need Help? Chat on WhatsApp
+            </button> */}
+          </div>
+
+          <div
+            style={{
+              minHeight: 500,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                width: 310,
+                height: 310,
+                borderRadius: "50%",
+                border: "1px dashed rgba(0,101,106,.24)",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 170,
+                  height: 170,
+                  borderRadius: 36,
+                  background: "linear-gradient(145deg, #25d366, #16a05a)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  boxShadow: "0 22px 55px rgba(0,101,106,.24)",
+                }}
+              >
+                <Icon name={isWhatsApp ? "whatsapp" : "integration"} size={76} />
+              </div>
+
+              {[
+                ["Auto Capture", "users", { top: 8, left: -35 }],
+                ["Follow-ups", "calendar", { bottom: 12, left: -45 }],
+                ["Track & Analyze", "report", { bottom: 18, right: -55 }],
+                ["Coming Soon", "spark", { top: 8, right: -48 }],
+              ].map(([label, icon, position]) => (
+                <div
+                  key={label}
+                  style={{
+                    position: "absolute",
+                    ...position,
+                    background: "#fff",
+                    border: "1px solid #e6eeee",
+                    borderRadius: 14,
+                    padding: "11px 14px",
+                    minWidth: 118,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 9,
+                    boxShadow: "0 10px 25px rgba(15,23,42,.08)",
+                    color: "#253047",
+                    fontSize: 11,
+                    fontWeight: 800,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 9,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#e6f4f4",
+                      color: "#00656A",
+                    }}
+                  >
+                    <Icon name={icon} size={15} />
+                  </span>
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .dash-coming-soon > div > div {
+            grid-template-columns: 1fr !important;
+          }
+          .dash-coming-soon > div > div > div:last-child {
+            min-height: 360px !important;
+            padding-bottom: 40px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .dash-coming-soon {
+            padding-top: 8px !important;
+          }
+          .dash-coming-soon > div {
+            border-radius: 18px !important;
+          }
+          .dash-coming-soon > div > div > div:first-child {
+            padding: 38px 24px 20px !important;
+          }
+          .dash-coming-soon > div > div > div:last-child {
+            transform: scale(.82);
+            margin-top: -25px;
+          }
+        }
+      `}</style>
+    </section>
+  );
+}
+
   const renderDashboardSection = () => {
+    if (active === "WhatsApp") {
+      return <ComingSoonPage type="WhatsApp" />;
+    }
+
+    if (active === "Integrations") {
+      return <MetaIntegrationPanel />;
+    }
+
     if (active === "Settings") {
       return (
         <Settings
@@ -1608,14 +1917,14 @@ export default function Dashboard() {
       return <Contacts user={user} />;
     }
 
-    if (active === "AI Chat") {
-  return (
-    <AIAssistant
-      key="ai-chat"
-      initialTab="conversations"
-    />
-  );
-}
+    if (active === "Chat") {
+      return (
+        <AIAssistant
+          key="ai-chat"
+          initialTab="conversations"
+        />
+      );
+    }
 
     if (active === "AI Assistant") {
       return (
@@ -1687,7 +1996,40 @@ export default function Dashboard() {
     "";
 
   return (
-    <div className="dashboard-shell">
+    <>
+      <style>{`
+        .dash-help-btn {
+          height: 36px;
+          padding: 0 12px;
+          border: 1px solid #d8e9e9;
+          border-radius: 10px;
+          background: #ffffff;
+          color: #00656A;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: .2s ease;
+        }
+        .dash-help-btn:hover {
+          background: #e6f4f4;
+          border-color: #b9dcdc;
+          transform: translateY(-1px);
+        }
+        @media (max-width: 600px) {
+          .dash-help-btn span {
+            display: none;
+          }
+          .dash-help-btn {
+            width: 36px;
+            padding: 0;
+          }
+        }
+      `}</style>
+      <div className="dashboard-shell">
 
       <aside
         className={`dash-sidebar ${mobileOpen ? "open" : ""
@@ -2051,21 +2393,23 @@ export default function Dashboard() {
 
           <div className="dash-top-actions">
 
-            <div className="dash-wa-live">
-
-              <i />
-
-              WhatsApp live
-
-            </div>
-
-            <button className="dash-icon-btn">
-
-              <Icon
-                name="help"
-                size={17}
-              />
-
+            <button
+              type="button"
+              className="dash-help-btn"
+              onClick={() => {
+                const message =
+                  "Hello SaleVitals Support, I need help with my CRM. Please assist me.";
+                window.open(
+                  `https://wa.me/919625989258?text=${encodeURIComponent(message)}`,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+              }}
+              aria-label="Get help on WhatsApp"
+              title="Get help on WhatsApp"
+            >
+              <Icon name="help" size={17} />
+              <span>Help</span>
             </button>
 
             <div
@@ -2416,5 +2760,6 @@ export default function Dashboard() {
       </nav>
 
     </div>
+    </>
   );
 }

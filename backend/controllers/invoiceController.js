@@ -3,6 +3,7 @@ const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
 
 const Invoice = require("../models/Invoice");
+const InvoiceCounter = require("../models/InvoiceCounter");
 const User = require("../models/User");
 
 const {
@@ -40,6 +41,56 @@ const requirePermission = (
     }
 
     return true;
+};
+
+const getNextPatientId = async (workspaceOwnerId) => {
+    let counter;
+
+    try {
+        counter = await InvoiceCounter.findOneAndUpdate(
+            { userId: workspaceOwnerId },
+            { $inc: { sequence: 1 } },
+            { new: true, upsert: true, setDefaultsOnInsert: false }
+        );
+    } catch (error) {
+        if (error.code !== 11000) throw error;
+        counter = await InvoiceCounter.findOneAndUpdate(
+            { userId: workspaceOwnerId },
+            { $inc: { sequence: 1 } },
+            { new: true }
+        );
+    }
+
+    return `K${String(counter.sequence).padStart(3, "0")}`;
+};
+
+const resolvePatientId = async ({
+    workspaceOwnerId,
+    customerId,
+    customerName,
+    customerPhone,
+}) => {
+    const patientFilter = customerId
+        ? { customerId }
+        : customerPhone
+            ? {
+                customerId: "",
+                customerName: String(customerName).trim(),
+                customerPhone,
+            }
+            : null;
+
+    if (patientFilter) {
+        const existingPatient = await Invoice.findOne({
+            userId: workspaceOwnerId,
+            ...patientFilter,
+            patientId: { $ne: "" },
+        }).select("patientId").lean();
+
+        if (existingPatient?.patientId) return existingPatient.patientId;
+    }
+
+    return getNextPatientId(workspaceOwnerId);
 };
 
 exports.getInvoices = async (
@@ -164,6 +215,13 @@ exports.createInvoice = async (
                 customerId:
                     customerId || "",
 
+                patientId: await resolvePatientId({
+                    workspaceOwnerId: userId,
+                    customerId,
+                    customerName,
+                    customerPhone,
+                }),
+
                 customerName:
                     String(
                         customerName
@@ -261,6 +319,106 @@ exports.createInvoice = async (
             message:
                 error.message ||
                 "Unable to create invoice.",
+        });
+    }
+};
+
+exports.updateInvoice = async (
+    req,
+    res
+) => {
+    try {
+        const context = await getContext(req);
+
+        if (!requirePermission(context, "invoices.edit", res)) return;
+
+        const invoice = await Invoice.findOne({
+            _id: req.params.invoiceId,
+            userId: context.workspaceOwnerId,
+        });
+
+        if (!invoice) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found.",
+            });
+        }
+
+        const {
+            invoiceNumber,
+            invoiceDate,
+            customerId,
+            customerName,
+            customerEmail,
+            customerPhone,
+            customerAddress,
+            notes,
+            billedBy,
+            items,
+            subtotal,
+            gstAmount,
+            total,
+            status,
+        } = req.body;
+
+        if (!customerName || !String(customerName).trim() || !Array.isArray(items) || !items.length) {
+            return res.status(400).json({
+                success: false,
+                message: "Customer name and at least one invoice item are required.",
+            });
+        }
+
+        const nextCustomerId = customerId || "";
+        const nextCustomerName = String(customerName).trim();
+        const nextCustomerPhone = customerPhone || "";
+        const samePatient =
+            String(invoice.customerId || "") === String(nextCustomerId) &&
+            invoice.customerName === nextCustomerName &&
+            invoice.customerPhone === nextCustomerPhone;
+        const patientId = samePatient && invoice.patientId
+            ? invoice.patientId
+            : await resolvePatientId({
+                workspaceOwnerId: context.workspaceOwnerId,
+                customerId: nextCustomerId,
+                customerName: nextCustomerName,
+                customerPhone: nextCustomerPhone,
+            });
+
+        Object.assign(invoice, {
+            invoiceNumber: invoiceNumber || invoice.invoiceNumber,
+            invoiceDate: invoiceDate ? new Date(invoiceDate) : invoice.invoiceDate,
+            customerId: nextCustomerId,
+            patientId,
+            customerName: nextCustomerName,
+            customerEmail: customerEmail || "",
+            customerPhone: customerPhone || "",
+            customerAddress: customerAddress || "",
+            notes: notes || "",
+            billedBy: billedBy || {},
+            items: items.map((item) => ({
+                serviceId: item.serviceId || "",
+                serviceName: item.serviceName || "Service",
+                quantity: Number(item.quantity) || 1,
+                cost: Number(item.cost) || 0,
+                gst: Number(item.gst) || 0,
+                baseAmount: Number(item.baseAmount) || 0,
+                gstAmount: Number(item.gstAmount) || 0,
+                total: Number(item.total) || 0,
+            })),
+            subtotal: Number(subtotal) || 0,
+            gstAmount: Number(gstAmount) || 0,
+            total: Number(total) || 0,
+            status: status || invoice.status,
+        });
+
+        await invoice.save();
+
+        return res.json({ success: true, invoice });
+    } catch (error) {
+        console.error("UPDATE INVOICE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Unable to update invoice.",
         });
     }
 };
@@ -500,6 +658,10 @@ function generateInvoicePDF(
                     .text(
                         `Invoice Date: ${invoiceDate}`
                     );
+
+                if (invoice.patientId) {
+                    doc.text(`Patient ID: ${invoice.patientId}`);
+                }
 
                 doc.moveDown();
 
@@ -754,7 +916,7 @@ function generateInvoicePDF(
                         "#777777"
                     )
                     .text(
-                        "This is a computer generated invoice.",
+                        "Powered by SaleVitals",
                         45,
                         760,
                         {
@@ -770,6 +932,43 @@ function generateInvoicePDF(
         }
     );
 }
+
+exports.downloadInvoicePDF = async (req, res) => {
+    try {
+        const context = await getContext(req);
+
+        if (!requirePermission(context, "invoices.view", res)) return;
+
+        const invoice = await Invoice.findOne({
+            _id: req.params.invoiceId,
+            userId: context.workspaceOwnerId,
+        }).lean();
+
+        if (!invoice) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found.",
+            });
+        }
+
+        const user = await User.findById(context.workspaceOwnerId).lean();
+        const pdf = await generateInvoicePDF(invoice, user);
+        const filename = `${String(invoice.invoiceNumber || "invoice").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+
+        res.set({
+            "Content-Type": "application/pdf",
+            "Content-Length": pdf.length,
+            "Content-Disposition": `attachment; filename="${filename}"`,
+        });
+        return res.send(pdf);
+    } catch (error) {
+        console.error("DOWNLOAD INVOICE PDF ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to generate invoice PDF.",
+        });
+    }
+};
 
 exports.sendInvoiceToWhatsApp =
     async (req, res) => {

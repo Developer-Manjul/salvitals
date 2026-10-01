@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getApiBaseUrl } from "../config/api";
 import "../styles/Invoice.scss";
 
@@ -6,12 +6,12 @@ const API_BASE = getApiBaseUrl();
 
 const getToken = () => {
   return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
-    localStorage.getItem("salevitals_token") ||
     sessionStorage.getItem("token") ||
     sessionStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("salevitals_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
+    localStorage.getItem("salevitals_token") ||
     ""
   );
 };
@@ -102,6 +102,7 @@ export default function Invoice() {
   const [view, setView] = useState("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
@@ -115,11 +116,14 @@ export default function Invoice() {
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [serviceSearchOpen, setServiceSearchOpen] = useState("");
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [pendingPdfDownload, setPendingPdfDownload] = useState(null);
+  const pdfExportRef = useRef(null);
 
   const [invoice, setInvoice] = useState({
     invoiceNumber: createInvoiceNumber("SaleVitals", []),
     invoiceDate: today(),
     customerId: "",
+    patientId: "",
     customerName: "",
     customerEmail: "",
     customerPhone: "",
@@ -145,6 +149,68 @@ export default function Invoice() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!pendingPdfDownload || !pdfExportRef.current) return undefined;
+
+    let cancelled = false;
+
+    const exportInvoice = async () => {
+      setSaving(true);
+
+      try {
+        if (document.fonts?.ready) await document.fonts.ready;
+
+        const images = Array.from(pdfExportRef.current.querySelectorAll("img"));
+        await Promise.all(images.map((image) => image.decode?.().catch(() => undefined)));
+        const { default: html2pdf } = await import("html2pdf.js");
+
+        await html2pdf()
+          .set({
+            margin: 0,
+            filename: pendingPdfDownload.filename,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: "#ffffff",
+              scrollX: 0,
+              scrollY: 0,
+            },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            pagebreak: { mode: ["css", "legacy"] },
+          })
+          .from(pdfExportRef.current)
+          .save();
+
+        if (!cancelled) {
+          setSuccess("Invoice PDF downloaded.");
+          if (pendingPdfDownload.returnToList) {
+            setShowPreview(false);
+            setView("list");
+          }
+        }
+      } catch (exportError) {
+        if (!cancelled) {
+          setError(exportError.message || "Unable to download invoice PDF.");
+          if (pendingPdfDownload.returnToList) {
+            setShowPreview(false);
+            setView("list");
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setSaving(false);
+          setPendingPdfDownload(null);
+        }
+      }
+    };
+
+    exportInvoice();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingPdfDownload]);
 
   const loadProfile = async () => {
     try {
@@ -291,11 +357,13 @@ export default function Invoice() {
     setCustomerQuery("");
     setCustomerSearchOpen(false);
     setServiceSearchOpen("");
+    setEditingInvoiceId("");
 
     setInvoice({
       invoiceNumber: createInvoiceNumber(getBusinessName(), invoices),
       invoiceDate: today(),
       customerId: "",
+      patientId: "",
       customerName: "",
       customerEmail: "",
       customerPhone: "",
@@ -318,6 +386,8 @@ export default function Invoice() {
     setInvoice((prev) => ({
       ...prev,
       customerId: customerId || "",
+      patientId:
+        invoices.find((invoiceItem) => String(invoiceItem.customerId) === String(customerId))?.patientId || "",
       customerName:
         customer?.name ||
         customer?.fullName ||
@@ -336,6 +406,7 @@ export default function Invoice() {
     setInvoice((prev) => ({
       ...prev,
       customerId: "",
+      patientId: "",
       customerName: value,
     }));
   };
@@ -355,6 +426,8 @@ export default function Invoice() {
     setInvoice((prev) => ({
       ...prev,
       customerId,
+      patientId:
+        invoices.find((invoiceItem) => String(invoiceItem.customerId) === String(customerId))?.patientId || "",
       customerName,
       customerEmail: customer?.email || "",
       customerPhone: customer?.phone || "",
@@ -519,6 +592,7 @@ export default function Invoice() {
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: invoice.invoiceDate,
     customerId: invoice.customerId,
+    patientId: invoice.patientId,
     customerName: invoice.customerName,
     customerEmail: invoice.customerEmail,
     customerPhone: invoice.customerPhone,
@@ -591,7 +665,41 @@ export default function Invoice() {
     });
   };
 
-  const saveInvoice = async (sendInvoice = false) => {
+  const downloadInvoicePDF = (invoiceRecord, returnToList = false) => {
+    const invoiceId = invoiceRecord?._id || invoiceRecord?.id;
+    if (!invoiceId) throw new Error("Invoice ID is missing.");
+
+    setInvoice({
+      invoiceNumber: invoiceRecord.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
+      invoiceDate: invoiceRecord.invoiceDate || today(),
+      customerId: invoiceRecord.customerId || "",
+      patientId: invoiceRecord.patientId || "",
+      customerName: invoiceRecord.customerName || "",
+      customerEmail: invoiceRecord.customerEmail || "",
+      customerPhone: invoiceRecord.customerPhone || "",
+      customerAddress: invoiceRecord.customerAddress || "",
+      notes: invoiceRecord.notes || "",
+      items: Array.isArray(invoiceRecord.items) && invoiceRecord.items.length
+        ? invoiceRecord.items.map((item) => ({
+            id: item._id || Date.now() + Math.random(),
+            serviceId: item.serviceId || "",
+            serviceName: item.serviceName || item.name || "",
+            cost: item.cost || "",
+            gst: item.gst ?? 18,
+          }))
+        : [emptyItem()],
+    });
+    setEditingInvoiceId(String(invoiceId));
+    setView("create");
+    setShowPreview(true);
+    setSuccess("");
+    setPendingPdfDownload({
+      filename: `${String(invoiceRecord.invoiceNumber || "invoice").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`,
+      returnToList,
+    });
+  };
+
+  const saveInvoice = async (sendInvoice = false, downloadAfterSave = false) => {
     setError("");
     setSuccess("");
 
@@ -617,16 +725,26 @@ export default function Invoice() {
     try {
       setSaving(true);
 
-      const data = await api("/api/invoices", {
-        method: "POST",
-        body: JSON.stringify(buildPayload()),
-      });
+      const data = await api(
+        editingInvoiceId ? `/api/invoices/${editingInvoiceId}` : "/api/invoices",
+        {
+          method: editingInvoiceId ? "PUT" : "POST",
+          body: JSON.stringify(buildPayload()),
+        }
+      );
 
       if (data.invoice) {
-        setInvoices((prev) => [data.invoice, ...prev]);
+        setEditingInvoiceId(String(data.invoice._id || data.invoice.id || ""));
+        setInvoice((prev) => ({ ...prev, patientId: data.invoice.patientId || "" }));
+        setInvoices((prev) => editingInvoiceId
+          ? prev.map((item) => String(item._id || item.id) === String(editingInvoiceId) ? data.invoice : item)
+          : [data.invoice, ...prev]);
       }
 
-      if (sendInvoice) {
+      if (downloadAfterSave) {
+        downloadInvoicePDF(data.invoice, true);
+        return;
+      } else if (sendInvoice) {
         try {
           await sendInvoiceToWhatsApp(data.invoice || buildPayload());
           setSuccess("Invoice created and sent to the customer's WhatsApp as a PDF.");
@@ -697,6 +815,7 @@ export default function Invoice() {
       invoiceNumber: item.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
       invoiceDate: item.invoiceDate || today(),
       customerId: item.customerId || "",
+      patientId: item.patientId || "",
       customerName: item.customerName || "",
       customerEmail: item.customerEmail || "",
       customerPhone: item.customerPhone || "",
@@ -715,6 +834,7 @@ export default function Invoice() {
     });
 
     setCustomerQuery(item.customerName || "");
+    setEditingInvoiceId(String(item._id || item.id || ""));
     setCustomerSearchOpen(false);
     setServiceSearchOpen("");
     setView("create");
@@ -739,9 +859,11 @@ export default function Invoice() {
     const businessEmail = getBusinessEmail();
     const businessGstin = getBusinessGstin();
     const businessPan = getBusinessPan();
+    const gstRates = [...new Set(invoice.items.map((item) => Number(item.gst) || 0))];
+    const gstHeading = gstRates.length === 1 ? `GST (${gstRates[0]}%)` : "GST";
 
     return (
-      <div className="invoice-document">
+      <div className="invoice-document" ref={pdfExportRef}>
         <div className="invoice-document-header">
           <div className="invoice-company">
             <div className="invoice-company-logo">
@@ -780,6 +902,7 @@ export default function Invoice() {
           <div>
             <span>INVOICE DETAILS</span>
             <strong>{invoice.invoiceNumber}</strong>
+            {invoice.patientId && <p>Patient ID: {invoice.patientId}</p>}
             <p>Invoice date: {formatDate(invoice.invoiceDate)}</p>
           </div>
         </div>
@@ -791,7 +914,7 @@ export default function Invoice() {
                 <th>#</th>
                 <th>DESCRIPTION OF SERVICE</th>
                 <th>RATE</th>
-                <th>GST</th>
+                <th>{gstHeading}</th>
                 <th>AMOUNT</th>
               </tr>
             </thead>
@@ -804,7 +927,7 @@ export default function Invoice() {
                     <td>{index + 1}</td>
                     <td>{item.serviceName || "Service"}</td>
                     <td>{formatCurrency(item.cost)}</td>
-                    <td>{Number(item.gst) || 0}% · {formatCurrency(result.gstAmount)}</td>
+                    <td>{formatCurrency(result.gstAmount)}</td>
                     <td>{formatCurrency(result.total)}</td>
                   </tr>
                 );
@@ -891,6 +1014,7 @@ export default function Invoice() {
             <thead>
               <tr>
                 <th>INVOICE NUMBER</th>
+                  <th>PATIENT ID</th>
                 <th>CUSTOMER</th>
                 <th>DATE</th>
                 <th>SERVICE</th>
@@ -903,11 +1027,11 @@ export default function Invoice() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="invoice-empty">Loading invoices...</td>
+                  <td colSpan="8" className="invoice-empty">Loading invoices...</td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="invoice-empty">
+                  <td colSpan="8" className="invoice-empty">
                     <div className="invoice-empty-icon">₹</div>
                     <strong>No invoices found</strong>
                     <span>Create your first invoice to get started.</span>
@@ -917,6 +1041,7 @@ export default function Invoice() {
                 filteredInvoices.map((item) => (
                   <tr key={item._id || item.id}>
                     <td><strong>{item.invoiceNumber}</strong></td>
+                    <td><strong>{item.patientId || "-"}</strong></td>
                     <td>
                       <div className="invoice-customer">
                         <div className="invoice-avatar">
@@ -950,10 +1075,23 @@ export default function Invoice() {
                         <button
                           type="button"
                           onClick={() => {
+                            try {
+                              downloadInvoicePDF(item, true);
+                            } catch (downloadError) {
+                              setError(downloadError.message);
+                            }
+                          }}
+                        >
+                          Download
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
                             setInvoice({
                               invoiceNumber: item.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
                               invoiceDate: item.invoiceDate || today(),
                               customerId: item.customerId || "",
+                              patientId: item.patientId || "",
                               customerName: item.customerName || "",
                               customerEmail: item.customerEmail || "",
                               customerPhone: item.customerPhone || "",
@@ -970,6 +1108,7 @@ export default function Invoice() {
                                     }))
                                   : [emptyItem()],
                             });
+                            setEditingInvoiceId(String(item._id || item.id || ""));
                             setView("create");
                             setShowPreview(true);
                           }}
@@ -1013,7 +1152,7 @@ export default function Invoice() {
           >
             ← Back to invoices
           </button>
-          <h1>Create Invoice</h1>
+          <h1>{editingInvoiceId ? "Edit Invoice" : "Create Invoice"}</h1>
           <p>Create a GST invoice for your customer.</p>
         </div>
 
@@ -1053,6 +1192,10 @@ export default function Invoice() {
                     setInvoice((prev) => ({ ...prev, invoiceDate: e.target.value }))
                   }
                 />
+              </div>
+              <div className="invoice-field">
+                <label>Patient ID</label>
+                <input type="text" value={invoice.patientId || "Assigned when saved"} readOnly />
               </div>
             </div>
           </section>
@@ -1465,7 +1608,8 @@ export default function Invoice() {
             <button
               type="button"
               className="invoice-outline-action"
-              onClick={printInvoice}
+              onClick={() => saveInvoice(false, true)}
+              disabled={saving}
             >
               ↓ Download PDF
             </button>
@@ -1484,6 +1628,10 @@ export default function Invoice() {
             <div>
               <span>Invoice Number</span>
               <strong>{invoice.invoiceNumber}</strong>
+            </div>
+            <div>
+              <span>Patient ID</span>
+              <strong>{invoice.patientId || "Assigned when saved"}</strong>
             </div>
             <div>
               <span>Invoice Date</span>

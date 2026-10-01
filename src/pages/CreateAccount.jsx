@@ -78,6 +78,9 @@ export default function CreateAccount() {
         );
 
       const storedUser = [
+        sessionStorage.getItem("salevitals_user"),
+        sessionStorage.getItem("user"),
+        sessionStorage.getItem("vitalsUser"),
         localStorage.getItem("salevitals_user"),
         localStorage.getItem("user"),
         localStorage.getItem("vitalsUser"),
@@ -92,12 +95,12 @@ export default function CreateAccount() {
         .find(Boolean);
 
       const token =
-        localStorage.getItem("salevitals_token") ||
-        localStorage.getItem("token") ||
-        localStorage.getItem("vitalsToken") ||
         sessionStorage.getItem("salevitals_token") ||
         sessionStorage.getItem("token") ||
-        sessionStorage.getItem("vitalsToken");
+        sessionStorage.getItem("vitalsToken") ||
+        localStorage.getItem("salevitals_token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("vitalsToken");
 
       const applyUserData = (user) => {
         if (!user) return;
@@ -436,12 +439,12 @@ export default function CreateAccount() {
     }
 
     const token =
-      localStorage.getItem("salevitals_token") ||
-      localStorage.getItem("token") ||
-      localStorage.getItem("vitalsToken") ||
       sessionStorage.getItem("salevitals_token") ||
       sessionStorage.getItem("token") ||
-      sessionStorage.getItem("vitalsToken");
+      sessionStorage.getItem("vitalsToken") ||
+      localStorage.getItem("salevitals_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("vitalsToken");
 
     if (!token) {
       setError("Your session has expired. Please sign in again.");

@@ -3,10 +3,10 @@ import { buildApiUrl } from "../config/api";
 
 const getToken = () => {
   return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("vitalsToken") ||
     sessionStorage.getItem("token") ||
     sessionStorage.getItem("vitalsToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("vitalsToken") ||
     ""
   );
 };
@@ -1723,21 +1723,7 @@ export default function MetaIntegrationPanel() {
             marginBottom: 18,
           }}
         >
-          <div
-            style={{
-              color: "#2563eb",
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing:
-                "1px",
-              textTransform:
-                "uppercase",
-              marginBottom: 5,
-            }}
-          >
-            Lead Sources
-          </div>
-
+          
           <h2
             style={{
               margin: 0,
@@ -1747,22 +1733,8 @@ export default function MetaIntegrationPanel() {
               color: "#111827",
             }}
           >
-            Meta Lead Ads
+            Integrations
           </h2>
-
-          <p
-            style={{
-              margin:
-                "6px 0 0",
-              color: "#64748b",
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            Connect your advertising
-            platforms to receive leads
-            directly in SaleVitals.
-          </p>
         </div>
 
         <div

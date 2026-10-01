@@ -34,10 +34,11 @@ const goTo = (url) => {
 
 const getToken = () => {
   return (
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("vitalsToken") ||
     localStorage.getItem("token") ||
     localStorage.getItem("vitalsToken") ||
     localStorage.getItem("authToken") ||
-    sessionStorage.getItem("token") ||
     ""
   );
 };

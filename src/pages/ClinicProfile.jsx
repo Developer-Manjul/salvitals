@@ -34,12 +34,12 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
 
   const getToken = () => {
     return (
-      localStorage.getItem("token") ||
-      localStorage.getItem("vitalsToken") ||
-      localStorage.getItem("salevitals_token") ||
       sessionStorage.getItem("token") ||
       sessionStorage.getItem("vitalsToken") ||
       sessionStorage.getItem("salevitals_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("vitalsToken") ||
+      localStorage.getItem("salevitals_token") ||
       ""
     );
   };
@@ -416,12 +416,12 @@ export default function ClinicProfile({ user, isHealthcare = false }) {
       });
 
       const currentUserJson =
-        localStorage.getItem("vitalsUser") ||
-        localStorage.getItem("user") ||
-        localStorage.getItem("salevitals_user") ||
         sessionStorage.getItem("vitalsUser") ||
         sessionStorage.getItem("user") ||
         sessionStorage.getItem("salevitals_user") ||
+        localStorage.getItem("vitalsUser") ||
+        localStorage.getItem("user") ||
+        localStorage.getItem("salevitals_user") ||
         "{}";
 
       let currentUser = {};

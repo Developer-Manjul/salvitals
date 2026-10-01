@@ -14,6 +14,16 @@ router.post(
     invoiceController.createInvoice
 );
 
+router.put(
+    "/:invoiceId",
+    invoiceController.updateInvoice
+);
+
+router.get(
+    "/:invoiceId/pdf",
+    invoiceController.downloadInvoicePDF
+);
+
 router.delete(
     "/:invoiceId",
     invoiceController.deleteInvoice
