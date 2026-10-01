@@ -366,22 +366,18 @@ exports.connect = async (req, res) => {
     }
 };
 
-exports.callback = async (
-    req,
-    res
-) => {
+exports.callback = async (req, res) => {
     const frontend = (
         process.env.FRONTEND_URL ||
         "http://localhost:5173"
     ).replace(/\/$/, "");
 
-    const stateRecord =
-        await MetaOAuthState.findOne({
-            state: req.query.state,
-            expiresAt: {
-                $gt: new Date(),
-            },
-        });
+    const stateRecord = await MetaOAuthState.findOne({
+        state: req.query.state,
+        expiresAt: {
+            $gt: new Date(),
+        },
+    });
 
     if (!stateRecord) {
         return res.redirect(
@@ -410,28 +406,50 @@ exports.callback = async (
     }
 
     try {
-        const tokenData =
-            await meta.exchangeCodeForToken(
-                req.query.code
-            );
+        const tokenData = await meta.exchangeCodeForToken(
+            req.query.code
+        );
 
-        const pages =
-            await meta.getPages(
-                tokenData.access_token
-            );
+        console.log("========================================");
+        console.log("META OAUTH USER TOKEN RECEIVED");
+        console.log("META TOKEN TYPE:", tokenData.token_type || "");
+        console.log(
+            "META TOKEN EXPIRES IN:",
+            tokenData.expires_in || ""
+        );
+        console.log("========================================");
 
-        stateRecord.accessTokenEncrypted =
-            encrypt(
-                tokenData.access_token
-            );
+        const pages = await meta.getPages(
+            tokenData.access_token
+        );
+
+        console.log("META CALLBACK PAGES:");
+
+        for (const page of pages.data || []) {
+            console.log("META PAGE:", {
+                id: page.id,
+                name: page.name,
+                hasPageAccessToken: Boolean(
+                    page.access_token
+                ),
+                hasInstagram:
+                    Boolean(
+                        page.instagram_business_account?.id
+                    ),
+                businessId:
+                    page.business?.id || "",
+            });
+        }
+
+        stateRecord.accessTokenEncrypted = encrypt(
+            tokenData.access_token
+        );
 
         stateRecord.tokenExpiresAt =
             tokenData.expires_in
                 ? new Date(
                       Date.now() +
-                          Number(
-                              tokenData.expires_in
-                          ) *
+                          Number(tokenData.expires_in) *
                               1000
                   )
                 : null;
@@ -448,25 +466,20 @@ exports.callback = async (
             ),
 
             instagramAccountId:
-                page
-                    .instagram_business_account
+                page.instagram_business_account
                     ?.id || "",
 
             instagramUsername:
-                page
-                    .instagram_business_account
+                page.instagram_business_account
                     ?.username || "",
 
             instagramName:
-                page
-                    .instagram_business_account
+                page.instagram_business_account
                     ?.name || "",
 
             instagramProfilePicture:
-                page
-                    .instagram_business_account
-                    ?.profile_picture_url ||
-                "",
+                page.instagram_business_account
+                    ?.profile_picture_url || "",
 
             businessId:
                 page.business?.id || "",
@@ -477,6 +490,16 @@ exports.callback = async (
 
         await stateRecord.save();
 
+        console.log(
+            "META CALLBACK SAVED PAGES:",
+            stateRecord.pages.map((page) => ({
+                id: page.id,
+                name: page.name,
+                hasEncryptedPageToken:
+                    Boolean(page.accessToken),
+            }))
+        );
+
         return res.redirect(
             `${frontend}/dashboard?metaSelectPage=true`
         );
@@ -484,6 +507,7 @@ exports.callback = async (
         console.error(
             "META CALLBACK ERROR:",
             error.response?.data ||
+                error.metaError ||
                 error.message
         );
 

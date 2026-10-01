@@ -111,13 +111,17 @@ exports.getAuthorizationUrl = (state) => {
   );
 
   url.searchParams.set(
+    "override_default_response_type",
+    "true"
+  );
+
+  url.searchParams.set(
     "auth_type",
     "rerequest"
   );
 
   return url.toString();
 };
-
 exports.exchangeCodeForToken =
   (code) =>
     graphRequest(
