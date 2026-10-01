@@ -6,6 +6,14 @@ const GRAPH_VERSION =
 const GRAPH_BASE =
   `https://graph.facebook.com/${GRAPH_VERSION}`;
 
+const REQUIRED_PERMISSIONS = [
+  "leads_retrieval",
+  "pages_manage_metadata",
+  "pages_show_list",
+  "pages_read_engagement",
+  "ads_management",
+];
+
 function isConfigured() {
   return Boolean(
     process.env.META_APP_ID &&
@@ -41,20 +49,14 @@ async function graphRequest(path, options = {}) {
   }
 
   const response = await fetch(url, {
-    method:
-      options.method || "GET",
-
-    headers:
-      options.headers || {},
-
-    body:
-      options.body,
+    method: options.method || "GET",
+    headers: options.headers || {},
+    body: options.body,
   });
 
-  const data =
-    await response
-      .json()
-      .catch(() => ({}));
+  const data = await response
+    .json()
+    .catch(() => ({}));
 
   if (!response.ok || data.error) {
     const error = new Error(
@@ -76,8 +78,7 @@ async function graphRequest(path, options = {}) {
   return data;
 }
 
-exports.isConfigured =
-  isConfigured;
+exports.isConfigured = isConfigured;
 
 exports.getAuthorizationUrl = (state) => {
   const url = new URL(
@@ -109,9 +110,18 @@ exports.getAuthorizationUrl = (state) => {
     "code"
   );
 
+  url.searchParams.set(
+    "auth_type",
+    "rerequest"
+  );
+
+  url.searchParams.set(
+    "scope",
+    REQUIRED_PERMISSIONS.join(",")
+  );
+
   return url.toString();
 };
-
 
 exports.exchangeCodeForToken =
   (code) =>
@@ -140,7 +150,7 @@ exports.getPages =
       {
         params: {
           fields:
-  "id,name,access_token,instagram_business_account",
+            "id,name,access_token,instagram_business_account,business",
 
           access_token:
             accessToken,
@@ -161,7 +171,7 @@ exports.getPageDetails =
         {
           params: {
             fields:
-  "id,name,instagram_business_account",
+              "id,name,instagram_business_account,business",
 
             access_token:
               accessToken,
@@ -265,12 +275,18 @@ exports.subscribePageToLeadgen = (
   pageAccessToken
 ) =>
   graphRequest(
-    `/${encodeURIComponent(pageId)}/subscribed_apps`,
+    `/${encodeURIComponent(
+      pageId
+    )}/subscribed_apps`,
     {
       method: "POST",
+
       params: {
-        subscribed_fields: "leadgen",
-        access_token: pageAccessToken,
+        subscribed_fields:
+          "leadgen",
+
+        access_token:
+          pageAccessToken,
       },
     }
   );
@@ -304,3 +320,6 @@ exports.refreshConnection =
 
 exports.graphRequest =
   graphRequest;
+
+exports.requiredPermissions =
+  REQUIRED_PERMISSIONS;
