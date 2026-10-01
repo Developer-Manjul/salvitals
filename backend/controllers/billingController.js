@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Contact = require("../models/Contact");
+const Lead = require("../models/Lead");
 const Order = require("../models/Order");
 const TeamMember = require("../models/TeamMember");
 const AIUsage = require("../models/AIUsage");
@@ -313,11 +314,22 @@ exports.getCurrentBilling =
       const activePlan =
         await getActivePlan(ownerId);
 
-      const contactUsed =
-        await Contact.countDocuments({
+      const [
+        contactCount,
+        leadCount,
+      ] = await Promise.all([
+        Contact.countDocuments({
           userId: ownerId,
           deletedAt: null,
-        });
+        }),
+
+        Lead.countDocuments({
+          userId: ownerId,
+        }),
+      ]);
+
+      const contactUsed =
+        contactCount + leadCount;
 
       const contactPlanLimit =
         activePlan.planLimit ??
@@ -412,7 +424,7 @@ exports.getCurrentBilling =
         getMonthKey();
 
       const aiUsage =
-        await require("../models/AIUsage").findOne({
+        await AIUsage.findOne({
           ownerId,
           monthKey,
         }).lean();

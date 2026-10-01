@@ -1179,25 +1179,22 @@ const [selectedContactId, setSelectedContactId] =
         );
       }
 
-      if (contactsResponse.ok) {
-        const contacts = Array.isArray(
-          contactsData.contacts
-        )
-          ? contactsData.contacts
-          : [];
+    if (contactsResponse.ok) {
+  const contacts = Array.isArray(
+    contactsData.contacts
+  )
+    ? contactsData.contacts
+    : [];
 
-        if (
-          contactsData.usage &&
-          typeof contactsData.usage.used ===
-          "number"
-        ) {
-          setContactCount(
-            contactsData.usage.used
-          );
-        } else {
-          setContactCount(contacts.length);
-        }
-      }
+  const usedContacts =
+    Number(contactsData?.usage?.used);
+
+  setContactCount(
+    Number.isFinite(usedContacts)
+      ? usedContacts
+      : contacts.length
+  );
+}
     } catch (error) {
       console.error(
         "LOAD SIDEBAR COUNTS ERROR:",

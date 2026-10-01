@@ -37,10 +37,10 @@ function formatDate(value, withTime = false) {
     year: "numeric",
     ...(withTime
       ? {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }
       : {}),
   }).format(date);
 }
@@ -81,12 +81,16 @@ function normalizeStage(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[\_-]+/g, " ")
+    .replace(/[_\\-]+/g, " ")
     .replace(/\s+/g, " ");
 }
 
 function getNoteId(note, index) {
-  return String(note?._id || note?.id || `note-${index}`);
+  return String(
+    note?._id ||
+      note?.id ||
+      `note-${index}`
+  );
 }
 
 function getNoteHistory(note) {
@@ -101,107 +105,6 @@ function getNoteHistory(note) {
   }
 
   return [];
-}
-
-function getHistoryEditor(item, fallbackUser = "") {
-  return (
-    item?.editedBy ||
-    item?.userName ||
-    item?.createdBy ||
-    fallbackUser ||
-    "User"
-  );
-}
-
-function getHistoryDate(item) {
-  return (
-    item?.editedAt ||
-    item?.updatedAt ||
-    item?.createdAt ||
-    null
-  );
-}
-
-function renderInlineNoteHistory(
-  note,
-  index,
-  expandedHistoryIds,
-  fallbackUser
-) {
-  const history = getNoteHistory(note);
-  const noteId = getNoteId(note, index);
-
-  if (!history.length || !expandedHistoryIds.has(noteId)) {
-    return null;
-  }
-
-  return (
-    <div
-      className="lead-note-history-inline"
-      style={{
-        marginTop: "10px",
-        paddingLeft: "14px",
-        borderLeft: "2px solid #e5e7eb",
-      }}
-    >
-      {history
-        .slice()
-        .reverse()
-        .map((item, historyIndex) => (
-          <div
-            className="lead-note-history-inline-item"
-            key={`${getHistoryDate(item) || historyIndex}-${historyIndex}`}
-            style={{
-              padding: "8px 0 8px 12px",
-              borderBottom:
-                historyIndex < history.length - 1
-                  ? "1px solid #eef0f3"
-                  : "none",
-            }}
-          >
-            <div
-              className="lead-note-history-inline-meta"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                flexWrap: "wrap",
-                marginBottom: "4px",
-              }}
-            >
-              <strong style={{ fontSize: "12px", color: "#172033" }}>
-                Previous version
-              </strong>
-              <span style={{ fontSize: "11px", color: "#7a8495" }}>
-                {getHistoryEditor(item, fallbackUser)}
-                {getHistoryDate(item)
-                  ? ` · ${formatDate(
-                      getHistoryDate(item),
-                      true
-                    )}`
-                  : ""}
-              </span>
-            </div>
-
-            <p
-              style={{
-                margin: 0,
-                fontSize: "13px",
-                lineHeight: 1.5,
-                color: "#4b5563",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {item.oldText ||
-                item.previousText ||
-                item.from ||
-                "—"}
-            </p>
-          </div>
-        ))}
-    </div>
-  );
 }
 
 function getOwner(lead, user) {
@@ -309,6 +212,7 @@ function getActivities(lead) {
 
   (lead.notes || []).forEach((note, index) => {
     const history = getNoteHistory(note);
+
     const lastEdit =
       history.length > 0
         ? history[history.length - 1]
@@ -337,7 +241,6 @@ function getActivities(lead) {
       noteIndex: index,
       note,
       edited: history.length > 0,
-      editHistory: history,
     });
   });
 
@@ -371,13 +274,13 @@ function getActivities(lead) {
     (first, second) =>
       new Date(
         second.createdAt ||
-        second.date ||
-        0
+          second.date ||
+          0
       ) -
       new Date(
         first.createdAt ||
-        first.date ||
-        0
+          first.date ||
+          0
       )
   );
 }
@@ -426,6 +329,33 @@ function getSavedNotes(lead) {
     (note) =>
       note?.text &&
       String(note.text).trim()
+  );
+}
+
+function EditIcon({ size = 15 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 20H21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16.5 3.5C16.8978 3.10218 17.4374 2.87868 18 2.87868C18.5626 2.87868 19.1022 3.10218 19.5 3.5C19.8978 3.89782 20.1213 4.43739 20.1213 5C20.1213 5.56261 19.8978 6.10218 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -479,9 +409,6 @@ export default function LeadDetails({
   const [savingNoteEdit, setSavingNoteEdit] =
     useState(false);
 
-  const [expandedHistoryIds, setExpandedHistoryIds] =
-    useState(() => new Set());
-
   const loadLead = async () => {
     const token = getToken();
 
@@ -513,7 +440,7 @@ export default function LeadDetails({
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Unable to load lead"
+            "Unable to load lead"
         );
       }
 
@@ -522,7 +449,7 @@ export default function LeadDetails({
     } catch (loadError) {
       setError(
         loadError.message ||
-        "Unable to load lead"
+          "Unable to load lead"
       );
     } finally {
       setLoading(false);
@@ -642,6 +569,11 @@ export default function LeadDetails({
     [lead]
   );
 
+  const latestNote =
+    savedNotes.length > 0
+      ? savedNotes[savedNotes.length - 1]
+      : null;
+
   const openNotesTab = () => {
     setActiveTab("notes");
 
@@ -667,8 +599,7 @@ export default function LeadDetails({
   };
 
   const saveNote = async () => {
-    const text =
-      noteText.trim();
+    const text = noteText.trim();
 
     if (!text) return;
 
@@ -701,7 +632,7 @@ export default function LeadDetails({
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Unable to save note"
+            "Unable to save note"
         );
       }
 
@@ -714,7 +645,7 @@ export default function LeadDetails({
     } catch (saveError) {
       setNotice(
         saveError.message ||
-        "Unable to save note"
+          "Unable to save note"
       );
     } finally {
       setSaving(false);
@@ -790,7 +721,7 @@ export default function LeadDetails({
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Unable to update status"
+            "Unable to update status"
         );
       }
 
@@ -802,7 +733,7 @@ export default function LeadDetails({
     } catch (updateError) {
       setNotice(
         updateError.message ||
-        "Unable to update status"
+          "Unable to update status"
       );
     } finally {
       setSavingStage(false);
@@ -813,6 +744,8 @@ export default function LeadDetails({
     note,
     index
   ) => {
+    if (!note) return;
+
     setEditingNote({
       ...note,
       _index: index,
@@ -823,6 +756,37 @@ export default function LeadDetails({
     );
 
     setNotice("");
+  };
+
+  const openLatestNoteEditor = () => {
+    if (!latestNote) {
+      setNotice(
+        "No note available to edit."
+      );
+      return;
+    }
+
+    const index =
+      lead?.notes?.findIndex(
+        (item) =>
+          String(
+            item?._id ||
+              item?.id ||
+              ""
+          ) ===
+          String(
+            latestNote?._id ||
+              latestNote?.id ||
+              ""
+          )
+      );
+
+    openEditNote(
+      latestNote,
+      index >= 0
+        ? index
+        : lead.notes.length - 1
+    );
   };
 
   const closeEditNote = () => {
@@ -883,7 +847,7 @@ export default function LeadDetails({
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Unable to edit note"
+            "Unable to edit note"
         );
       }
 
@@ -898,29 +862,11 @@ export default function LeadDetails({
     } catch (editError) {
       setNotice(
         editError.message ||
-        "Unable to edit note"
+          "Unable to edit note"
       );
     } finally {
       setSavingNoteEdit(false);
     }
-  };
-
-  const toggleHistory = (note) => {
-    const noteId = String(note?._id || note?.id || "");
-
-    if (!noteId) return;
-
-    setExpandedHistoryIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(noteId)) {
-        next.delete(noteId);
-      } else {
-        next.add(noteId);
-      }
-
-      return next;
-    });
   };
 
   const saveFollowUp = async (
@@ -989,7 +935,7 @@ export default function LeadDetails({
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Unable to schedule follow-up"
+            "Unable to schedule follow-up"
         );
       }
 
@@ -1004,7 +950,7 @@ export default function LeadDetails({
     } catch (saveError) {
       setNotice(
         saveError.message ||
-        "Unable to schedule follow-up"
+          "Unable to schedule follow-up"
       );
     } finally {
       setSaving(false);
@@ -1085,7 +1031,7 @@ export default function LeadDetails({
                     <option
                       key={String(
                         stage._id ||
-                        stage.name
+                          stage.name
                       )}
                       value={stage.name}
                     >
@@ -1215,16 +1161,16 @@ export default function LeadDetails({
             <strong>
               {nextFollowUp
                 ? formatFollowUpDate(
-                  nextFollowUp.date
-                )
+                    nextFollowUp.date
+                  )
                 : "—"}
             </strong>
 
             <span>
               {nextFollowUp
                 ? formatFollowUpTime(
-                  nextFollowUp.date
-                )
+                    nextFollowUp.date
+                  )
                 : "—"}
             </span>
 
@@ -1281,164 +1227,269 @@ export default function LeadDetails({
             </p>
           )}
 
-          <section className="lead-activity-card">
-            <header>
-              <h2>
+          <section
+            className="lead-activity-card"
+            style={{
+              overflow: "hidden",
+              borderRadius: "16px",
+              border: "1px solid #dfe7f2",
+              background: "#ffffff",
+              boxShadow:
+                "0 8px 24px rgba(31, 56, 88, 0.06)",
+            }}
+          >
+            <header
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "20px",
+                padding: "18px 22px",
+                borderBottom:
+                  "1px solid #e8edf4",
+                background: "#ffffff",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  color: "#172033",
+                }}
+              >
                 Activity timeline
               </h2>
 
-              <div>
-                <button
-                  type="button"
-                  className={
-                    activeTab === "all"
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() =>
-                    setActiveTab("all")
-                  }
-                >
-                  All
-                </button>
-
-                <button
-                  type="button"
-                  className={
-                    activeTab ===
-                      "notes"
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() =>
-                    setActiveTab("notes")
-                  }
-                >
-                  Notes
-                </button>
-
-                <button
-                  type="button"
-                  className={
-                    activeTab ===
-                      "calls"
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() =>
-                    setActiveTab("calls")
-                  }
-                >
-                  Calls
-                </button>
-
-                <button
-                  type="button"
-                  className={
-                    activeTab ===
-                      "whatsapp"
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() =>
-                    setActiveTab(
-                      "whatsapp"
-                    )
-                  }
-                >
-                  WhatsApp
-                </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {[
+                  ["all", "All"],
+                  ["notes", "Notes"],
+                  ["calls", "Calls"],
+                  ["whatsapp", "WhatsApp"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setActiveTab(value)
+                    }
+                    style={{
+                      border: "0",
+                      borderRadius: "9px",
+                      padding: "8px 12px",
+                      background:
+                        activeTab === value
+                          ? "#edf5ff"
+                          : "transparent",
+                      color:
+                        activeTab === value
+                          ? "#2563eb"
+                          : "#64748b",
+                      fontSize: "12px",
+                      fontWeight:
+                        activeTab === value
+                          ? 700
+                          : 500,
+                      cursor: "pointer",
+                      transition:
+                        "all .2s ease",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </header>
 
             {activeTab === "notes" &&
-              savedNotes.length === 0 ? (
+            savedNotes.length === 0 ? (
               <div className="lead-detail-empty">
                 No notes recorded yet.
               </div>
             ) : (
-              <div className="lead-activity-list">
+              <div
+                className="lead-activity-list"
+                style={{
+                  padding:
+                    "4px 22px",
+                }}
+              >
                 {visibleActivities.length ? (
                   visibleActivities.map(
                     (
                       activity,
                       index
                     ) => {
-                      const history =
-                        activity.note
-                          ? getNoteHistory(
-                            activity.note
-                          )
-                          : [];
+                      const isNote =
+                        Boolean(
+                          activity.note
+                        );
 
                       return (
                         <article
                           key={`${activity.title}-${activity.date}-${index}`}
                           className={
                             activity.title ===
-                              "Follow-up scheduled"
+                            "Follow-up scheduled"
                               ? "lead-follow-up-activity"
                               : ""
                           }
+                          style={{
+                            display: "flex",
+                            alignItems:
+                              "flex-start",
+                            gap: "14px",
+                            padding:
+                              "18px 0",
+                            borderBottom:
+                              index <
+                              visibleActivities.length -
+                                1
+                                ? "1px solid #edf1f6"
+                                : "none",
+                          }}
                         >
-                          <span className="lead-activity-icon">
+                          <span
+                            className="lead-activity-icon"
+                            style={{
+                              flex:
+                                "0 0 30px",
+                              width: "30px",
+                              height: "30px",
+                              minWidth:
+                                "30px",
+                              borderRadius:
+                                "50%",
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              justifyContent:
+                                "center",
+                              background:
+                                "#edf5ff",
+                              color:
+                                "#2563eb",
+                              fontSize:
+                                "13px",
+                              marginTop:
+                                "1px",
+                            }}
+                          >
                             {activity.icon}
                           </span>
 
-                          <div>
-                            <div className="lead-activity-title-row">
-                              <strong>
+                          <div
+                            className="lead-activity-content"
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            <div
+                              className="lead-activity-title-row"
+                              style={{
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                justifyContent:
+                                  "space-between",
+                                gap: "14px",
+                                width:
+                                  "100%",
+                                minHeight:
+                                  "30px",
+                              }}
+                            >
+                              <strong
+                                style={{
+                                  color:
+                                    "#172033",
+                                  fontSize:
+                                    "13px",
+                                  fontWeight:
+                                    700,
+                                }}
+                              >
                                 {
                                   activity.title
                                 }
                               </strong>
 
-                              {activity.note && (
-                                <div className="lead-note-inline-actions">
-                                  <button
-                                    type="button"
-                                    className="lead-note-edit-btn"
-                                    onClick={() =>
-                                      openEditNote(
-                                        activity.note,
-                                        activity.noteIndex
-                                      )
-                                    }
-                                  >
+                              {isNote && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openEditNote(
+                                      activity.note,
+                                      activity.noteIndex
+                                    )
+                                  }
+                                  disabled={
+                                    savingNoteEdit
+                                  }
+                                  aria-label="Edit note"
+                                  title="Edit note"
+                                  style={{
+                                    flex:
+                                      "0 0 auto",
+                                    display:
+                                      "inline-flex",
+                                    alignItems:
+                                      "center",
+                                    justifyContent:
+                                      "center",
+                                    gap: "7px",
+                                    height:
+                                      "34px",
+                                    padding:
+                                      "0 13px",
+                                    border:
+                                      "1px solid #d8e3f0",
+                                    borderRadius:
+                                      "9px",
+                                    background:
+                                      "#ffffff",
+                                    color:
+                                      "#2563eb",
+                                    fontSize:
+                                      "12px",
+                                    fontWeight:
+                                      600,
+                                    cursor:
+                                      savingNoteEdit
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    boxShadow:
+                                      "0 2px 6px rgba(37, 99, 235, 0.06)",
+                                  }}
+                                >
+                                  <EditIcon
+                                    size={13}
+                                  />
+                                  <span>
                                     Edit
-                                  </button>
-
-                                  {history.length >
-                                    0 && (
-                                      <button
-                                        type="button"
-                                        className="lead-note-history-btn"
-                                        onClick={() =>
-                                          toggleHistory(
-                                            activity.note
-                                          )
-                                        }
-                                      >
-                                        {expandedHistoryIds.has(
-                                          getNoteId(
-                                            activity.note,
-                                            activity.noteIndex
-                                          )
-                                        )
-                                          ? "Hide edits"
-                                          : "Edited"}
-                                      </button>
-                                    )}
-                                </div>
+                                  </span>
+                                </button>
                               )}
                             </div>
 
                             {activity.followUpDate && (
                               <div
-                                className={`lead-follow-up-datetime ${activity.completed
+                                className={`lead-follow-up-datetime ${
+                                  activity.completed
                                     ? "completed"
                                     : ""
-                                  }`}
+                                }`}
                               >
                                 {!activity.completed ? (
                                   <>
@@ -1474,22 +1525,35 @@ export default function LeadDetails({
                               </div>
                             )}
 
-                            <p>
+                            <p
+                              style={{
+                                margin:
+                                  "7px 0 6px",
+                                color:
+                                  "#40516a",
+                                fontSize:
+                                  "13px",
+                                lineHeight:
+                                  1.5,
+                              }}
+                            >
                               {
                                 activity.detail
                               }
                             </p>
 
-                            {activity.note &&
-                              renderInlineNoteHistory(
-                                activity.note,
-                                activity.noteIndex,
-                                expandedHistoryIds,
-                                activity.user ||
-                                  getOwner(lead, user)
-                              )}
-
-                            <small>
+                            <small
+                              style={{
+                                display:
+                                  "block",
+                                color:
+                                  "#8190a5",
+                                fontSize:
+                                  "10.5px",
+                                lineHeight:
+                                  1.4,
+                              }}
+                            >
                               {activity.user ||
                                 getOwner(
                                   lead,
@@ -1498,13 +1562,13 @@ export default function LeadDetails({
                               {" · "}
                               {activity.createdAt
                                 ? `Created ${formatDate(
-                                  activity.createdAt,
-                                  true
-                                )}`
+                                    activity.createdAt,
+                                    true
+                                  )}`
                                 : formatDate(
-                                  activity.date,
-                                  true
-                                )}
+                                    activity.date,
+                                    true
+                                  )}
                             </small>
                           </div>
                         </article>
@@ -1557,10 +1621,10 @@ export default function LeadDetails({
                 "Next follow-up",
                 nextFollowUp
                   ? `${formatFollowUpDate(
-                    nextFollowUp.date
-                  )} · ${formatFollowUpTime(
-                    nextFollowUp.date
-                  )}`
+                      nextFollowUp.date
+                    )} · ${formatFollowUpTime(
+                      nextFollowUp.date
+                    )}`
                   : null,
               ],
               [
@@ -1593,97 +1657,150 @@ export default function LeadDetails({
           </section>
 
           {savedNotes.length > 0 && (
-            <section className="lead-information-card">
-              <header>
-                <h2>Notes</h2>
+            <section
+              className="lead-information-card lead-notes-card"
+              style={{
+                overflow: "hidden",
+                borderRadius: "16px",
+                border:
+                  "1px solid #dfe7f2",
+                background:
+                  "#ffffff",
+                boxShadow:
+                  "0 8px 24px rgba(31, 56, 88, 0.06)",
+                marginTop: "16px",
+              }}
+            >
+              <header
+                className="lead-notes-card-header"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent:
+                    "space-between",
+                  padding:
+                    "17px 16px",
+                  borderBottom:
+                    "1px solid #e8edf4",
+                  background:
+                    "#ffffff",
+                }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color:
+                      "#172033",
+                  }}
+                >
+                  Notes
+                </h2>
+
+                <button
+                  type="button"
+                  className="lead-notes-edit-btn"
+                  onClick={
+                    openLatestNoteEditor
+                  }
+                  disabled={
+                    savingNoteEdit
+                  }
+                  aria-label="Edit latest note"
+                  title="Edit note"
+                  style={{
+                    width: "38px",
+                    height: "38px",
+                    padding: 0,
+                    display:
+                      "inline-flex",
+                    alignItems:
+                      "center",
+                    justifyContent:
+                      "center",
+                    border:
+                      "1px solid #8db9ff",
+                    borderRadius:
+                      "9px",
+                    background:
+                      "#f7fbff",
+                    color:
+                      "#2563eb",
+                    cursor:
+                      savingNoteEdit
+                        ? "not-allowed"
+                        : "pointer",
+                    transition:
+                      "all .2s ease",
+                  }}
+                >
+                  <EditIcon size={17} />
+                </button>
               </header>
 
-              <div className="lead-saved-notes">
+              <div
+                className="lead-saved-notes"
+                style={{
+                  padding:
+                    "20px 16px 18px",
+                }}
+              >
                 {savedNotes.map(
                   (
                     note,
                     index
-                  ) => {
-                    const history =
-                      getNoteHistory(
-                        note
-                      );
-
-                    return (
-                      <div
-                        className="lead-saved-note"
-                        key={`${note.createdAt || "note"}-${index}`}
+                  ) => (
+                    <div
+                      className="lead-saved-note"
+                      key={`${note._id || note.createdAt || "note"}-${index}`}
+                      style={{
+                        padding:
+                          "0",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin:
+                            "0 0 9px",
+                          color:
+                            "#40516a",
+                          fontSize:
+                            "13px",
+                          lineHeight:
+                            1.6,
+                          fontWeight:
+                            400,
+                        }}
                       >
-                        <div className="lead-note-content-row">
-                          <p>
-                            {
-                              note.text
-                            }
-                          </p>
+                        {note.text}
+                      </p>
 
-                          <div className="lead-note-actions">
-                            <button
-                              type="button"
-                              className="lead-note-edit-btn"
-                              onClick={() =>
-                                openEditNote(
-                                  note,
-                                  index
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
+                      <small
+                        style={{
+                          display:
+                            "block",
+                          color:
+                            "#8190a5",
+                          fontSize:
+                            "10.5px",
+                        }}
+                      >
+                        {note.userName ||
+                          getOwner(
+                            lead,
+                            user
+                          )}
 
-                            {history.length >
-                              0 && (
-                                <button
-                                  type="button"
-                                  className="lead-note-history-btn"
-                                  onClick={() =>
-                                    toggleHistory(
-                                      note
-                                    )
-                                  }
-                                >
-                                  {expandedHistoryIds.has(
-                                    getNoteId(
-                                      note,
-                                      index
-                                    )
-                                  )
-                                    ? "Hide edits"
-                                    : "Edited"}
-                                </button>
-                              )}
-                          </div>
-                        </div>
-
-                        <small>
-                          {note.userName ||
-                            getOwner(
-                              lead,
-                              user
-                            )}
-
-                          {note.createdAt
-                            ? ` · ${formatDate(
+                        {note.createdAt
+                          ? ` · ${formatDate(
                               note.createdAt,
                               true
                             )}`
-                            : ""}
-                        </small>
-
-                        {renderInlineNoteHistory(
-                          note,
-                          index,
-                          expandedHistoryIds,
-                          note.userName ||
-                            getOwner(lead, user)
-                        )}
-                      </div>
-                    );
-                  }
+                          : ""}
+                      </small>
+                    </div>
+                  )
                 )}
               </div>
             </section>
@@ -1808,10 +1925,7 @@ export default function LeadDetails({
                   min={
                     new Date()
                       .toISOString()
-                      .slice(
-                        0,
-                        16
-                      )
+                      .slice(0, 16)
                   }
                   onChange={(
                     event
@@ -1900,10 +2014,7 @@ export default function LeadDetails({
                 </h2>
 
                 <p>
-                  Update this note.
-                  The previous text
-                  will stay in edit
-                  history.
+                  Update your note.
                 </p>
               </div>
 
@@ -1974,7 +2085,6 @@ export default function LeadDetails({
           </form>
         </div>
       )}
-
     </div>
   );
 }

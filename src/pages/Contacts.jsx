@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "../config/api";
 
 function getToken() {
@@ -227,6 +227,37 @@ function normalizeSource(value) {
   return source;
 }
 
+function normalizeStage(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isJunkLead(contact) {
+  const recordType = String(
+    contact?.recordType ||
+      contact?.sourceRecord ||
+      ""
+  ).toLowerCase();
+
+  const stage = normalizeStage(
+    contact?.stage ||
+      contact?.leadStage ||
+      contact?.status ||
+      ""
+  );
+
+  return (
+    recordType === "lead" &&
+    (
+      stage === "junk lead" ||
+      stage === "junk"
+    )
+  );
+}
+
 const emptyForm = {
   name: "",
   email: "",
@@ -256,8 +287,13 @@ function getSuggestions(value, field, contacts) {
 
   return contacts
     .filter((contact) => {
-      const name = cleanText(contact.name).toLowerCase();
-      const phone = normalizePhone(contact.phone);
+      const name = cleanText(
+        contact.name
+      ).toLowerCase();
+
+      const phone = normalizePhone(
+        contact.phone
+      );
 
       if (field === "phone") {
         return (
@@ -269,6 +305,83 @@ function getSuggestions(value, field, contacts) {
       return name.includes(search);
     })
     .slice(0, 6);
+}
+
+function DeleteIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M4 7H20"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10 11V17"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14 11V17"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6 7L7 20H17L18 7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 7V4H15V7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 3L22 20H2L12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 9V13"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle
+        cx="12"
+        cy="16.5"
+        r="1"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
 export default function Contacts({ user }) {
@@ -292,6 +405,14 @@ export default function Contacts({ user }) {
     selectedExistingContact,
     setSelectedExistingContact,
   ] = useState(null);
+
+  const [
+    deletingContact,
+    setDeletingContact,
+  ] = useState(null);
+
+  const [deleting, setDeleting] =
+    useState(false);
 
   const loadContacts = async () => {
     const token = getToken();
@@ -344,6 +465,12 @@ export default function Contacts({ user }) {
     setForm(getDefaultForm(user));
   }, [user]);
 
+  const visibleContacts = useMemo(() => {
+    return contacts.filter(
+      (contact) => !isJunkLead(contact)
+    );
+  }, [contacts]);
+
   const resetContactForm = () => {
     setForm(getDefaultForm(user));
     setSuggestions([]);
@@ -380,7 +507,7 @@ export default function Contacts({ user }) {
       getSuggestions(
         value,
         field,
-        contacts
+        visibleContacts
       )
     );
   };
@@ -507,29 +634,43 @@ export default function Contacts({ user }) {
     }
   };
 
-  const deleteContact = async (
+  const askDeleteContact = (
+    event,
     contact
   ) => {
-    if (
-      contact?.recordType === "lead" ||
-      contact?.sourceRecord === "lead"
-    ) {
+    event.stopPropagation();
+
+    setMessage("");
+    setDeletingContact(contact);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+
+    setDeletingContact(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingContact) {
       return;
     }
 
-    if (
-      !window.confirm(
-        "Delete this contact?"
-      )
-    ) {
-      return;
-    }
+    setDeleting(true);
+    setMessage("");
+
+    const isLead =
+      deletingContact.recordType ===
+        "lead" ||
+      deletingContact.sourceRecord ===
+        "lead";
+
+    const endpoint = isLead
+      ? `/api/leads/${deletingContact._id}`
+      : `/api/contacts/${deletingContact._id}`;
 
     try {
       const response = await fetch(
-        buildApiUrl(
-          `/api/contacts/${contact._id}`
-        ),
+        buildApiUrl(endpoint),
         {
           method: "DELETE",
           headers: {
@@ -543,23 +684,32 @@ export default function Contacts({ user }) {
       if (!response.ok) {
         throw new Error(
           data.message ||
-            "Unable to delete contact"
+            "Unable to delete record"
         );
       }
 
       setContacts((previous) =>
         previous.filter(
           (item) =>
-            item._id !== contact._id ||
-            item.recordType === "lead"
+            String(item._id) !==
+            String(
+              deletingContact._id
+            )
         )
       );
 
-      setUsage(
-        data.usage || usage
-      );
+      if (data.usage) {
+        setUsage(data.usage);
+      }
+
+      setDeletingContact(null);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message ||
+          "Unable to delete record"
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -578,6 +728,180 @@ export default function Contacts({ user }) {
 
   return (
     <div className="contacts-page">
+      <style>
+        {`
+          .contacts-clickable-row {
+            transition: background .18s ease;
+          }
+
+          .contacts-clickable-row:hover {
+            background: #f8fbff;
+          }
+
+          .contact-delete-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 72px;
+            height: 32px;
+            padding: 0 11px;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            background: #fff7f7;
+            color: #dc2626;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .18s ease;
+          }
+
+          .contact-delete-btn:hover {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #b91c1c;
+            transform: translateY(-1px);
+          }
+
+          .contact-delete-btn svg {
+            flex-shrink: 0;
+          }
+
+          .contact-delete-cell {
+            text-align: right;
+            width: 90px;
+          }
+
+          .contact-delete-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(15, 23, 42, .48);
+            backdrop-filter: blur(3px);
+          }
+
+          .contact-delete-modal {
+            width: min(420px, 100%);
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .18);
+            overflow: hidden;
+            animation: contactDeleteModalIn .18s ease-out;
+          }
+
+          @keyframes contactDeleteModalIn {
+            from {
+              opacity: 0;
+              transform: translateY(8px) scale(.98);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
+
+          .contact-delete-modal-content {
+            padding: 24px;
+          }
+
+          .contact-delete-warning {
+            width: 46px;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: #fff1f2;
+            color: #dc2626;
+            margin-bottom: 16px;
+          }
+
+          .contact-delete-modal h3 {
+            margin: 0 0 7px;
+            color: #172033;
+            font-size: 17px;
+            font-weight: 700;
+          }
+
+          .contact-delete-modal p {
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.55;
+          }
+
+          .contact-delete-modal-name {
+            color: #172033;
+            font-weight: 700;
+          }
+
+          .contact-delete-modal-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 15px 20px;
+            border-top: 1px solid #edf1f5;
+            background: #fbfcfe;
+          }
+
+          .contact-delete-cancel {
+            height: 36px;
+            padding: 0 15px;
+            border: 1px solid #dbe3ed;
+            border-radius: 8px;
+            background: #fff;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+
+          .contact-delete-cancel:hover {
+            background: #f8fafc;
+          }
+
+          .contact-delete-confirm {
+            height: 36px;
+            padding: 0 16px;
+            border: 1px solid #dc2626;
+            border-radius: 8px;
+            background: #dc2626;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+
+          .contact-delete-confirm:hover {
+            background: #b91c1c;
+            border-color: #b91c1c;
+          }
+
+          .contact-delete-confirm:disabled,
+          .contact-delete-cancel:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+          }
+
+          @media (max-width: 900px) {
+            .contact-delete-cell {
+              width: 75px;
+            }
+
+            .contact-delete-btn {
+              min-width: 64px;
+              padding: 0 8px;
+            }
+          }
+        `}
+      </style>
+
       <header className="contacts-page-header">
         <div>
           <p className="dash-breadcrumb">
@@ -653,7 +977,7 @@ export default function Contacts({ user }) {
 
       <section className="contacts-table-card">
         <div className="contacts-table-meta">
-          {contacts.length} records
+          {visibleContacts.length} records
         </div>
 
         <div className="contacts-table-wrap">
@@ -667,7 +991,9 @@ export default function Contacts({ user }) {
                 <th>Service</th>
                 <th>Doctor</th>
                 <th>Lead date</th>
-                <th />
+                <th className="contact-delete-cell">
+                  Action
+                </th>
               </tr>
             </thead>
 
@@ -681,7 +1007,7 @@ export default function Contacts({ user }) {
                     Loading contacts...
                   </td>
                 </tr>
-              ) : contacts.length === 0 ? (
+              ) : visibleContacts.length === 0 ? (
                 <tr>
                   <td
                     colSpan="8"
@@ -691,149 +1017,140 @@ export default function Contacts({ user }) {
                   </td>
                 </tr>
               ) : (
-                contacts.map((contact) => {
-                  const displayName =
-                    cleanName(
-                      contact.name
-                    );
+                visibleContacts.map(
+                  (contact) => {
+                    const displayName =
+                      cleanName(
+                        contact.name
+                      );
 
-                  const displayPhone =
-                    cleanText(
-                      contact.phone
-                    );
+                    const displayPhone =
+                      cleanText(
+                        contact.phone
+                      );
 
-                  const displayEmail =
-                    cleanText(
-                      contact.email
-                    );
+                    const displayEmail =
+                      cleanText(
+                        contact.email
+                      );
 
-                  const displaySource =
-                    getContactSource(
-                      contact
-                    );
+                    const displaySource =
+                      getContactSource(
+                        contact
+                      );
 
-                  const displayService =
-                    cleanText(
-                      contact.service
-                    );
+                    const displayService =
+                      cleanText(
+                        contact.service
+                      );
 
-                  const displayDoctor =
-                    cleanText(
-                      contact.doctor ||
-                        contact.preferredDoctor ||
-                        contact.owner ||
-                        user?.name ||
-                        ""
-                    );
+                    const displayDoctor =
+                      cleanText(
+                        contact.doctor ||
+                          contact.preferredDoctor ||
+                          contact.owner ||
+                          user?.name ||
+                          ""
+                      );
 
-                  const sourceClass =
-                    displaySource
-                      .toLowerCase()
-                      .replace(
-                        /[^a-z0-9]+/g,
-                        "-"
-                      )
-                      .replace(
-                        /^-+|-+$/g,
-                        ""
-                      ) ||
-                    "default";
-
-                  const isLead =
-                    contact.recordType ===
-                      "lead" ||
-                    contact.sourceRecord ===
-                      "lead";
-
-                  return (
-                    <tr
-                      key={`${contact.recordType || "contact"}-${contact._id}`}
-                      className="contacts-clickable-row"
-                      onClick={() =>
-                        openContactDetails(
-                          contact
+                    const sourceClass =
+                      displaySource
+                        .toLowerCase()
+                        .replace(
+                          /[^a-z0-9]+/g,
+                          "-"
                         )
-                      }
-                      style={{
-                        cursor: "pointer",
-                      }}
-                    >
-                      <td>
-                        <span className="contact-name">
-                          <span className="contact-avatar">
-                            {getInitials(
-                              displayName
-                            )}
+                        .replace(
+                          /^-+|-+$/g,
+                          ""
+                        ) ||
+                      "default";
+
+                    return (
+                      <tr
+                        key={`${contact.recordType || "contact"}-${contact._id}`}
+                        className="contacts-clickable-row"
+                        onClick={() =>
+                          openContactDetails(
+                            contact
+                          )
+                        }
+                      >
+                        <td>
+                          <span className="contact-name">
+                            <span className="contact-avatar">
+                              {getInitials(
+                                displayName
+                              )}
+                            </span>
+
+                            <strong
+                              className="contact-name-text"
+                              title={
+                                displayName
+                              }
+                            >
+                              {displayName}
+                            </strong>
                           </span>
+                        </td>
 
-                          <strong
-                            className="contact-name-text"
-                            title={
-                              displayName
-                            }
+                        <td>
+                          {displayPhone ||
+                            "—"}
+                        </td>
+
+                        <td>
+                          {displayEmail ||
+                            "—"}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`lead-source-badge source-${sourceClass}`}
                           >
-                            {displayName}
-                          </strong>
-                        </span>
-                      </td>
+                            {displaySource}
+                          </span>
+                        </td>
 
-                      <td>
-                        {displayPhone ||
-                          "—"}
-                      </td>
+                        <td>
+                          {displayService ||
+                            "—"}
+                        </td>
 
-                      <td>
-                        {displayEmail ||
-                          "—"}
-                      </td>
+                        <td>
+                          {displayDoctor ||
+                            "—"}
+                        </td>
 
-                      <td>
-                        <span
-                          className={`lead-source-badge source-${sourceClass}`}
-                        >
-                          {displaySource}
-                        </span>
-                      </td>
+                        <td>
+                          {formatDateTime(
+                            contact.leadCreatedAt ||
+                              contact.createdAt
+                          )}
+                        </td>
 
-                      <td>
-                        {displayService ||
-                          "—"}
-                      </td>
-
-                      <td>
-                        {displayDoctor ||
-                          "—"}
-                      </td>
-
-                      <td>
-                        {formatDateTime(
-                          contact.leadCreatedAt ||
-                            contact.createdAt
-                        )}
-                      </td>
-
-                      <td>
-                        {!isLead && (
+                        <td className="contact-delete-cell">
                           <button
                             type="button"
                             className="contact-delete-btn"
                             onClick={(
                               event
-                            ) => {
-                              event.stopPropagation();
-
-                              deleteContact(
+                            ) =>
+                              askDeleteContact(
+                                event,
                                 contact
-                              );
-                            }}
+                              )
+                            }
                           >
+                            <DeleteIcon />
                             Delete
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
               )}
             </tbody>
           </table>
@@ -908,7 +1225,7 @@ export default function Contacts({ user }) {
                           getSuggestions(
                             form.name,
                             "name",
-                            contacts
+                            visibleContacts
                           )
                         );
                       }
@@ -1055,7 +1372,7 @@ export default function Contacts({ user }) {
                           getSuggestions(
                             form.phone,
                             "phone",
-                            contacts
+                            visibleContacts
                           )
                         );
                       }
@@ -1289,6 +1606,73 @@ export default function Contacts({ user }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {deletingContact && (
+        <div
+          className="contact-delete-modal-backdrop"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closeDeleteModal();
+            }
+          }}
+        >
+          <div
+            className="contact-delete-modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="contact-delete-modal-content">
+              <div className="contact-delete-warning">
+                <WarningIcon />
+              </div>
+
+              <h3>
+                Are you sure?
+              </h3>
+
+              <p>
+                Are you sure you want to
+                delete{" "}
+                <span className="contact-delete-modal-name">
+                  {cleanName(
+                    deletingContact.name
+                  )}
+                </span>
+                ? This action cannot be
+                undone.
+              </p>
+            </div>
+
+            <div className="contact-delete-modal-actions">
+              <button
+                type="button"
+                className="contact-delete-cancel"
+                onClick={
+                  closeDeleteModal
+                }
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="contact-delete-confirm"
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting
+                  ? "Deleting..."
+                  : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
