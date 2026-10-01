@@ -26,7 +26,12 @@ function getUserId(req) {
             process.env.JWT_SECRET
         );
 
-        return decoded.id || decoded._id || decoded.userId || null;
+        return (
+            decoded.id ||
+            decoded._id ||
+            decoded.userId ||
+            null
+        );
     } catch {
         return null;
     }
@@ -59,7 +64,8 @@ function publicIntegration(integration) {
         instagramAccountId: integration.instagramAccountId,
         instagramUsername: integration.instagramUsername,
         instagramName: integration.instagramName,
-        instagramProfilePicture: integration.instagramProfilePicture,
+        instagramProfilePicture:
+            integration.instagramProfilePicture,
 
         facebook: {
             connected: Boolean(integration.isActive),
@@ -72,7 +78,8 @@ function publicIntegration(integration) {
             accountId: integration.instagramAccountId,
             username: integration.instagramUsername,
             name: integration.instagramName,
-            profilePicture: integration.instagramProfilePicture,
+            profilePicture:
+                integration.instagramProfilePicture,
         },
 
         businessId: integration.businessId,
@@ -88,9 +95,15 @@ function applyInstagramDetails(integration, details) {
         details?.instagram_business_account ||
         details?.instagramBusinessAccount;
 
-    integration.instagramAccountId = instagram?.id || "";
-    integration.instagramUsername = instagram?.username || "";
-    integration.instagramName = instagram?.name || "";
+    integration.instagramAccountId =
+        instagram?.id || "";
+
+    integration.instagramUsername =
+        instagram?.username || "";
+
+    integration.instagramName =
+        instagram?.name || "";
+
     integration.instagramProfilePicture =
         instagram?.profile_picture_url || "";
 }
@@ -126,7 +139,14 @@ function getIndiaDateStart(daysAgo = 0) {
     );
 
     return new Date(
-        Date.UTC(year, month - 1, day, 0, 0, 0) -
+        Date.UTC(
+            year,
+            month - 1,
+            day,
+            0,
+            0,
+            0
+        ) -
             330 * 60 * 1000 -
             daysAgo * 24 * 60 * 60 * 1000
     );
@@ -141,99 +161,143 @@ async function getMetaCampaignName(
     adId,
     accessToken
 ) {
-    let resolvedCampaignId = String(campaignId || "").trim();
+    let resolvedCampaignId =
+        String(campaignId || "").trim();
+
     let campaignName = "";
     let adName = "";
 
-    const resolvedAdId = String(adId || "").trim();
+    const resolvedAdId =
+        String(adId || "").trim();
 
     const graphVersion =
         process.env.META_GRAPH_VERSION ||
         process.env.META_GRAPH_API_VERSION ||
         "v25.0";
 
-    if (resolvedCampaignId && accessToken) {
+    if (
+        resolvedCampaignId &&
+        accessToken
+    ) {
         try {
-            const response = await axios.get(
-                `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
-                    resolvedCampaignId
-                )}`,
-                {
-                    params: {
-                        fields: "id,name",
-                        access_token: accessToken,
-                    },
-                    timeout: 10000,
-                }
-            );
+            const response =
+                await axios.get(
+                    `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
+                        resolvedCampaignId
+                    )}`,
+                    {
+                        params: {
+                            fields: "id,name",
+                            access_token:
+                                accessToken,
+                        },
+                        timeout: 10000,
+                    }
+                );
 
-            campaignName = String(
-                response.data?.name || ""
-            ).trim();
+            campaignName =
+                String(
+                    response.data?.name || ""
+                ).trim();
         } catch (error) {
             console.error(
                 "META CAMPAIGN NAME FETCH ERROR:",
-                error.response?.data || error.message
+                error.response?.data ||
+                    error.message
             );
         }
     }
 
-    if (resolvedAdId && accessToken && !campaignName) {
+    if (
+        resolvedAdId &&
+        accessToken &&
+        !campaignName
+    ) {
         try {
-            const response = await axios.get(
-                `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
-                    resolvedAdId
-                )}`,
-                {
-                    params: {
-                        fields: "id,name,campaign{id,name}",
-                        access_token: accessToken,
-                    },
-                    timeout: 10000,
-                }
-            );
+            const response =
+                await axios.get(
+                    `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
+                        resolvedAdId
+                    )}`,
+                    {
+                        params: {
+                            fields:
+                                "id,name,campaign{id,name}",
+                            access_token:
+                                accessToken,
+                        },
+                        timeout: 10000,
+                    }
+                );
 
-            adName = String(
-                response.data?.name || ""
-            ).trim();
+            adName =
+                String(
+                    response.data?.name || ""
+                ).trim();
 
-            const adCampaignId = String(
-                response.data?.campaign?.id || ""
-            ).trim();
+            const adCampaignId =
+                String(
+                    response.data?.campaign?.id ||
+                        ""
+                ).trim();
 
-            const adCampaignName = String(
-                response.data?.campaign?.name || ""
-            ).trim();
+            const adCampaignName =
+                String(
+                    response.data?.campaign?.name ||
+                        ""
+                ).trim();
 
-            if (!resolvedCampaignId && adCampaignId) {
-                resolvedCampaignId = adCampaignId;
+            if (
+                !resolvedCampaignId &&
+                adCampaignId
+            ) {
+                resolvedCampaignId =
+                    adCampaignId;
             }
 
-            if (!campaignName && adCampaignName) {
-                campaignName = adCampaignName;
+            if (
+                !campaignName &&
+                adCampaignName
+            ) {
+                campaignName =
+                    adCampaignName;
             }
         } catch (error) {
             console.error(
                 "META AD CAMPAIGN FETCH ERROR:",
-                error.response?.data || error.message
+                error.response?.data ||
+                    error.message
             );
         }
     }
 
-    if (!campaignName && adName) {
+    if (
+        !campaignName &&
+        adName
+    ) {
         campaignName = adName;
     }
 
     return {
-        campaignId: resolvedCampaignId,
-        campaignName: campaignName || "",
-        serviceName: cleanMetaServiceName(campaignName),
-        adName: adName || "",
+        campaignId:
+            resolvedCampaignId,
+
+        campaignName:
+            campaignName || "",
+
+        serviceName:
+            cleanMetaServiceName(
+                campaignName
+            ),
+
+        adName:
+            adName || "",
     };
 }
 
 exports.connect = async (req, res) => {
-    const userId = requireUser(req, res);
+    const userId =
+        requireUser(req, res);
 
     if (!userId) {
         return;
@@ -246,26 +310,36 @@ exports.connect = async (req, res) => {
         return res.status(503).json({
             success: false,
             configured: false,
-            message: "Meta integration is not configured yet.",
+            message:
+                "Meta integration is not configured yet.",
         });
     }
 
     try {
-        const state = crypto.randomBytes(32).toString("hex");
+        const state =
+            crypto
+                .randomBytes(32)
+                .toString("hex");
 
         await MetaOAuthState.create({
             state,
             userId,
-            expiresAt: new Date(
-                Date.now() + 10 * 60 * 1000
-            ),
+            expiresAt:
+                new Date(
+                    Date.now() +
+                        10 * 60 * 1000
+                ),
         });
 
         const authorizationUrl =
-            meta.getAuthorizationUrl(state);
+            meta.getAuthorizationUrl(
+                state
+            );
 
         if (
-            String(req.headers.accept || "").includes(
+            String(
+                req.headers.accept || ""
+            ).includes(
                 "application/json"
             )
         ) {
@@ -275,7 +349,9 @@ exports.connect = async (req, res) => {
             });
         }
 
-        return res.redirect(authorizationUrl);
+        return res.redirect(
+            authorizationUrl
+        );
     } catch (error) {
         console.error(
             "META CONNECT ERROR:",
@@ -284,23 +360,28 @@ exports.connect = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Unable to start Meta connection",
+            message:
+                "Unable to start Meta connection",
         });
     }
 };
 
-exports.callback = async (req, res) => {
+exports.callback = async (
+    req,
+    res
+) => {
     const frontend = (
         process.env.FRONTEND_URL ||
         "http://localhost:5173"
     ).replace(/\/$/, "");
 
-    const stateRecord = await MetaOAuthState.findOne({
-        state: req.query.state,
-        expiresAt: {
-            $gt: new Date(),
-        },
-    });
+    const stateRecord =
+        await MetaOAuthState.findOne({
+            state: req.query.state,
+            expiresAt: {
+                $gt: new Date(),
+            },
+        });
 
     if (!stateRecord) {
         return res.redirect(
@@ -340,7 +421,9 @@ exports.callback = async (req, res) => {
             );
 
         stateRecord.accessTokenEncrypted =
-            encrypt(tokenData.access_token);
+            encrypt(
+                tokenData.access_token
+            );
 
         stateRecord.tokenExpiresAt =
             tokenData.expires_in
@@ -365,19 +448,23 @@ exports.callback = async (req, res) => {
             ),
 
             instagramAccountId:
-                page.instagram_business_account?.id ||
-                "",
+                page
+                    .instagram_business_account
+                    ?.id || "",
 
             instagramUsername:
-                page.instagram_business_account?.username ||
-                "",
+                page
+                    .instagram_business_account
+                    ?.username || "",
 
             instagramName:
-                page.instagram_business_account?.name ||
-                "",
+                page
+                    .instagram_business_account
+                    ?.name || "",
 
             instagramProfilePicture:
-                page.instagram_business_account
+                page
+                    .instagram_business_account
                     ?.profile_picture_url ||
                 "",
 
@@ -410,65 +497,103 @@ exports.callback = async (req, res) => {
     }
 };
 
-exports.status = async (req, res) => {
-    const userId = requireUser(req, res);
+exports.status = async (
+    req,
+    res
+) => {
+    const userId =
+        requireUser(req, res);
 
     if (!userId) {
         return;
     }
 
-    const integration =
-        await MetaIntegration.findOne({
-            userId,
-            isActive: true,
-        }).sort({
-            updatedAt: -1,
-        });
+    try {
+        const integrations =
+            await MetaIntegration.find({
+                userId,
+                isActive: true,
+            }).sort({
+                updatedAt: -1,
+            });
 
-    if (
-        integration &&
-        !integration.instagramAccountId
-    ) {
-        try {
-            const details =
-                await meta.getPageDetails(
-                    integration.pageId,
-                    decrypt(
-                        integration.accessTokenEncrypted
-                    )
-                );
+        for (
+            const integration
+            of integrations
+        ) {
+            if (
+                !integration
+                    .instagramAccountId
+            ) {
+                try {
+                    const details =
+                        await meta.getPageDetails(
+                            integration.pageId,
+                            decrypt(
+                                integration
+                                    .accessTokenEncrypted
+                            )
+                        );
 
-            applyInstagramDetails(
-                integration,
-                details
-            );
+                    applyInstagramDetails(
+                        integration,
+                        details
+                    );
 
-            await integration.save();
-        } catch (error) {
-            console.error(
-                "META INSTAGRAM DETECTION ERROR:",
-                error.message
-            );
+                    await integration.save();
+                } catch (error) {
+                    console.error(
+                        "META INSTAGRAM DETECTION ERROR:",
+                        integration.pageId,
+                        error.message
+                    );
+                }
+            }
         }
+
+        const publicIntegrations =
+            integrations.map(
+                publicIntegration
+            );
+
+        return res.json({
+            configured:
+                meta.isConfigured() &&
+                Boolean(
+                    process.env
+                        .META_TOKEN_ENCRYPTION_KEY
+                ),
+
+            connected:
+                integrations.length > 0,
+
+            integrations:
+                publicIntegrations,
+
+            integration:
+                publicIntegrations[0] ||
+                null,
+        });
+    } catch (error) {
+        console.error(
+            "META STATUS ERROR:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to load Meta connections",
+        });
     }
-
-    return res.json({
-        configured:
-            meta.isConfigured() &&
-            Boolean(
-                process.env.META_TOKEN_ENCRYPTION_KEY
-            ),
-
-        connected:
-            Boolean(integration),
-
-        integration:
-            publicIntegration(integration),
-    });
 };
 
-exports.pages = async (req, res) => {
-    const userId = requireUser(req, res);
+exports.pages = async (
+    req,
+    res
+) => {
+    const userId =
+        requireUser(req, res);
 
     if (!userId) {
         return;
@@ -498,8 +623,12 @@ exports.pages = async (req, res) => {
     });
 };
 
-exports.selectPage = async (req, res) => {
-    const userId = requireUser(req, res);
+exports.selectPage = async (
+    req,
+    res
+) => {
+    const userId =
+        requireUser(req, res);
 
     if (!userId) {
         return;
@@ -516,13 +645,16 @@ exports.selectPage = async (req, res) => {
                 createdAt: -1,
             });
 
+        const requestedPageId =
+            String(
+                req.body?.pageId || ""
+            );
+
         const page =
             state?.pages?.find(
                 (item) =>
-                    item.id ===
-                    String(
-                        req.body?.pageId || ""
-                    )
+                    String(item.id) ===
+                    requestedPageId
             );
 
         if (!state || !page) {
@@ -533,19 +665,53 @@ exports.selectPage = async (req, res) => {
             });
         }
 
+        const pageAccessToken =
+            decrypt(
+                page.accessToken
+            );
+
         let pageDetails = null;
 
         try {
             pageDetails =
                 await meta.getPageDetails(
                     page.id,
-                    decrypt(page.accessToken)
+                    pageAccessToken
                 );
         } catch (error) {
             console.error(
                 "META INSTAGRAM DETECTION ERROR:",
                 error.message
             );
+        }
+
+        try {
+            const subscription =
+                await meta.subscribePageToLeadgen(
+                    page.id,
+                    pageAccessToken
+                );
+
+            console.log(
+                "META LEADGEN SUBSCRIPTION SUCCESS:",
+                page.id,
+                subscription
+            );
+        } catch (subscriptionError) {
+            console.error(
+                "META LEADGEN SUBSCRIPTION ERROR:",
+                subscriptionError.metaError ||
+                    subscriptionError.message
+            );
+
+            return res.status(409).json({
+                success: false,
+                message:
+                    "Meta Page connected, but Lead Ads webhook subscription failed.",
+                details:
+                    subscriptionError.metaError ||
+                    subscriptionError.message,
+            });
         }
 
         const integration =
@@ -557,7 +723,8 @@ exports.selectPage = async (req, res) => {
                 {
                     userId,
                     pageId: page.id,
-                    pageName: page.name,
+                    pageName:
+                        page.name,
 
                     instagramAccountId:
                         page.instagramAccountId,
@@ -584,7 +751,8 @@ exports.selectPage = async (req, res) => {
                         state.tokenExpiresAt,
 
                     isActive: true,
-                    connectedAt: new Date(),
+                    connectedAt:
+                        new Date(),
                 },
                 {
                     upsert: true,
@@ -602,43 +770,17 @@ exports.selectPage = async (req, res) => {
             await integration.save();
         }
 
-        try {
-            const subscription =
-                await meta.subscribePageToLeadgen(
-                    page.id,
-                    decrypt(page.accessToken)
-                );
-
-            console.log(
-                "META LEADGEN SUBSCRIPTION SUCCESS:",
-                page.id,
-                subscription
-            );
-        } catch (subscriptionError) {
-            console.error(
-                "META LEADGEN SUBSCRIPTION ERROR:",
-                subscriptionError.metaError ||
-                    subscriptionError.message
-            );
-
-            return res.status(409).json({
-                success: false,
-                message:
-                    "Meta Page connected, but Lead Ads webhook subscription failed.",
-                details:
-                    subscriptionError.metaError ||
-                    subscriptionError.message,
-            });
-        }
-
         await MetaOAuthState.deleteOne({
             _id: state._id,
         });
 
         return res.json({
             success: true,
+
             integration:
-                publicIntegration(integration),
+                publicIntegration(
+                    integration
+                ),
         });
     } catch (error) {
         console.error(
@@ -649,49 +791,122 @@ exports.selectPage = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Unable to connect Meta Page",
+            message:
+                "Unable to connect Meta Page",
         });
     }
 };
 
-exports.disconnect = async (req, res) => {
-    const userId = requireUser(req, res);
-
-    if (!userId) {
-        return;
-    }
-
-    await MetaIntegration.updateMany(
-        {
-            userId,
-        },
-        {
-            $set: {
-                isActive: false,
-            },
-        }
-    );
-
-    return res.json({
-        success: true,
-        message:
-            "Meta connection disconnected",
-    });
-};
-
-exports.refresh = async (req, res) => {
-    const userId = requireUser(req, res);
+exports.disconnect = async (
+    req,
+    res
+) => {
+    const userId =
+        requireUser(req, res);
 
     if (!userId) {
         return;
     }
 
     try {
-        const integration =
-            await MetaIntegration.findOne({
-                userId,
-                isActive: true,
+        const requestedPageId =
+            String(
+                req.body?.pageId ||
+                    req.query?.pageId ||
+                    ""
+            ).trim();
+
+        let integration = null;
+
+        if (requestedPageId) {
+            integration =
+                await MetaIntegration.findOne({
+                    userId,
+                    pageId:
+                        requestedPageId,
+                    isActive: true,
+                });
+        } else {
+            integration =
+                await MetaIntegration.findOne({
+                    userId,
+                    isActive: true,
+                }).sort({
+                    updatedAt: -1,
+                });
+        }
+
+        if (!integration) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Meta connection not found",
             });
+        }
+
+        integration.isActive = false;
+
+        await integration.save();
+
+        return res.json({
+            success: true,
+            message:
+                "Meta connection disconnected",
+            pageId:
+                integration.pageId,
+        });
+    } catch (error) {
+        console.error(
+            "META DISCONNECT ERROR:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to disconnect Meta connection",
+        });
+    }
+};
+
+exports.refresh = async (
+    req,
+    res
+) => {
+    const userId =
+        requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    try {
+        const requestedPageId =
+            String(
+                req.body?.pageId ||
+                    req.query?.pageId ||
+                    ""
+            ).trim();
+
+        let integration = null;
+
+        if (requestedPageId) {
+            integration =
+                await MetaIntegration.findOne({
+                    userId,
+                    pageId:
+                        requestedPageId,
+                    isActive: true,
+                });
+        } else {
+            integration =
+                await MetaIntegration.findOne({
+                    userId,
+                    isActive: true,
+                }).sort({
+                    updatedAt: -1,
+                });
+        }
 
         if (!integration) {
             return res.status(404).json({
@@ -705,7 +920,8 @@ exports.refresh = async (req, res) => {
             await meta.refreshConnection(
                 integration,
                 decrypt(
-                    integration.accessTokenEncrypted
+                    integration
+                        .accessTokenEncrypted
                 )
             );
 
@@ -723,7 +939,9 @@ exports.refresh = async (req, res) => {
         return res.json({
             success: true,
             integration:
-                publicIntegration(integration),
+                publicIntegration(
+                    integration
+                ),
         });
     } catch (error) {
         console.error(
@@ -739,10 +957,14 @@ exports.refresh = async (req, res) => {
     }
 };
 
-exports.verifyWebhook = (req, res) => {
+exports.verifyWebhook = (
+    req,
+    res
+) => {
     if (
         req.query["hub.verify_token"] !==
-        process.env.META_WEBHOOK_VERIFY_TOKEN
+        process.env
+            .META_WEBHOOK_VERIFY_TOKEN
     ) {
         return res.sendStatus(403);
     }
@@ -758,7 +980,9 @@ function fieldMap(fieldData = []) {
     return fieldData.reduce(
         (result, field) => {
             const key =
-                String(field?.name || "")
+                String(
+                    field?.name || ""
+                )
                     .toLowerCase()
                     .replace(
                         /[^a-z0-9]/g,
@@ -766,7 +990,8 @@ function fieldMap(fieldData = []) {
                     );
 
             result[key] =
-                field?.values?.[0] || "";
+                field?.values?.[0] ||
+                "";
 
             return result;
         },
@@ -818,44 +1043,84 @@ function detectMetaLeadSource(
     return "Facebook";
 }
 
-exports.receiveWebhook = async (req, res) => {
+exports.receiveWebhook = async (
+    req,
+    res
+) => {
     res.sendStatus(200);
 
     try {
-        const webhookObject = String(req.body?.object || "");
+        const webhookObject =
+            String(
+                req.body?.object || ""
+            );
 
-        if (webhookObject === "whatsapp_business_account") {
-            console.log("========================================");
-            console.log("WHATSAPP WEBHOOK RECEIVED");
+        if (
+            webhookObject ===
+            "whatsapp_business_account"
+        ) {
+            console.log(
+                "========================================"
+            );
 
-            for (const entry of req.body?.entry || []) {
-                for (const change of entry.changes || []) {
-                    const value = change.value || {};
+            console.log(
+                "WHATSAPP WEBHOOK RECEIVED"
+            );
 
-                    if (change.field !== "messages") {
+            for (
+                const entry of
+                req.body?.entry || []
+            ) {
+                for (
+                    const change of
+                    entry.changes || []
+                ) {
+                    const value =
+                        change.value || {};
+
+                    if (
+                        change.field !==
+                        "messages"
+                    ) {
                         continue;
                     }
 
-                    const statuses = Array.isArray(value.statuses)
-                        ? value.statuses
-                        : [];
+                    const statuses =
+                        Array.isArray(
+                            value.statuses
+                        )
+                            ? value.statuses
+                            : [];
 
-                    if (!statuses.length) {
+                    if (
+                        !statuses.length
+                    ) {
                         continue;
                     }
 
-                    for (const statusData of statuses) {
-                        const messageId = String(
-                            statusData?.id || ""
-                        ).trim();
+                    for (
+                        const statusData of
+                        statuses
+                    ) {
+                        const messageId =
+                            String(
+                                statusData?.id ||
+                                    ""
+                            ).trim();
 
-                        const status = String(
-                            statusData?.status || ""
-                        ).trim().toLowerCase();
+                        const status =
+                            String(
+                                statusData?.status ||
+                                    ""
+                            )
+                                .trim()
+                                .toLowerCase();
 
-                        const recipientId = String(
-                            statusData?.recipient_id || ""
-                        ).trim();
+                        const recipientId =
+                            String(
+                                statusData?.recipient_id ||
+                                    ""
+                            ).trim();
 
                         console.log(
                             "WHATSAPP MESSAGE STATUS:",
@@ -873,35 +1138,48 @@ exports.receiveWebhook = async (req, res) => {
                         );
 
                         if (
-                            status === "failed" &&
-                            Array.isArray(statusData?.errors)
+                            status ===
+                                "failed" &&
+                            Array.isArray(
+                                statusData?.errors
+                            )
                         ) {
-                            for (const errorItem of statusData.errors) {
+                            for (
+                                const errorItem of
+                                statusData.errors
+                            ) {
                                 console.error(
                                     "WHATSAPP DELIVERY FAILED"
                                 );
 
                                 console.error(
                                     "Error Code:",
-                                    errorItem?.code || ""
+                                    errorItem?.code ||
+                                        ""
                                 );
 
                                 console.error(
                                     "Error Title:",
-                                    errorItem?.title || ""
+                                    errorItem?.title ||
+                                        ""
                                 );
 
                                 console.error(
                                     "Error Message:",
-                                    errorItem?.message || ""
+                                    errorItem?.message ||
+                                        ""
                                 );
 
                                 if (
-                                    errorItem?.error_data?.details
+                                    errorItem
+                                        ?.error_data
+                                        ?.details
                                 ) {
                                     console.error(
                                         "Error Details:",
-                                        errorItem.error_data.details
+                                        errorItem
+                                            .error_data
+                                            .details
                                     );
                                 }
                             }
@@ -931,28 +1209,40 @@ exports.receiveWebhook = async (req, res) => {
                             invoice.invoiceNumber
                         );
 
-                        if (status === "sent") {
+                        if (
+                            status ===
+                            "sent"
+                        ) {
                             console.log(
                                 "WHATSAPP MESSAGE SENT TO META:",
                                 invoice.invoiceNumber
                             );
                         }
 
-                        if (status === "delivered") {
+                        if (
+                            status ===
+                            "delivered"
+                        ) {
                             console.log(
                                 "WHATSAPP INVOICE DELIVERED:",
                                 invoice.invoiceNumber
                             );
                         }
 
-                        if (status === "read") {
+                        if (
+                            status ===
+                            "read"
+                        ) {
                             console.log(
                                 "WHATSAPP INVOICE READ:",
                                 invoice.invoiceNumber
                             );
                         }
 
-                        if (status === "failed") {
+                        if (
+                            status ===
+                            "failed"
+                        ) {
                             console.error(
                                 "WHATSAPP INVOICE DELIVERY FAILED:",
                                 invoice.invoiceNumber
@@ -972,28 +1262,40 @@ exports.receiveWebhook = async (req, res) => {
                 }
             }
 
-            console.log("WHATSAPP WEBHOOK PROCESSING COMPLETE");
-            console.log("========================================");
+            console.log(
+                "WHATSAPP WEBHOOK PROCESSING COMPLETE"
+            );
+
+            console.log(
+                "========================================"
+            );
 
             return;
         }
 
-        for (const entry of req.body?.entry || []) {
-            const pageId = String(
-                entry.id || ""
-            );
+        for (
+            const entry of
+            req.body?.entry || []
+        ) {
+            const pageId =
+                String(
+                    entry.id || ""
+                );
 
             if (!pageId) {
                 continue;
             }
 
-            const integration =
-                await MetaIntegration.findOne({
+            const integrations =
+                await MetaIntegration.find({
                     pageId,
                     isActive: true,
                 });
 
-            if (!integration) {
+            if (
+                integrations.length ===
+                0
+            ) {
                 console.log(
                     "META WEBHOOK PAGE NOT CONNECTED:",
                     pageId
@@ -1002,8 +1304,33 @@ exports.receiveWebhook = async (req, res) => {
                 continue;
             }
 
-            for (const change of entry.changes || []) {
-                const value = change.value || {};
+            if (
+                integrations.length >
+                1
+            ) {
+                console.error(
+                    "META WEBHOOK DUPLICATE ACTIVE PAGE INTEGRATIONS:",
+                    pageId,
+                    integrations.map(
+                        (item) =>
+                            String(
+                                item.userId
+                            )
+                    )
+                );
+
+                continue;
+            }
+
+            const integration =
+                integrations[0];
+
+            for (
+                const change of
+                entry.changes || []
+            ) {
+                const value =
+                    change.value || {};
 
                 const leadId =
                     value.leadgen_id ||
@@ -1022,9 +1349,11 @@ exports.receiveWebhook = async (req, res) => {
                     integration.userId
                 );
 
-                const token = decrypt(
-                    integration.accessTokenEncrypted
-                );
+                const token =
+                    decrypt(
+                        integration
+                            .accessTokenEncrypted
+                    );
 
                 const metaLead =
                     await meta.getLeadDetails(
@@ -1037,14 +1366,16 @@ exports.receiveWebhook = async (req, res) => {
 
                 const metaCreatedAt =
                     new Date(
-                        metaLead?.created_time || ""
+                        metaLead?.created_time ||
+                            ""
                     );
 
                 if (
                     !Number.isNaN(
                         metaCreatedAt.getTime()
                     ) &&
-                    metaCreatedAt < allowedFrom
+                    metaCreatedAt <
+                        allowedFrom
                 ) {
                     console.log(
                         "OLD META LEAD IGNORED:",
@@ -1071,17 +1402,19 @@ exports.receiveWebhook = async (req, res) => {
                         metaLead.field_data
                     );
 
-                const adId = String(
-                    metaLead?.ad_id ||
-                        value?.ad_id ||
-                        ""
-                ).trim();
+                const adId =
+                    String(
+                        metaLead?.ad_id ||
+                            value?.ad_id ||
+                            ""
+                    ).trim();
 
-                const campaignId = String(
-                    metaLead?.campaign_id ||
-                        value?.campaign_id ||
-                        ""
-                ).trim();
+                const campaignId =
+                    String(
+                        metaLead?.campaign_id ||
+                            value?.campaign_id ||
+                            ""
+                    ).trim();
 
                 const campaignResult =
                     await getMetaCampaignName(
@@ -1106,12 +1439,14 @@ exports.receiveWebhook = async (req, res) => {
                     });
 
                 if (existing) {
-                    let changed = false;
+                    let changed =
+                        false;
 
                     if (
                         serviceName &&
                         !String(
-                            existing.service || ""
+                            existing.service ||
+                                ""
                         ).trim()
                     ) {
                         existing.service =
@@ -1136,7 +1471,8 @@ exports.receiveWebhook = async (req, res) => {
                     if (
                         adId &&
                         !String(
-                            existing.metaAdId || ""
+                            existing.metaAdId ||
+                                ""
                         ).trim()
                     ) {
                         existing.metaAdId =
@@ -1279,11 +1615,36 @@ exports.debugLeadgenSubscription =
         }
 
         try {
-            const integration =
-                await MetaIntegration.findOne({
-                    userId,
-                    isActive: true,
-                });
+            const requestedPageId =
+                String(
+                    req.query?.pageId ||
+                        req.body?.pageId ||
+                        ""
+                ).trim();
+
+            let integration = null;
+
+            if (requestedPageId) {
+                integration =
+                    await MetaIntegration.findOne(
+                        {
+                            userId,
+                            pageId:
+                                requestedPageId,
+                            isActive: true,
+                        }
+                    );
+            } else {
+                integration =
+                    await MetaIntegration.findOne(
+                        {
+                            userId,
+                            isActive: true,
+                        }
+                    ).sort({
+                        updatedAt: -1,
+                    });
+            }
 
             if (!integration) {
                 return res.status(404).json({
@@ -1307,9 +1668,16 @@ exports.debugLeadgenSubscription =
 
             return res.json({
                 success: true,
-                pageId: integration.pageId,
-                pageName: integration.pageName,
-                userId: integration.userId,
+
+                pageId:
+                    integration.pageId,
+
+                pageName:
+                    integration.pageName,
+
+                userId:
+                    integration.userId,
+
                 subscription,
             });
         } catch (error) {
@@ -1340,11 +1708,36 @@ exports.debugMetaPermissions =
         }
 
         try {
-            const integration =
-                await MetaIntegration.findOne({
-                    userId,
-                    isActive: true,
-                });
+            const requestedPageId =
+                String(
+                    req.query?.pageId ||
+                        req.body?.pageId ||
+                        ""
+                ).trim();
+
+            let integration = null;
+
+            if (requestedPageId) {
+                integration =
+                    await MetaIntegration.findOne(
+                        {
+                            userId,
+                            pageId:
+                                requestedPageId,
+                            isActive: true,
+                        }
+                    );
+            } else {
+                integration =
+                    await MetaIntegration.findOne(
+                        {
+                            userId,
+                            isActive: true,
+                        }
+                    ).sort({
+                        updatedAt: -1,
+                    });
+            }
 
             if (!integration) {
                 return res.status(404).json({
@@ -1412,7 +1805,9 @@ exports.debugMetaPermissions =
                         integration.pageId,
                         accessToken
                     );
-            } catch (subscriptionError) {
+            } catch (
+                subscriptionError
+            ) {
                 subscription = {
                     error:
                         subscriptionError.metaError ||
@@ -1437,8 +1832,13 @@ exports.debugMetaPermissions =
 
             const permissionStatus =
                 requiredPermissions.reduce(
-                    (result, permission) => {
-                        result[permission] =
+                    (
+                        result,
+                        permission
+                    ) => {
+                        result[
+                            permission
+                        ] =
                             scopes.includes(
                                 permission
                             );
@@ -1494,7 +1894,9 @@ exports.debugMetaPermissions =
 
                 missingPermissions:
                     requiredPermissions.filter(
-                        (permission) =>
+                        (
+                            permission
+                        ) =>
                             !scopes.includes(
                                 permission
                             )
