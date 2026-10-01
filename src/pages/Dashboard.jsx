@@ -6,6 +6,7 @@ import { buildApiUrl } from "../config/api";
 import Settings from "./Settings";
 import Leads from "./Leads";
 import LeadDetails from "./LeadDetails";
+import ContactDetails from "./ContactDetails";
 import Contacts from "./Contacts";
 import FollowUps from "./FollowUps";
 import Calendar from "./Calendar";
@@ -20,7 +21,7 @@ const navGroups = [
     items: [
       ["Leads", "users"],
       ["Follow-ups", "calendar"],
-      ["Chat", "chat"],
+      ["Ai Chat", "chat"],
     ],
   },
   {
@@ -650,8 +651,14 @@ function TodayFollowUpPopup({ items, minimized, onOpen, onMinimize, onClose, onR
 }
 
 export default function Dashboard() {
-  const [active, setActive] =
-    useState("Dashboard");
+  const contactPathMatch =
+    window.location.pathname.match(/^\/contacts\/([^/]+)$/);
+
+const [active, setActive] =
+    useState(contactPathMatch ? "ContactDetails" : "Dashboard");
+
+const [selectedContactId, setSelectedContactId] =
+    useState(contactPathMatch ? contactPathMatch[1] : null);
 
   const [settingsTab, setSettingsTab] =
     useState("Business Profile");
@@ -1545,7 +1552,11 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (active === "Dashboard" || active === "LeadDetails") {
+    if (
+      active === "Dashboard" ||
+      active === "LeadDetails" ||
+      active === "ContactDetails"
+    ) {
       return;
     }
 
@@ -1917,7 +1928,20 @@ function ComingSoonPage({ type = "WhatsApp" }) {
       return <Contacts user={user} />;
     }
 
-    if (active === "Chat") {
+    if (active === "ContactDetails" && selectedContactId) {
+  return (
+    <ContactDetails
+      contactId={selectedContactId}
+      onBack={() => {
+        window.history.pushState({}, "", "/dashboard");
+        setSelectedContactId(null);
+        setActive("Contacts");
+      }}
+    />
+  );
+}
+
+    if (active === "Ai Chat") {
       return (
         <AIAssistant
           key="ai-chat"

@@ -202,6 +202,36 @@ const leadSchema = new mongoose.Schema(
                         type: Date,
                         default: Date.now,
                     },
+
+                    editHistory: {
+                        type: [
+                            {
+                                oldText: {
+                                    type: String,
+                                    trim: true,
+                                    default: "",
+                                },
+
+                                newText: {
+                                    type: String,
+                                    trim: true,
+                                    default: "",
+                                },
+
+                                editedBy: {
+                                    type: String,
+                                    trim: true,
+                                    default: "",
+                                },
+
+                                editedAt: {
+                                    type: Date,
+                                    default: Date.now,
+                                },
+                            },
+                        ],
+                        default: [],
+                    },
                 },
             ],
 

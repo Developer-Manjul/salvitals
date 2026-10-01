@@ -76,6 +76,9 @@ const aiKnowledgeRoutes = require("./routes/aiKnowledgeRoutes");
 const aiConversationRoutes = require("./routes/aiConversationRoutes");
 const aiWidgetRoutes = require("./routes/aiWidgetRoutes");
 
+const leadSettingRoutes = require("./routes/leadSettingRoutes");
+const seedLeadSettings = require("./utils/seedLeadSettings");
+
 app.use(
     "/api/ai-widget",
     cors({
@@ -114,6 +117,11 @@ app.use("/api/ai-knowledge", aiKnowledgeRoutes);
 app.use("/api/ai-conversations", aiConversationRoutes);
 app.use("/api/ai-widget", aiWidgetRoutes);
 
+app.use(
+    "/api/lead-settings",
+    leadSettingRoutes
+);
+
 app.get("/api/location", (req, res) => {
     const forwarded = String(
         req.headers["x-forwarded-for"] || ""
@@ -121,8 +129,8 @@ app.get("/api/location", (req, res) => {
 
     const countryCode = String(
         req.headers["cf-ipcountry"] ||
-        req.headers["x-country-code"] ||
-        ""
+            req.headers["x-country-code"] ||
+            ""
     ).toUpperCase();
 
     const ip =
@@ -161,8 +169,12 @@ const PORT = process.env.PORT || 5000;
 
 mongoose
     .connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log("MongoDB connected successfully");
+    .then(async () => {
+        console.log(
+            "MongoDB connected successfully"
+        );
+
+        await seedLeadSettings();
 
         app.listen(
             PORT,
@@ -182,6 +194,10 @@ mongoose
 
                 console.log(
                     `Leads API: http://localhost:${PORT}/api/leads`
+                );
+
+                console.log(
+                    `Lead Settings API: http://localhost:${PORT}/api/lead-settings`
                 );
 
                 console.log(
@@ -207,6 +223,9 @@ mongoose
         );
     })
     .catch((error) => {
-        console.error("MongoDB connection failed:");
+        console.error(
+            "MongoDB connection failed:"
+        );
+
         console.error(error.message);
     });

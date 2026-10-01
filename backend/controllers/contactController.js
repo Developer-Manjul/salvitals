@@ -71,7 +71,7 @@ function limitResponse(res, usage) {
     current: usage.used,
     plan: usage.plan,
   });
-}
+};
 
 exports.getContacts = async (
   req,
@@ -96,6 +96,7 @@ exports.getContacts = async (
 
     const [
       contacts,
+      leads,
       usage,
     ] = await Promise.all([
       Contact.find({
@@ -107,12 +108,195 @@ exports.getContacts = async (
         })
         .lean(),
 
+      Lead.find({
+        userId: workspaceOwnerId,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .lean(),
+
       getUsage(workspaceOwnerId),
     ]);
 
+    const convertedLeadIds =
+      new Set(
+        contacts
+          .map((contact) =>
+            contact.leadId
+              ? String(contact.leadId)
+              : null
+          )
+          .filter(Boolean)
+      );
+
+    const normalizedContacts =
+      contacts.map((contact) => ({
+        ...contact,
+        recordType: "contact",
+        sourceRecord: "contact",
+        leadCreatedAt:
+          contact.leadCreatedAt ||
+          contact.createdAt ||
+          null,
+      }));
+
+    const normalizedLeads =
+      leads
+        .filter(
+          (lead) =>
+            !convertedLeadIds.has(
+              String(lead._id)
+            )
+        )
+        .map((lead) => ({
+          _id: lead._id,
+          leadId: lead._id,
+
+          userId:
+            lead.userId,
+
+          name:
+            lead.name || "",
+
+          email:
+            lead.email || "",
+
+          phone:
+            lead.phone || "",
+
+          source:
+            lead.source || "Manual",
+
+          service:
+            lead.service || "",
+
+          doctor:
+            lead.preferredDoctor ||
+            "",
+
+          owner:
+            lead.owner || "",
+
+          stage:
+            lead.stage || "New",
+
+          preferredDoctor:
+            lead.preferredDoctor || "",
+
+          landingPage:
+            lead.landingPage || "",
+
+          pageUrl:
+            lead.pageUrl || "",
+
+          utmSource:
+            lead.utmSource || "",
+
+          utmMedium:
+            lead.utmMedium || "",
+
+          utmCampaign:
+            lead.utmCampaign || "",
+
+          utmTerm:
+            lead.utmTerm || "",
+
+          utmContent:
+            lead.utmContent || "",
+
+          ipAddress:
+            lead.ipAddress || "",
+
+          firstNote:
+            lead.firstNote || "",
+
+          notes:
+            Array.isArray(lead.notes)
+              ? lead.notes
+              : [],
+
+          followUps:
+            Array.isArray(
+              lead.followUps
+            )
+              ? lead.followUps
+              : [],
+
+          metaLeadId:
+            lead.metaLeadId || "",
+
+          metaPageId:
+            lead.metaPageId || "",
+
+          metaFormId:
+            lead.metaFormId || "",
+
+          metaAdId:
+            lead.metaAdId || "",
+
+          metaCampaignId:
+            lead.metaCampaignId || "",
+
+          googleLeadId:
+            lead.googleLeadId || "",
+
+          googleCustomerId:
+            lead.googleCustomerId || "",
+
+          googleCampaignId:
+            lead.googleCampaignId || "",
+
+          googleAdGroupId:
+            lead.googleAdGroupId || "",
+
+          googleAdId:
+            lead.googleAdId || "",
+
+          googleAssetId:
+            lead.googleAssetId || "",
+
+          googleGclid:
+            lead.googleGclid || "",
+
+          createdAt:
+            lead.createdAt || null,
+
+          updatedAt:
+            lead.updatedAt || null,
+
+          leadCreatedAt:
+            lead.createdAt || null,
+
+          recordType: "lead",
+          sourceRecord: "lead",
+        }));
+
+    const combined =
+      [
+        ...normalizedContacts,
+        ...normalizedLeads,
+      ].sort((a, b) => {
+        const dateA =
+          new Date(
+            a.leadCreatedAt ||
+              a.createdAt ||
+              0
+          ).getTime();
+
+        const dateB =
+          new Date(
+            b.leadCreatedAt ||
+              b.createdAt ||
+              0
+          ).getTime();
+
+        return dateB - dateA;
+      });
+
     return res.json({
       success: true,
-      contacts,
+      contacts: combined,
       usage,
     });
   } catch (error) {
@@ -125,6 +309,200 @@ exports.getContacts = async (
       success: false,
       message:
         "Unable to load contacts",
+    });
+  }
+};
+
+exports.getContactDetails = async (
+  req,
+  res
+) => {
+  try {
+    const context =
+      await getContext(req);
+
+    if (
+      !requirePermission(
+        context,
+        "contacts.view",
+        res
+      )
+    ) {
+      return;
+    }
+
+    const workspaceOwnerId =
+      context.workspaceOwnerId;
+
+    const contact =
+      await Contact.findOne({
+        _id: req.params.id,
+        userId: workspaceOwnerId,
+        deletedAt: null,
+      }).lean();
+
+    if (contact) {
+      return res.json({
+        success: true,
+        recordType: "contact",
+        contact: {
+          ...contact,
+          recordType: "contact",
+          sourceRecord: "contact",
+        },
+      });
+    }
+
+    const lead =
+      await Lead.findOne({
+        _id: req.params.id,
+        userId: workspaceOwnerId,
+      }).lean();
+
+    if (lead) {
+      return res.json({
+        success: true,
+        recordType: "lead",
+        contact: {
+          _id: lead._id,
+          leadId: lead._id,
+
+          userId:
+            lead.userId,
+
+          name:
+            lead.name || "",
+
+          email:
+            lead.email || "",
+
+          phone:
+            lead.phone || "",
+
+          source:
+            lead.source || "Manual",
+
+          service:
+            lead.service || "",
+
+          doctor:
+            lead.preferredDoctor ||
+            "",
+
+          owner:
+            lead.owner || "",
+
+          stage:
+            lead.stage || "New",
+
+          preferredDoctor:
+            lead.preferredDoctor || "",
+
+          landingPage:
+            lead.landingPage || "",
+
+          pageUrl:
+            lead.pageUrl || "",
+
+          utmSource:
+            lead.utmSource || "",
+
+          utmMedium:
+            lead.utmMedium || "",
+
+          utmCampaign:
+            lead.utmCampaign || "",
+
+          utmTerm:
+            lead.utmTerm || "",
+
+          utmContent:
+            lead.utmContent || "",
+
+          ipAddress:
+            lead.ipAddress || "",
+
+          firstNote:
+            lead.firstNote || "",
+
+          notes:
+            Array.isArray(lead.notes)
+              ? lead.notes
+              : [],
+
+          followUps:
+            Array.isArray(
+              lead.followUps
+            )
+              ? lead.followUps
+              : [],
+
+          metaLeadId:
+            lead.metaLeadId || "",
+
+          metaPageId:
+            lead.metaPageId || "",
+
+          metaFormId:
+            lead.metaFormId || "",
+
+          metaAdId:
+            lead.metaAdId || "",
+
+          metaCampaignId:
+            lead.metaCampaignId || "",
+
+          googleLeadId:
+            lead.googleLeadId || "",
+
+          googleCustomerId:
+            lead.googleCustomerId || "",
+
+          googleCampaignId:
+            lead.googleCampaignId || "",
+
+          googleAdGroupId:
+            lead.googleAdGroupId || "",
+
+          googleAdId:
+            lead.googleAdId || "",
+
+          googleAssetId:
+            lead.googleAssetId || "",
+
+          googleGclid:
+            lead.googleGclid || "",
+
+          createdAt:
+            lead.createdAt || null,
+
+          updatedAt:
+            lead.updatedAt || null,
+
+          leadCreatedAt:
+            lead.createdAt || null,
+
+          recordType: "lead",
+          sourceRecord: "lead",
+        },
+      });
+    }
+
+    return res.status(404).json({
+      success: false,
+      message:
+        "Contact not found",
+    });
+  } catch (error) {
+    console.error(
+      "GET CONTACT DETAILS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to load contact details",
     });
   }
 };
@@ -231,8 +609,12 @@ exports.createContact = async (
       )
       .json({
         success: true,
-        contact:
-          result.contact,
+        contact: {
+          ...result.contact?.toObject?.() ||
+            result.contact,
+          recordType: "contact",
+          sourceRecord: "contact",
+        },
         usage:
           result.usage ||
           await getUsage(
@@ -320,8 +702,12 @@ exports.convertLead = async (
       )
       .json({
         success: true,
-        contact:
-          result.contact,
+        contact: {
+          ...result.contact?.toObject?.() ||
+            result.contact,
+          recordType: "contact",
+          sourceRecord: "contact",
+        },
         usage:
           result.usage ||
           await getUsage(

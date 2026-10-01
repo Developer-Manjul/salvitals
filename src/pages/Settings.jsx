@@ -128,12 +128,12 @@ function getSettingsGroups(isHealthcare, user) {
 
 function getToken() {
   return (
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("vitalsToken") ||
-    sessionStorage.getItem("salevitals_token") ||
     localStorage.getItem("token") ||
     localStorage.getItem("vitalsToken") ||
     localStorage.getItem("salevitals_token") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("vitalsToken") ||
+    sessionStorage.getItem("salevitals_token") ||
     ""
   );
 }
@@ -160,7 +160,7 @@ const MODERN_SETTINGS_STYLES = `
 .sv-source-table{width:100%;min-width:720px;border-collapse:collapse}
 .sv-source-table th{padding:12px 14px;text-align:left;background:#f8fbff;border-bottom:1px solid #e6edf5;color:#8796aa;font-size:9px;letter-spacing:.08em;font-weight:800}
 .sv-source-table td{padding:13px 14px;border-bottom:1px solid #edf2f7;color:#52627a;font-size:11px;vertical-align:middle}
-.sv-source-table tr:last-child td{border-bottom:0}
+.sv-source-table tr:last-child td{border-bottom:0}.settings-management .settings-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px}.settings-management .settings-row-actions .sv-action-btn{min-width:68px}.settings-management .settings-row-actions svg{width:13px;height:13px}.settings-management-table th:last-child,.settings-management-table td:last-child{white-space:nowrap}
 .sv-source-name{display:flex;align-items:center;gap:10px;min-width:200px}
 .sv-source-icon{display:flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#edf5ff;color:#2878ed;font-weight:800;font-size:14px}
 .sv-source-icon.green{background:#e7f8ef;color:#15a566}.sv-source-icon.purple{background:#f0eaff;color:#7048e8}.sv-source-icon.orange{background:#fff3df;color:#e89219}.sv-source-icon.gray{background:#eef2f6;color:#6b7a90}
@@ -168,7 +168,7 @@ const MODERN_SETTINGS_STYLES = `
 .sv-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:9px;font-weight:800}.sv-status i{width:6px;height:6px;border-radius:50%;background:currentColor}.sv-status.active{background:#eaf9f0;color:#168447}.sv-status.available{background:#edf5ff;color:#2878ed}.sv-status.soon{background:#f2f4f7;color:#78869a}
 .sv-source-count{color:#29384f;font-weight:800}.sv-source-muted{color:#a0adbc}
 .sv-toggle{position:relative;width:38px;height:22px;border:0;border-radius:999px;background:#d9e2ee;cursor:pointer;transition:.2s}.sv-toggle.on{background:#2878ed}.sv-toggle:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.16);transition:.2s}.sv-toggle.on:after{left:19px}.sv-toggle.soon{cursor:not-allowed;opacity:.7}
-.sv-more{width:29px;height:29px;border:1px solid #dce6f2;border-radius:8px;background:#fff;color:#65758d;font-weight:800;cursor:pointer}.sv-more:hover{background:#f7faff}
+.sv-more{width:30px;height:30px;border:1px solid #dce6f2;border-radius:8px;background:#fff;color:#65758d;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.sv-more:hover{background:#f7faff;color:#2878ed}.sv-more .fa-trash{color:#d74b4b}.sv-source-icon-safe{font-size:15px;font-weight:900;line-height:1;letter-spacing:-.04em}.sv-source-icon-safe>span{display:flex;align-items:center;justify-content:center;width:100%;height:100%}.sv-action-buttons{display:flex;align-items:center;justify-content:flex-end;gap:7px}.sv-action-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:70px;height:32px;padding:0 9px;border:1px solid #dce6f2;border-radius:8px;background:#fff;color:#53637b;font-size:10px;font-weight:800;cursor:pointer;transition:.18s}.sv-action-btn svg{width:13px;height:13px;flex:0 0 13px}.sv-action-btn.edit:hover{background:#edf5ff;border-color:#bcd6fb;color:#2878ed}.sv-action-btn.delete{color:#d74b4b}.sv-action-btn.delete:hover{background:#fff1f2;border-color:#f2c4c8;color:#c73e49}.sv-stage-actions{display:flex;justify-content:flex-end;align-items:center;gap:7px;margin-top:14px}
 .sv-stage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .sv-stage-card{position:relative;min-height:170px;padding:18px;border:1px solid #dce6f2;border-radius:16px;background:#fff;box-shadow:0 7px 22px rgba(40,75,120,.045);overflow:hidden}.sv-stage-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#2878ed}.sv-stage-card.orange:before{background:#f59e0b}.sv-stage-card.green:before{background:#16a34a}.sv-stage-card.purple:before{background:#7c4de8}.sv-stage-card.red:before{background:#dc4d4d}.sv-stage-card.gray:before{background:#94a3b8}
 .sv-stage-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.sv-stage-head h3{margin:0;color:#26354d;font-size:15px}.sv-stage-count{padding:5px 9px;border-radius:999px;background:#edf5ff;color:#2878ed;font-size:10px;font-weight:800}.sv-stage-card.orange .sv-stage-count{background:#fff3df;color:#d88413}.sv-stage-card.green .sv-stage-count{background:#e7f8ef;color:#15965b}.sv-stage-card.purple .sv-stage-count{background:#f0eaff;color:#7048e8}.sv-stage-card.red .sv-stage-count{background:#fff0f0;color:#d74b4b}.sv-stage-card.gray .sv-stage-count{background:#eef2f6;color:#68778c}
@@ -184,66 +184,84 @@ function ModernSettingsStyles() {
   return <style>{MODERN_SETTINGS_STYLES}</style>;
 }
 
-const DEFAULT_LEAD_SOURCES = [
-  { id: "meta", name: "Meta Ads (Facebook / Instagram)", description: "Leads from Facebook and Instagram Ads", icon: "◎", tone: "purple", defaultStatus: "active", locked: false },
-  { id: "whatsapp", name: "WhatsApp", description: "Leads from WhatsApp conversations", icon: "◔", tone: "green", defaultStatus: "available", locked: false },
-  { id: "website", name: "Website Form", description: "Leads from your website forms", icon: "◎", tone: "blue", defaultStatus: "available", locked: false },
-  { id: "manual", name: "Manual Entry", description: "Leads added manually by your team", icon: "+", tone: "blue", defaultStatus: "active", locked: false },
-  { id: "google", name: "Google Ads", description: "Leads from Google Ads", icon: "G", tone: "orange", defaultStatus: "soon", locked: true },
-  { id: "import", name: "Import (CSV)", description: "Import leads from CSV files", icon: "↓", tone: "gray", defaultStatus: "available", locked: false },
-  { id: "thirdparty", name: "Third-party Integration", description: "Connect tools such as Zapier and Pabbly", icon: "✦", tone: "purple", defaultStatus: "soon", locked: true },
-  { id: "api", name: "API Integration", description: "Get leads via API", icon: "▦", tone: "blue", defaultStatus: "soon", locked: true },
-];
 
-const DEFAULT_LEAD_STAGES = [
-  { id: "new", name: "New", description: "Fresh leads that have just entered your CRM.", tone: "blue" },
-  { id: "pending-follow-up", name: "Pending follow-up", description: "Leads waiting for the next scheduled follow-up.", tone: "orange" },
-  { id: "contacted", name: "Contacted", description: "Your team has contacted the lead.", tone: "purple" },
-  { id: "qualified", name: "Qualified", description: "The lead matches your service or sales criteria.", tone: "green" },
-  { id: "proposal", name: "Proposal", description: "A proposal or quotation has been shared.", tone: "blue" },
-  { id: "converted", name: "Converted", description: "The lead has successfully converted.", tone: "green" },
-  { id: "lost", name: "Lost", description: "The opportunity is no longer active.", tone: "red" },
-];
-
-function readStoredJson(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    if (!value) return fallback;
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) || typeof parsed === "object" ? parsed : fallback;
-  } catch (_) {
-    return fallback;
+function ActionIcon({ type }) {
+  if (type === "edit") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 20h4l10.5-10.5a2.12 2.12 0 0 0-3-3L5 17v3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="m13.5 7.5 3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
   }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7h14M9 7V5h6v2m-8 0 1 13h6l1-13M10 11v6m4-6v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
-function slugify(value) {
-  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `item-${Date.now()}`;
+function SourceIcon({ source }) {
+  const value = String(source?.name || source?.slug || "").toLowerCase();
+  const color = source?.colorHex || "#2878ED";
+  let symbol = "";
+
+  if (value.includes("meta") || value.includes("facebook") || value.includes("instagram")) {
+    symbol = "M";
+  } else if (value.includes("whatsapp")) {
+    symbol = "⌕";
+  } else if (value.includes("website")) {
+    symbol = "◎";
+  } else if (value.includes("walk")) {
+    symbol = "♙";
+  } else if (value.includes("google ads")) {
+    symbol = "G";
+  } else if (value.includes("gmb") || value.includes("google business")) {
+    symbol = "⌖";
+  } else if (value.includes("inbound") || value === "call") {
+    symbol = "⌕";
+  } else if (value.includes("ai chat") || value.includes("chatbot")) {
+    symbol = "✦";
+  } else if (value.includes("referral")) {
+    symbol = "♧";
+  } else {
+    symbol = "•";
+  }
+
+  return (
+    <span
+      className="sv-source-icon sv-source-icon-safe"
+      style={{ color, background: `${color}18` }}
+      aria-hidden="true"
+    >
+      <span>{symbol}</span>
+    </span>
+  );
 }
 
 function LeadSourceModal({ onClose, onSave, initialSource = null }) {
   const [name, setName] = useState(initialSource?.name || "");
-  const [description, setDescription] = useState(initialSource?.description || "");
+  const [color, setColor] = useState(initialSource?.color || "blue");
+  const [colorHex, setColorHex] = useState(initialSource?.colorHex || "#2878ED");
   const [saving, setSaving] = useState(false);
   const editing = Boolean(initialSource);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
+
     setSaving(true);
-
-    onSave({
-      id: initialSource?.id || `custom-${slugify(cleanName)}-${Date.now()}`,
-      name: cleanName,
-      description: description.trim() || "Custom lead source",
-      icon: initialSource?.icon || cleanName.charAt(0).toUpperCase(),
-      tone: initialSource?.tone || "blue",
-      defaultStatus: initialSource?.defaultStatus || "active",
-      locked: false,
-      custom: initialSource?.custom || false,
-    });
-
-    setSaving(false);
+    try {
+      await onSave({
+        name: cleanName,
+        color: color.trim() || "blue",
+        colorHex: colorHex.trim() || "#2878ED",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -254,8 +272,37 @@ function LeadSourceModal({ onClose, onSave, initialSource = null }) {
           <button type="button" className="sv-modal-close" onClick={onClose}>×</button>
         </div>
         <form className="sv-modal-form" onSubmit={submit}>
-          <label className="sv-field">Source name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Referral" autoFocus required /></label>
-          <label className="sv-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Short description" /></label>
+          <label className="sv-field">
+            Source name
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Referral" autoFocus required />
+          </label>
+          <label className="sv-field">
+            Color
+            <select value={color} onChange={(event) => {
+              const value = event.target.value;
+              setColor(value);
+              const map = {
+                blue: "#2878ED",
+                green: "#16A05A",
+                purple: "#7048E8",
+                orange: "#E89219",
+                red: "#D74B4B",
+                gray: "#68778C",
+              };
+              setColorHex(map[value] || "#2878ED");
+            }}>
+              <option value="blue">Blue</option>
+              <option value="green">Green</option>
+              <option value="purple">Purple</option>
+              <option value="orange">Orange</option>
+              <option value="red">Red</option>
+              <option value="gray">Gray</option>
+            </select>
+          </label>
+          <label className="sv-field">
+            Custom color
+            <input type="color" value={colorHex || "#2878ED"} onChange={(event) => setColorHex(event.target.value)} style={{ height: "42px", padding: "5px" }} />
+          </label>
           <div className="sv-modal-actions">
             <button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button>
             <button type="submit" className="sv-primary-btn" disabled={saving}>{saving ? "Saving..." : editing ? "Save Changes" : "Add Source"}</button>
@@ -268,22 +315,26 @@ function LeadSourceModal({ onClose, onSave, initialSource = null }) {
 
 function LeadStageModal({ onClose, onSave, initialStage = null }) {
   const [name, setName] = useState(initialStage?.name || "");
-  const [description, setDescription] = useState(initialStage?.description || "");
-  const [tone, setTone] = useState(initialStage?.tone || "blue");
+  const [color, setColor] = useState(initialStage?.color || initialStage?.tone || "blue");
+  const [colorHex, setColorHex] = useState(initialStage?.colorHex || "#2878ED");
+  const [saving, setSaving] = useState(false);
   const editing = Boolean(initialStage);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
 
-    onSave({
-      id: initialStage?.id || `custom-${slugify(cleanName)}-${Date.now()}`,
-      name: cleanName,
-      description: description.trim() || "Custom CRM pipeline stage.",
-      tone,
-      custom: initialStage?.custom || false,
-    });
+    setSaving(true);
+    try {
+      await onSave({
+        name: cleanName,
+        color: color.trim() || "blue",
+        colorHex: colorHex.trim() || "#2878ED",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -294,12 +345,40 @@ function LeadStageModal({ onClose, onSave, initialStage = null }) {
           <button type="button" className="sv-modal-close" onClick={onClose}>×</button>
         </div>
         <form className="sv-modal-form" onSubmit={submit}>
-          <label className="sv-field">Stage name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Negotiation" autoFocus required /></label>
-          <label className="sv-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What happens in this stage?" /></label>
-          <label className="sv-field">Color<select value={tone} onChange={(event) => setTone(event.target.value)}><option value="blue">Blue</option><option value="orange">Orange</option><option value="purple">Purple</option><option value="green">Green</option><option value="red">Red</option><option value="gray">Gray</option></select></label>
+          <label className="sv-field">
+            Stage name
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Negotiation" autoFocus required />
+          </label>
+          <label className="sv-field">
+            Color
+            <select value={color} onChange={(event) => {
+              const value = event.target.value;
+              setColor(value);
+              const map = {
+                blue: "#2878ED",
+                green: "#16A05A",
+                purple: "#7048E8",
+                orange: "#E89219",
+                red: "#D74B4B",
+                gray: "#68778C",
+              };
+              setColorHex(map[value] || "#2878ED");
+            }}>
+              <option value="blue">Blue</option>
+              <option value="green">Green</option>
+              <option value="purple">Purple</option>
+              <option value="orange">Orange</option>
+              <option value="red">Red</option>
+              <option value="gray">Gray</option>
+            </select>
+          </label>
+          <label className="sv-field">
+            Custom color
+            <input type="color" value={colorHex || "#2878ED"} onChange={(event) => setColorHex(event.target.value)} style={{ height: "42px", padding: "5px" }} />
+          </label>
           <div className="sv-modal-actions">
             <button type="button" className="sv-secondary-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="sv-primary-btn">{editing ? "Save Changes" : "Add Stage"}</button>
+            <button type="submit" className="sv-primary-btn" disabled={saving}>{saving ? "Saving..." : editing ? "Save Changes" : "Add Stage"}</button>
           </div>
         </form>
       </div>
@@ -313,146 +392,197 @@ function LeadSourcesContent() {
   const [filter, setFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
   const [editingSource, setEditingSource] = useState(null);
-  const [sources, setSources] = useState(() => {
-    const saved = readStoredJson("salevitals_lead_sources", null);
-    return Array.isArray(saved) && saved.length ? saved : DEFAULT_LEAD_SOURCES;
-  });
-  const [enabled, setEnabled] = useState(() => {
-    const saved = readStoredJson("salevitals_lead_source_status", {});
-    const result = {};
-    DEFAULT_LEAD_SOURCES.forEach((item) => { result[item.id] = item.defaultStatus === "active"; });
-    Object.assign(result, saved && typeof saved === "object" ? saved : {});
-    return result;
-  });
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const headers = { Authorization: `Bearer ${getToken()}` };
+      const [sourceResponse, leadResponse] = await Promise.all([
+        fetch(`${getApiBaseUrl()}/api/lead-settings/sources`, { headers, cache: "no-store" }),
+        fetch(`${getApiBaseUrl()}/api/leads`, { headers, cache: "no-store" }),
+      ]);
+
+      const sourceData = await sourceResponse.json();
+      const leadData = await leadResponse.json();
+
+      if (!sourceResponse.ok || !sourceData.success) {
+        throw new Error(sourceData.message || "Unable to load lead sources.");
+      }
+
+      setSources(sourceData.sources || []);
+      if (leadResponse.ok) {
+        setLeads(leadData.leads || leadData.data || []);
+      }
+    } catch (err) {
+      setError(err.message || "Unable to load lead sources.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadLeads = async () => {
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/api/leads`, { headers: { Authorization: `Bearer ${getToken()}` }, cache: "no-store" });
-        const data = await response.json();
-        if (response.ok) setLeads(data.leads || data.data || []);
-      } catch (_) { }
-    };
-    loadLeads();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("salevitals_lead_sources", JSON.stringify(sources));
-  }, [sources]);
+  const normalizeSource = (value) => {
+    const source = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ");
 
-  useEffect(() => {
-    localStorage.setItem("salevitals_lead_source_status", JSON.stringify(enabled));
-  }, [enabled]);
+    if (source.includes("facebook") || source === "fb") return "facebook";
+    if (source.includes("instagram") || source === "ig") return "instagram";
+    if (source.includes("meta")) return "meta";
+    if (source.includes("whatsapp")) return "whatsapp";
+    if (source.includes("website") || source.includes("web site")) return "website";
+    if (source.includes("walk in") || source.includes("walkin")) return "walk-in";
+    if (source.includes("google")) return "google-ads";
+    if (source.includes("gmb") || source.includes("google business")) return "gmb";
+    if (source.includes("inbound call") || source === "call") return "inbound-call";
+    if (source.includes("ai chat") || source.includes("chatbot")) return "ai-chat";
+    if (source.includes("patient referral") || source === "referral" || source.includes("referral")) return "patient-referrals";
+    if (source.includes("doctor referral")) return "doctor-referrals";
+    return source;
+  };
 
-  const normalizeSource = (source) => {
-    const value = String(source || "").trim().toLowerCase();
-    if (["facebook", "fb", "meta", "facbook", "instagram", "ig"].includes(value)) return "meta";
-    if (["whatsapp", "whats app"].includes(value)) return "whatsapp";
-    if (["website", "website form", "web"].includes(value)) return "website";
-    if (["manual", "walk-in", "walkin"].includes(value)) return "manual";
-    if (["google", "google ads"].includes(value)) return "google";
-    return "other";
+  const getLeadSourceValue = (lead) => {
+    if (!lead) return "";
+    return [
+      lead.metaPlatform,
+      lead.platform,
+      lead.leadPlatform,
+      lead.metaSource,
+      lead.sourceDetails,
+      lead.metaSourceDetails,
+      lead.adSource,
+      lead.utmSource,
+      lead.source,
+    ].map((value) => String(value || "").trim()).find(Boolean) || "";
+  };
+
+  const sourceCount = (source) => {
+    const sourceKey = normalizeSource(source.slug || source.name);
+    return leads.filter((lead) => {
+      const leadKey = normalizeSource(getLeadSourceValue(lead));
+      if (sourceKey === "meta") return ["meta", "facebook", "instagram"].includes(leadKey);
+      return leadKey === sourceKey;
+    }).length;
   };
 
   const filteredSources = sources.filter((item) => {
-    const matchesSearch = `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase());
-    const isOn = Boolean(enabled[item.id]);
-    const status = item.locked ? "soon" : isOn ? "active" : "available";
+    const matchesSearch = normalizeSource(item.name).includes(normalizeSource(search));
+    const status = item.status === "active" ? "active" : "available";
     return matchesSearch && (filter === "all" || status === filter);
   });
 
-  const sourceCount = (id) => leads.filter((lead) => normalizeSource(lead.source) === id).length;
   const totalLeads = leads.length;
-  const activeSources = sources.filter((item) => !item.locked && enabled[item.id]).length;
+  const activeSources = sources.filter((item) => item.status === "active").length;
   const thisMonth = leads.filter((lead) => {
     const date = new Date(lead.createdAt || lead.created_at || lead.date);
     const now = new Date();
     return !Number.isNaN(date.getTime()) && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length;
+  const metaSource = sources.find((item) => normalizeSource(item.name).includes("meta"));
+  const metaLeads = metaSource ? sourceCount(metaSource) : leads.filter((lead) => ["facebook", "instagram", "meta", "fb", "ig"].includes(normalizeSource(lead.source))).length;
 
-  const saveSource = (source) => {
-    setSources((previous) =>
-      editingSource
-        ? previous.map((item) =>
-            item.id === source.id ? { ...item, ...source } : item
-          )
-        : [...previous, source]
-    );
-
-    setEnabled((previous) => ({
-      ...previous,
-      [source.id]: editingSource ? previous[source.id] ?? true : true,
-    }));
-
-    setShowModal(false);
-    setEditingSource(null);
+  const saveSource = async (payload) => {
+    try {
+      setError("");
+      const isEditing = Boolean(editingSource);
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/lead-settings/sources${isEditing ? `/${editingSource._id}` : ""}`,
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to save lead source.");
+      }
+      await loadData();
+      setShowModal(false);
+      setEditingSource(null);
+    } catch (err) {
+      setError(err.message || "Unable to save lead source.");
+    }
   };
 
-  const openEditSource = (source) => {
-    setEditingSource(source);
-    setShowModal(true);
-  };
-
-  const deleteSource = (source) => {
+  const deleteSource = async (source) => {
     if (!window.confirm(`Delete lead source "${source.name}"?`)) return;
 
-    setSources((previous) =>
-      previous.filter((item) => item.id !== source.id)
-    );
-
-    setEnabled((previous) => {
-      const next = { ...previous };
-      delete next[source.id];
-      return next;
-    });
-
-    setEditingSource(null);
-    setShowModal(false);
+    try {
+      setError("");
+      const response = await fetch(`${getApiBaseUrl()}/api/lead-settings/sources/${source._id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to delete lead source.");
+      }
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Unable to delete lead source.");
+    }
   };
 
-  const closeSourceModal = () => {
-    setShowModal(false);
-    setEditingSource(null);
-  };
-
-  const toggleSource = (item) => {
-    if (item.locked) return;
-    setEnabled((previous) => ({ ...previous, [item.id]: !previous[item.id] }));
+  const toggleSource = async (source) => {
+    try {
+      const nextStatus = source.status === "active" ? "inactive" : "active";
+      const response = await fetch(`${getApiBaseUrl()}/api/lead-settings/sources/${source._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Unable to update source status.");
+      setSources((previous) => previous.map((item) => item._id === source._id ? data.source : item));
+    } catch (err) {
+      setError(err.message || "Unable to update source status.");
+    }
   };
 
   return (
     <div className="sv-settings-section">
       <ModernSettingsStyles />
       <div className="sv-section-head"><div><h2>Lead Sources</h2><p>Manage where your leads come from and monitor connected channels.</p></div><button type="button" className="sv-primary-btn" onClick={() => { setEditingSource(null); setShowModal(true); }}>＋ Add Source</button></div>
+      {error && <div style={{ marginBottom: "12px", padding: "10px 12px", borderRadius: "10px", background: "#fff1f2", color: "#c2414a", fontSize: "11px" }}>{error}</div>}
       <div className="sv-summary-grid">
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon">♧</span></div><strong className="sv-summary-value">{totalLeads.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">From all sources</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Active Sources</span><span className="sv-summary-icon">↗</span></div><strong className="sv-summary-value">{activeSources}</strong><small className="sv-summary-meta">Currently enabled</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">This Month</span><span className="sv-summary-icon">⌁</span></div><strong className="sv-summary-value">{thisMonth.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">New leads</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Meta Leads</span><span className="sv-summary-icon">◎</span></div><strong className="sv-summary-value">{sourceCount("meta").toLocaleString("en-IN")}</strong><small className="sv-summary-meta">Facebook + Instagram</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon"><i className="fa-solid fa-users" /></span></div><strong className="sv-summary-value">{totalLeads.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">From all sources</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Active Sources</span><span className="sv-summary-icon"><i className="fa-solid fa-toggle-on" /></span></div><strong className="sv-summary-value">{activeSources}</strong><small className="sv-summary-meta">Currently enabled</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">This Month</span><span className="sv-summary-icon"><i className="fa-solid fa-calendar-days" /></span></div><strong className="sv-summary-value">{thisMonth.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">New leads</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Meta Leads</span><span className="sv-summary-icon"><i className="fa-brands fa-meta" /></span></div><strong className="sv-summary-value">{metaLeads.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">Facebook + Instagram</small></div>
       </div>
-      <div className="sv-toolbar"><input className="sv-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lead sources..." /><select className="sv-filter" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All sources</option><option value="active">Active</option><option value="available">Available</option><option value="soon">Coming soon</option></select></div>
+      <div className="sv-toolbar"><input className="sv-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lead sources..." /><select className="sv-filter" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All sources</option><option value="active">Active</option><option value="available">Available</option></select></div>
       <div className="sv-source-table-wrap"><table className="sv-source-table"><thead><tr><th>SOURCE</th><th>STATUS</th><th>LEADS</th><th>LAST SYNC</th><th>TOGGLE</th><th>ACTIONS</th></tr></thead><tbody>
-        {filteredSources.length === 0 ? <tr><td colSpan="6" style={{ textAlign: "center", padding: "30px" }}>No sources found.</td></tr> : filteredSources.map((item) => {
-          const isOn = Boolean(enabled[item.id]);
-          const status = item.locked ? "soon" : isOn ? "active" : "available";
-          const label = item.locked ? "Coming soon" : isOn ? "Active" : "Available";
-          return <tr key={item.id}>
-            <td><div className="sv-source-name"><span className={`sv-source-icon ${item.tone}`}>{item.icon}</span><div><strong>{item.name}</strong><small>{item.description}</small></div></div></td>
-            <td><span className={`sv-status ${status}`}><i />{label}</span></td>
-            <td><span className="sv-source-count">{["meta", "whatsapp", "website", "manual"].includes(item.id) ? sourceCount(item.id).toLocaleString("en-IN") : "—"}</span></td>
-            <td><span className="sv-source-muted">{item.id === "meta" ? "Connected" : isOn ? "Enabled" : "—"}</span></td>
-            <td><button type="button" className={`sv-toggle ${isOn ? "on" : ""} ${item.locked ? "soon" : ""}`} onClick={() => toggleSource(item)} disabled={item.locked} aria-label={`${label} ${item.name}`} /></td>
-            <td>
-  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-    <button type="button" className="sv-more" onClick={() => openEditSource(item)} title="Edit source">✎</button>
-    <button type="button" className="sv-more" onClick={() => deleteSource(item)} title="Delete source">×</button>
-  </div>
-</td>
+        {loading ? <tr><td colSpan="6" style={{ textAlign: "center", padding: "30px" }}>Loading sources...</td></tr> : filteredSources.length === 0 ? <tr><td colSpan="6" style={{ textAlign: "center", padding: "30px" }}>No sources found.</td></tr> : filteredSources.map((item) => {
+          const isActive = item.status === "active";
+          const color = item.colorHex || "#2878ED";
+          return <tr key={item._id}>
+            <td><div className="sv-source-name"><SourceIcon source={item} /><div><strong>{item.name}</strong><small>{item.slug || "Custom CRM source"}</small></div></div></td>
+            <td><span className={`sv-status ${isActive ? "active" : "available"}`}><i />{isActive ? "Active" : "Available"}</span></td>
+            <td><span className="sv-source-count">{sourceCount(item).toLocaleString("en-IN")}</span></td>
+            <td><span className="sv-source-muted">{isActive ? "Enabled" : "—"}</span></td>
+            <td><button type="button" className={`sv-toggle ${isActive ? "on" : ""}`} onClick={() => toggleSource(item)} aria-label={`${isActive ? "Disable" : "Enable"} ${item.name}`} /></td>
+            <td><div className="sv-action-buttons"><button type="button" className="sv-action-btn edit" onClick={() => { setEditingSource(item); setShowModal(true); }} title={`Edit ${item.name}`} aria-label={`Edit ${item.name}`}><ActionIcon type="edit" /><span>Edit</span></button><button type="button" className="sv-action-btn delete" onClick={() => deleteSource(item)} title={`Delete ${item.name}`} aria-label={`Delete ${item.name}`}><ActionIcon type="delete" /><span>Delete</span></button></div></td>
           </tr>;
         })}
       </tbody></table></div>
-      {showModal && <LeadSourceModal onClose={closeSourceModal} onSave={saveSource} initialSource={editingSource} />}
-    </div>
+      { showModal && <LeadSourceModal onClose={() => { setShowModal(false); setEditingSource(null); }} onSave={saveSource} initialSource={editingSource} /> }
+    </div >
   );
 }
 
@@ -460,74 +590,111 @@ function LeadStagesContent() {
   const [leads, setLeads] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingStage, setEditingStage] = useState(null);
-  const [stages, setStages] = useState(() => {
-    const saved = readStoredJson("salevitals_lead_stages", null);
-    return Array.isArray(saved) && saved.length ? saved : DEFAULT_LEAD_STAGES;
-  });
+  const [stages, setStages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const headers = { Authorization: `Bearer ${getToken()}` };
+      const [stageResponse, leadResponse] = await Promise.all([
+        fetch(`${getApiBaseUrl()}/api/lead-settings/stages`, { headers, cache: "no-store" }),
+        fetch(`${getApiBaseUrl()}/api/leads`, { headers, cache: "no-store" }),
+      ]);
+      const stageData = await stageResponse.json();
+      const leadData = await leadResponse.json();
+      if (!stageResponse.ok || !stageData.success) {
+        throw new Error(stageData.message || "Unable to load lead stages.");
+      }
+      setStages(stageData.stages || []);
+      if (leadResponse.ok) setLeads(leadData.leads || leadData.data || []);
+    } catch (err) {
+      setError(err.message || "Unable to load lead stages.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadLeads = async () => {
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/api/leads`, { headers: { Authorization: `Bearer ${getToken()}` }, cache: "no-store" });
-        const data = await response.json();
-        if (response.ok) setLeads(data.leads || data.data || []);
-      } catch (_) { }
-    };
-    loadLeads();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("salevitals_lead_stages", JSON.stringify(stages));
-  }, [stages]);
+  const normalizeStage = (value) => String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 
-  const getCount = (stage) => leads.filter((lead) => String(lead.stage || "New").trim().toLowerCase() === stage.toLowerCase()).length;
+  const getCount = (stage) => {
+    const stageKey = normalizeStage(stage.slug || stage.name);
+    return leads.filter((lead) => normalizeStage(lead.stage || lead.status || "new") === stageKey).length;
+  };
   const total = leads.length;
-  const saveStage = (stage) => {
-    setStages((previous) =>
-      editingStage
-        ? previous.map((item) =>
-            item.id === stage.id ? { ...item, ...stage } : item
-          )
-        : [...previous, stage]
-    );
-
-    setShowModal(false);
-    setEditingStage(null);
+  const saveStage = async (payload) => {
+    try {
+      setError("");
+      const isEditing = Boolean(editingStage);
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/lead-settings/stages${isEditing ? `/${editingStage._id}` : ""}`,
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Unable to save lead stage.");
+      await loadData();
+      setShowModal(false);
+      setEditingStage(null);
+    } catch (err) {
+      setError(err.message || "Unable to save lead stage.");
+    }
   };
 
-  const openEditStage = (stage) => {
-    setEditingStage(stage);
-    setShowModal(true);
-  };
-
-  const deleteStage = (stage) => {
+  const deleteStage = async (stage) => {
     if (!window.confirm(`Delete lead stage "${stage.name}"?`)) return;
-
-    setStages((previous) =>
-      previous.filter((item) => item.id !== stage.id)
-    );
-
-    setEditingStage(null);
-    setShowModal(false);
-  };
-
-  const closeStageModal = () => {
-    setShowModal(false);
-    setEditingStage(null);
+    try {
+      setError("");
+      const response = await fetch(`${getApiBaseUrl()}/api/lead-settings/stages/${stage._id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Unable to delete lead stage.");
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Unable to delete lead stage.");
+    }
   };
 
   return (
     <div className="sv-settings-section">
       <ModernSettingsStyles />
       <div className="sv-section-head"><div><h2>Lead Stages</h2><p>Track every lead through your CRM pipeline from new enquiry to conversion.</p></div><button type="button" className="sv-primary-btn" onClick={() => { setEditingStage(null); setShowModal(true); }}>＋ Add Stage</button></div>
+      {error && <div style={{ marginBottom: "12px", padding: "10px 12px", borderRadius: "10px", background: "#fff1f2", color: "#c2414a", fontSize: "11px" }}>{error}</div>}
       <div className="sv-summary-grid">
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon">♧</span></div><strong className="sv-summary-value">{total.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">Current CRM leads</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">New</span><span className="sv-summary-icon">＋</span></div><strong className="sv-summary-value">{getCount("New")}</strong><small className="sv-summary-meta">Fresh enquiries</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Qualified</span><span className="sv-summary-icon">✓</span></div><strong className="sv-summary-value">{getCount("Qualified")}</strong><small className="sv-summary-meta">Sales qualified</small></div>
-        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Converted</span><span className="sv-summary-icon">↗</span></div><strong className="sv-summary-value">{getCount("Converted")}</strong><small className="sv-summary-meta">Successfully converted</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Total Leads</span><span className="sv-summary-icon"><i className="fa-solid fa-users" /></span></div><strong className="sv-summary-value">{total.toLocaleString("en-IN")}</strong><small className="sv-summary-meta">Current CRM leads</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">New</span><span className="sv-summary-icon"><i className="fa-solid fa-plus" /></span></div><strong className="sv-summary-value">{stages[0] ? getCount(stages[0]) : 0}</strong><small className="sv-summary-meta">Fresh enquiries</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Qualified</span><span className="sv-summary-icon"><i className="fa-solid fa-check" /></span></div><strong className="sv-summary-value">{stages.find((stage) => String(stage.name).toLowerCase() === "qualified") ? getCount(stages.find((stage) => String(stage.name).toLowerCase() === "qualified")) : 0}</strong><small className="sv-summary-meta">Sales qualified</small></div>
+        <div className="sv-summary-card"><div className="sv-summary-top"><span className="sv-summary-label">Converted</span><span className="sv-summary-icon"><i className="fa-solid fa-arrow-up-right-from-square" /></span></div><strong className="sv-summary-value">{stages.find((stage) => String(stage.name).toLowerCase() === "converted") ? getCount(stages.find((stage) => String(stage.name).toLowerCase() === "converted")) : 0}</strong><small className="sv-summary-meta">Successfully converted</small></div>
       </div>
-      <div className="sv-stage-grid">{stages.map((stage) => { const count = getCount(stage.name); const percent = total ? Math.min((count / total) * 100, 100) : 0; return <div className={`sv-stage-card ${stage.tone}`} key={stage.id || stage.name}><div className="sv-stage-head"><h3>{stage.name}</h3><span className="sv-stage-count">{count}</span></div><p className="sv-stage-desc">{stage.description}</p><div className="sv-stage-bar"><i style={{ width: `${percent}%` }} /></div><div className="sv-stage-foot"><span>Lead share</span><strong>{Math.round(percent)}%</strong></div><div style={{ display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "12px" }}><button type="button" className="sv-secondary-btn" style={{ padding: "6px 10px", fontSize: "10px" }} onClick={() => openEditStage(stage)}>Edit</button><button type="button" className="sv-secondary-btn" style={{ padding: "6px 10px", fontSize: "10px", color: "#d74b4b" }} onClick={() => deleteStage(stage)}>Delete</button></div></div>; })}</div>
-      {showModal && <LeadStageModal onClose={closeStageModal} onSave={saveStage} initialStage={editingStage} />}
+      <div className="sv-stage-grid">
+        {loading ? <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "30px" }}>Loading stages...</div> : stages.map((stage) => {
+          const count = getCount(stage);
+          const percent = total ? Math.min((count / total) * 100, 100) : 0;
+          const tone = stage.color || stage.tone || "blue";
+          const color = stage.colorHex || "";
+          return <div className={`sv-stage-card ${tone}`} key={stage._id} style={color ? { "--sv-stage-color": color } : undefined}>
+            <div className="sv-stage-head"><h3>{stage.name}</h3><span className="sv-stage-count" style={color ? { color, background: `${color}18` } : undefined}>{count}</span></div>
+            <div className="sv-stage-bar"><i style={{ width: `${percent}%`, background: color || undefined }} /></div>
+            <div className="sv-stage-foot"><span>Lead share</span><strong>{Math.round(percent)}%</strong></div>
+            <div className="sv-stage-actions"><button type="button" className="sv-action-btn edit" onClick={() => { setEditingStage(stage); setShowModal(true); }} title={`Edit ${stage.name}`} aria-label={`Edit ${stage.name}`}><ActionIcon type="edit" /><span>Edit</span></button><button type="button" className="sv-action-btn delete" onClick={() => deleteStage(stage)} title={`Delete ${stage.name}`} aria-label={`Delete ${stage.name}`}><ActionIcon type="delete" /><span>Delete</span></button></div>
+          </div>;
+        })}
+      </div>
+      {showModal && <LeadStageModal onClose={() => { setShowModal(false); setEditingStage(null); }} onSave={saveStage} initialStage={editingStage} />}
     </div>
   );
 }
@@ -756,8 +923,6 @@ function ManagementContent({ memberType }) {
         ? {
           name,
           speciality: form.speciality.trim(),
-          phone: form.phone.trim(),
-          email,
           memberType: "doctor",
         }
         : {
@@ -791,6 +956,35 @@ function ManagementContent({ memberType }) {
             : `Unable to add ${isDoctor ? "doctor" : "team member"
             }.`)
         );
+      }
+
+      if (isDoctor && data.member?._id) {
+        const speciality = form.speciality.trim();
+        const specialityResponse = await fetch(
+          `${getApiBaseUrl()}/api/team-members/${data.member._id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({
+              name,
+              speciality,
+            }),
+          }
+        );
+
+        const specialityData = await specialityResponse.json();
+
+        if (!specialityResponse.ok || !specialityData.success) {
+          throw new Error(
+            specialityData.message ||
+            "Doctor was added but speciality could not be saved."
+          );
+        }
+
+        data.member = specialityData.member || data.member;
       }
 
       if (editingMember) {
@@ -943,7 +1137,7 @@ function ManagementContent({ memberType }) {
       : 0;
 
   const columns = isDoctor
-    ? ["NAME", "SPECIALITY", "PHONE", "EMAIL", "STATUS", "ACTION"]
+    ? ["NAME", "SPECIALITY", "STATUS", "ACTION"]
     : ["NAME", "ROLE", "EMAIL", "INVITATION", "STATUS", "ACTION"];
 
   return (
@@ -1048,11 +1242,7 @@ function ManagementContent({ memberType }) {
                   </td>
 
                   {isDoctor ? (
-                    <>
-                      <td>{member.speciality || "-"}</td>
-                      <td>{member.phone || "-"}</td>
-                      <td>{member.email || "-"}</td>
-                    </>
+                    <td>{member.speciality || "-"}</td>
                   ) : (
                     <>
                       <td>
@@ -1091,17 +1281,20 @@ function ManagementContent({ memberType }) {
                     <div className="settings-row-actions">
                       <button
                         type="button"
+                        className="sv-action-btn edit"
                         onClick={() => openEditModal(member)}
                       >
-                        Edit
+                        <ActionIcon type="edit" />
+                        <span>Edit</span>
                       </button>
 
                       <button
                         type="button"
-                        className="danger"
+                        className="sv-action-btn delete"
                         onClick={() => deleteMember(member)}
                       >
-                        Delete
+                        <ActionIcon type="delete" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </td>
@@ -1171,28 +1364,7 @@ function ManagementContent({ memberType }) {
                           event.target.value
                         )
                       }
-                    />
-                  </label>
-
-                  <label>
-                    Phone
-                    <input
-                      type="tel"
-                      value={form.phone}
-                      onChange={(event) =>
-                        updateForm("phone", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label>
-                    Email
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(event) =>
-                        updateForm("email", event.target.value)
-                      }
+                      placeholder="e.g. Plastic Surgeon"
                     />
                   </label>
                 </>
@@ -2007,8 +2179,8 @@ export default function Settings({
 
     const requestedTab =
       params.get("metaSelectPage") === "true" ||
-      params.get("metaError") ||
-      params.get("google")
+        params.get("metaError") ||
+        params.get("google")
         ? "Integrations"
         : initialTab || "Business Profile";
 

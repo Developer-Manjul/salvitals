@@ -471,11 +471,11 @@ export default function App() {
   }
 
   if (
-  path === "/reset-password" ||
-  path === "/reset-password/"
-) {
-  return <ResetPassword />;
-}
+    path === "/reset-password" ||
+    path === "/reset-password/"
+  ) {
+    return <ResetPassword />;
+  }
 
   if (
     path === "/privacy-policy" ||
@@ -523,6 +523,19 @@ export default function App() {
     path === "/invoice/"
   ) {
     return <Invoice />;
+  }
+
+  if (
+    path === "/contacts" ||
+    path === "/contacts/"
+  ) {
+    return <Dashboard />;
+  }
+
+  if (
+    /^\/contacts\/[^/]+$/.test(path)
+  ) {
+    return <Dashboard />;
   }
 
   if (

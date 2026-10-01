@@ -1,29 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApiUrl } from "../config/api";
 
-const DEFAULT_LEAD_SOURCES = [
-  "Google",
-  "Instagram",
-  "Website",
-  "WhatsApp",
-  "Referral",
-  "Facebook",
-  "Walk-in",
-  "Campaign",
-  "Manual",
-  "Other",
-];
-
-const DEFAULT_LEAD_STAGES = [
-  "New",
-  "Pending follow-up",
-  "Contacted",
-  "Qualified",
-  "Proposal",
-  "Converted",
-  "Lost",
-];
-
 function readStoredList(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -37,26 +14,24 @@ function readStoredList(key, fallback) {
 
 function getConfiguredSourceNames() {
   const saved = readStoredList("salevitals_lead_sources", []);
-  if (!saved.length) return DEFAULT_LEAD_SOURCES;
   const names = saved
     .map((item) => typeof item === "string" ? item : item?.name)
     .map((item) => String(item || "").trim())
     .filter(Boolean);
-  return names.length ? names : DEFAULT_LEAD_SOURCES;
+  return names;
 }
 
 function getConfiguredStageNames() {
   const saved = readStoredList("salevitals_lead_stages", []);
-  if (!saved.length) return DEFAULT_LEAD_STAGES;
   const names = saved
     .map((item) => typeof item === "string" ? item : item?.name)
     .map((item) => String(item || "").trim())
     .filter(Boolean);
-  return names.length ? names : DEFAULT_LEAD_STAGES;
+  return names;
 }
 
 const DEFAULT_OWNERS = [
- 
+
 ];
 
 function getToken() {
@@ -133,29 +108,50 @@ function getLeadPhone(lead) {
   ).trim();
 }
 
-function normalizeSource(value = "", configuredSources = DEFAULT_LEAD_SOURCES) {
+function normalizeSource(value = "", configuredSources = []) {
   const raw = String(value || "").trim();
-  const source = raw.toLowerCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
+  if (!raw) return "";
 
-  if (source === "instagram" || source === "ig" || source.includes("instagram") || source.includes("instagram ads") || source.includes("instagram lead")) return "Instagram";
-  if (source === "facebook" || source === "fb" || source === "meta" || source.includes("facebook") || source.includes("facebook ads") || source.includes("facebook lead")) return "Facebook";
-  if (source === "whatsapp" || source.includes("whatsapp")) return "WhatsApp";
-  if (source === "website" || source.includes("website") || source.includes("web site")) return "Website";
-  if (source === "google" || source.includes("google") || source.includes("google ads") || source.includes("google lead")) return "Google";
-  if (source === "referral" || source.includes("referral")) return "Referral";
-  if (source === "walk in" || source === "walkin") return "Walk-in";
-  if (source === "campaign" || source.includes("campaign")) return "Campaign";
-  if (source === "manual") return "Manual";
+  const source = raw.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  const names = Array.isArray(configuredSources)
+    ? configuredSources.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
 
-  const customMatch = configuredSources.find(
-    (item) => String(item || "").trim().toLowerCase() === raw.toLowerCase()
+  const exactMatch = names.find(
+    (item) => item.toLowerCase() === raw.toLowerCase()
   );
 
-  return customMatch || raw || "Other";
+  if (exactMatch) return exactMatch;
+
+  const aliases = [
+    { match: ["google", "google ads", "google lead", "google leads"], includes: "google", name: ["google ads", "google"] },
+    { match: ["instagram", "ig", "instagram ads", "instagram lead"], includes: "instagram", name: ["meta ads", "instagram"] },
+    { match: ["facebook", "fb", "meta", "facebook ads", "facebook lead"], includes: "facebook", name: ["meta ads", "facebook"] },
+    { match: ["whatsapp", "whats app"], includes: "whatsapp", name: ["whatsapp"] },
+    { match: ["website", "website form", "web site", "web"], includes: "website", name: ["website"] },
+    { match: ["walk in", "walkin", "walk-in"], includes: "walk", name: ["walk"] },
+    { match: ["referral"], includes: "referral", name: ["referral"] },
+    { match: ["campaign"], includes: "campaign", name: ["campaign"] },
+    { match: ["manual", "manual entry"], includes: "manual", name: ["manual"] },
+  ];
+
+  for (const alias of aliases) {
+    const isMatch = alias.match.includes(source) || source.includes(alias.includes);
+    if (!isMatch) continue;
+
+    const configuredMatch = names.find((item) => {
+      const normalizedName = item.toLowerCase();
+      return alias.name.some((part) => normalizedName.includes(part));
+    });
+
+    if (configuredMatch) return configuredMatch;
+  }
+
+  return raw;
 }
 
-function getLeadSource(lead, configuredSources = DEFAULT_LEAD_SOURCES) {
-  if (!lead) return "Other";
+function getLeadSource(lead, configuredSources = []) {
+  if (!lead) return "";
 
   const candidates = [
     lead.metaPlatform,
@@ -176,7 +172,7 @@ function getLeadSource(lead, configuredSources = DEFAULT_LEAD_SOURCES) {
     if (normalized) return normalized;
   }
 
-  return "Other";
+  return "";
 }
 
 function getInitials(name = "") {
@@ -194,47 +190,31 @@ function getInitials(name = "") {
 }
 
 function getSourceTone(source) {
-  switch (normalizeSource(source)) {
-    case "Google":
-      return "source-google";
-    case "Instagram":
-      return "source-instagram";
-    case "Website":
-      return "source-website";
-    case "WhatsApp":
-      return "source-whatsapp";
-    case "Referral":
-      return "source-referral";
-    case "Facebook":
-      return "source-facebook";
-    case "Walk-in":
-      return "source-walkin";
-    case "Campaign":
-      return "source-campaign";
-    default:
-      return "source-default";
-  }
+  const value = String(source || "").toLowerCase();
+
+  if (value.includes("google")) return "source-google";
+  if (value.includes("instagram")) return "source-instagram";
+  if (value.includes("facebook") || value.includes("meta ads")) return "source-facebook";
+  if (value.includes("whatsapp")) return "source-whatsapp";
+  if (value.includes("website") || value.includes("web")) return "source-website";
+  if (value.includes("referral")) return "source-referral";
+  if (value.includes("walk")) return "source-walkin";
+  if (value.includes("campaign")) return "source-campaign";
+
+  return "source-default";
 }
 
 function getStageTone(stage) {
-  switch (stage) {
-    case "New":
-      return "stage-new";
-    case "Pending follow-up":
-      return "stage-proposal";
-    case "Contacted":
-      return "stage-contacted";
-    case "Qualified":
-      return "stage-qualified";
-    case "Proposal":
-      return "stage-proposal";
-    case "Converted":
-      return "stage-converted";
-    case "Lost":
-      return "stage-lost";
-    default:
-      return "stage-default";
-  }
+  const value = String(stage || "").toLowerCase();
+
+  if (value === "new") return "stage-new";
+  if (value.includes("contact")) return "stage-contacted";
+  if (value.includes("convert")) return "stage-converted";
+  if (value.includes("lost") || value.includes("junk") || value.includes("not answered")) return "stage-lost";
+  if (value.includes("qualif") || value.includes("relevant") || value.includes("opd")) return "stage-qualified";
+  if (value.includes("pending") || value.includes("follow") || value.includes("proposal")) return "stage-proposal";
+
+  return "stage-default";
 }
 
 function formatDate(value) {
@@ -269,7 +249,7 @@ function defaultLeadForm(user, isHealthcare) {
     name: "",
     email: "",
     phone: "",
-    source: "Website",
+    source: "",
     service: "",
     owner: user?.name || "",
     stage: "New",
@@ -304,13 +284,13 @@ export default function Leads({
   const [availableServices, setAvailableServices] =
     useState([]);
 
-  const [leadSources, setLeadSources] = useState(() =>
-    getConfiguredSourceNames()
-  );
+  const [leadSources, setLeadSources] = useState([]);
 
-  const [leadStages, setLeadStages] = useState(() =>
-    getConfiguredStageNames()
-  );
+  const [leadStages, setLeadStages] = useState([]);
+
+  const [leadSettingsLoading, setLeadSettingsLoading] = useState(true);
+
+  const [leadSettingsError, setLeadSettingsError] = useState("");
 
   const [loadingLeads, setLoadingLeads] =
     useState(true);
@@ -557,17 +537,72 @@ export default function Leads({
     }
   };
 
+  const loadLeadSettings = async () => {
+    try {
+      setLeadSettingsLoading(true);
+      setLeadSettingsError("");
+
+      const headers = {
+        Authorization: `Bearer ${getToken()}`,
+      };
+
+      const [sourceResponse, stageResponse] = await Promise.all([
+        fetch(buildApiUrl("/api/lead-settings/sources"), {
+          headers,
+          cache: "no-store",
+        }),
+        fetch(buildApiUrl("/api/lead-settings/stages"), {
+          headers,
+          cache: "no-store",
+        }),
+      ]);
+
+      const sourceData = await sourceResponse.json();
+      const stageData = await stageResponse.json();
+
+      if (!sourceResponse.ok || !sourceData.success) {
+        throw new Error(sourceData.message || "Unable to load lead sources.");
+      }
+
+      if (!stageResponse.ok || !stageData.success) {
+        throw new Error(stageData.message || "Unable to load lead stages.");
+      }
+
+      const sources = (sourceData.sources || [])
+        .filter((item) => !item?.isSystem)
+        .map((item) => String(item?.name || item || "").trim())
+        .filter(Boolean);
+
+      const stages = (stageData.stages || [])
+        .filter((item) => !item?.isSystem)
+        .map((item) => String(item?.name || item || "").trim())
+        .filter(Boolean);
+
+      setLeadSources([...new Set(sources)]);
+      setLeadStages([...new Set(stages)]);
+    } catch (error) {
+      console.error("LOAD LEAD SETTINGS ERROR:", error);
+      setLeadSources([]);
+      setLeadStages([]);
+      setLeadSettingsError(error.message || "Unable to load lead settings.");
+    } finally {
+      setLeadSettingsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const syncLeadSettings = () => {
-      setLeadSources(getConfiguredSourceNames());
-      setLeadStages(getConfiguredStageNames());
+    loadLeadSettings();
+
+    const handleSettingsChanged = () => {
+      loadLeadSettings();
     };
 
-    syncLeadSettings();
-    window.addEventListener("storage", syncLeadSettings);
+    window.addEventListener("lead-settings-updated", handleSettingsChanged);
+    window.addEventListener("storage", handleSettingsChanged);
 
     return () => {
-      window.removeEventListener("storage", syncLeadSettings);
+      window.removeEventListener("lead-settings-updated", handleSettingsChanged);
+      window.removeEventListener("storage", handleSettingsChanged);
     };
   }, []);
 
@@ -581,6 +616,27 @@ export default function Leads({
 
     return () => clearInterval(interval);
   }, []);
+
+  const configuredSourceOptions = useMemo(() => {
+    return [...new Set(
+      leadSources
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )];
+  }, [leadSources]);
+
+  const configuredStageOptions = useMemo(() => {
+    const values = ["New", ...leadStages];
+
+    leads.forEach((lead) => {
+      const stage = String(lead?.stage || "").trim();
+      if (stage && !values.some((item) => item.toLowerCase() === stage.toLowerCase())) {
+        values.push(stage);
+      }
+    });
+
+    return [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
+  }, [leadStages, leads]);
 
   const ownerOptions = useMemo(() => {
     const owners = new Set(
@@ -629,16 +685,15 @@ export default function Leads({
         "",
       source:
         previous.source ||
-        (leadSources.includes("Website")
-          ? "Website"
-          : leadSources[0] || "Website"),
+        configuredSourceOptions[0] ||
+        "",
       stage: previous.stage || "New",
     }));
   }, [
     user,
     isHealthcare,
     availableServices,
-    leadSources,
+    configuredSourceOptions,
     showAddModal,
   ]);
 
@@ -679,7 +734,7 @@ export default function Leads({
         getLeadName(lead);
 
       const displaySource =
-        getLeadSource(lead, leadSources);
+        getLeadSource(lead, configuredSourceOptions);
 
       const searchText = [
         displayName,
@@ -775,7 +830,7 @@ export default function Leads({
     enquiryFilter,
     ownerFilter,
     serviceFilter,
-    leadSources,
+    configuredSourceOptions,
   ]);
 
   const openAddLeadModal = () => {
@@ -790,10 +845,7 @@ export default function Leads({
         availableServices[0] || "",
       owner:
         user?.name || "",
-      source:
-        leadSources.includes("Website")
-          ? "Website"
-          : leadSources[0] || "Website",
+      source: configuredSourceOptions[0] || "",
       stage: "New",
     });
 
@@ -821,7 +873,7 @@ export default function Leads({
         getLeadPhone(lead) || "",
 
       source:
-        getLeadSource(lead, leadSources),
+        getLeadSource(lead, configuredSourceOptions),
 
       service:
         lead.service ||
@@ -966,7 +1018,8 @@ export default function Leads({
 
         source:
           normalizeSource(
-            formData.source
+            formData.source,
+            configuredSourceOptions
           ),
 
         service:
@@ -1043,11 +1096,6 @@ export default function Leads({
             ""
           ).trim(),
 
-        firstNote:
-          String(
-            formData.firstNote ||
-            ""
-          ).trim(),
       };
 
       setSavingLead(true);
@@ -1299,7 +1347,7 @@ export default function Leads({
                     "",
 
                   source:
-                    getLeadSource(lead, leadSources),
+                    getLeadSource(lead, configuredSourceOptions),
 
                   service:
                     lead.service ||
@@ -1726,7 +1774,7 @@ export default function Leads({
               Stage
             </option>
 
-            {leadStages.map(
+            {configuredStageOptions.map(
               (stage) => (
                 <option
                   value={stage}
@@ -1755,7 +1803,7 @@ export default function Leads({
               Lead Source
             </option>
 
-            {leadSources.map(
+            {configuredSourceOptions.map(
               (source) => (
                 <option
                   value={source}
@@ -1989,7 +2037,7 @@ export default function Leads({
                         getLeadName(lead);
 
                       const displaySource =
-                        getLeadSource(lead, leadSources);
+                        getLeadSource(lead, configuredSourceOptions);
 
                       return (
                         <tr
@@ -1997,8 +2045,8 @@ export default function Leads({
                             lead._id
                           }
                           className={`lead-clickable-row ${unreadLeadIds.has(String(lead._id))
-                              ? "lead-new-row"
-                              : ""
+                            ? "lead-new-row"
+                            : ""
                             }`}
                           style={
                             unreadLeadIds.has(String(lead._id))
@@ -2121,7 +2169,7 @@ export default function Leads({
                               }
                             >
 
-                              {leadStages.map((stage) => (
+                              {configuredStageOptions.map((stage) => (
                                 <option value={stage} key={stage}>
                                   {stage === "Lost" ? "Mark as lost" : stage}
                                 </option>
@@ -2344,7 +2392,7 @@ export default function Leads({
                     getLeadName(lead);
 
                   const displaySource =
-                    getLeadSource(lead, leadSources);
+                    getLeadSource(lead, configuredSourceOptions);
 
                   return (
                     <div
@@ -2591,7 +2639,7 @@ export default function Leads({
                     }
                   >
 
-                    {leadSources.map(
+                    {configuredSourceOptions.map(
                       (source) => (
                         <option
                           value={
@@ -2731,29 +2779,6 @@ export default function Leads({
                   </label>
                 )}
 
-                <label className="lead-form-full">
-
-                  First note
-
-                  <textarea
-                    rows="4"
-                    value={
-                      formData.firstNote
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      handleFormChange(
-                        "firstNote",
-                        event.target
-                          .value
-                      )
-                    }
-                    placeholder="Any important notes about the enquiry..."
-                  />
-
-                </label>
-
               </div>
 
               <div className="lead-form-actions">
@@ -2882,7 +2907,7 @@ export default function Leads({
                   </span>
 
                   <strong>
-                    {getLeadSource(selectedLead)}
+                    {getLeadSource(selectedLead, configuredSourceOptions)}
                   </strong>
                 </div>
 

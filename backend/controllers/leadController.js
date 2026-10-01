@@ -1,4 +1,5 @@
 const Lead = require("../models/Lead");
+
 const {
     getWorkspaceContext,
     hasPermission,
@@ -20,7 +21,8 @@ const requirePermission = (context, permission, res) => {
     if (!hasPermission(context, permission)) {
         res.status(403).json({
             success: false,
-            message: "You do not have permission to perform this action.",
+            message:
+                "You do not have permission to perform this action.",
             permission,
         });
         return false;
@@ -384,7 +386,10 @@ exports.addLeadNote = async (req, res) => {
                     notes: {
                         text,
                         userName:
-                            req.body?.userName || "",
+                            String(
+                                req.body?.userName || ""
+                            ).trim(),
+                        editHistory: [],
                     },
                 },
             },
@@ -414,6 +419,102 @@ exports.addLeadNote = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Unable to add note",
+        });
+    }
+};
+
+exports.updateLeadNote = async (req, res) => {
+    try {
+        const context = await getContext(req);
+
+        if (
+            !requirePermission(
+                context,
+                "leads.edit",
+                res
+            )
+        ) {
+            return;
+        }
+
+        const text = String(
+            req.body?.text || ""
+        ).trim();
+
+        if (!text) {
+            return res.status(400).json({
+                success: false,
+                message: "Note is required",
+            });
+        }
+
+        const lead = await Lead.findOne({
+            _id: req.params.id,
+            userId: context.workspaceOwnerId,
+        });
+
+        if (!lead) {
+            return res.status(404).json({
+                success: false,
+                message: "Lead not found",
+            });
+        }
+
+        const note = lead.notes.id(
+            req.params.noteId
+        );
+
+        if (!note) {
+            return res.status(404).json({
+                success: false,
+                message: "Note not found",
+            });
+        }
+
+        const oldText = String(
+            note.text || ""
+        ).trim();
+
+        if (oldText === text) {
+            return res.status(400).json({
+                success: false,
+                message: "No changes made to note",
+            });
+        }
+
+        if (!Array.isArray(note.editHistory)) {
+            note.editHistory = [];
+        }
+
+        note.editHistory.push({
+            oldText,
+            newText: text,
+            editedBy: String(
+                req.body?.userName ||
+                    context?.user?.name ||
+                    ""
+            ).trim(),
+            editedAt: new Date(),
+        });
+
+        note.text = text;
+
+        await lead.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Note updated successfully",
+            lead,
+        });
+    } catch (error) {
+        console.error(
+            "UPDATE LEAD NOTE ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to update note",
         });
     }
 };
@@ -653,8 +754,7 @@ exports.updateLeadFollowUp = async (
                     priority
                 )
             ) {
-                followUp.priority =
-                    priority;
+                followUp.priority = priority;
             }
         }
 

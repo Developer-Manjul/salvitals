@@ -7,6 +7,7 @@ const {
     updateLead,
     deleteLead,
     addLeadNote,
+    updateLeadNote,
     addLeadFollowUp,
     updateLeadFollowUp,
     deleteLeadFollowUp,
@@ -19,6 +20,8 @@ router.get("/", getLeads);
 router.get("/:id", getLead);
 
 router.post("/:id/notes", addLeadNote);
+
+router.put("/:id/notes/:noteId", updateLeadNote);
 
 router.post("/:id/follow-ups", addLeadFollowUp);
 

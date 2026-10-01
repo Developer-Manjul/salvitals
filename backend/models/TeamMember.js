@@ -23,6 +23,12 @@ const teamMemberSchema = new mongoose.Schema(
       trim: true,
     },
 
+    speciality: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     roleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",

@@ -36,7 +36,10 @@ function cleanText(value) {
 
   return String(value)
     .normalize("NFKC")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g,
+      ""
+    )
     .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -273,9 +276,11 @@ export default function Contacts({ user }) {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+
   const [form, setForm] = useState(() =>
     getDefaultForm(user)
   );
+
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -283,8 +288,10 @@ export default function Contacts({ user }) {
   const [suggestionField, setSuggestionField] =
     useState(null);
 
-  const [selectedExistingContact, setSelectedExistingContact] =
-    useState(null);
+  const [
+    selectedExistingContact,
+    setSelectedExistingContact,
+  ] = useState(null);
 
   const loadContacts = async () => {
     const token = getToken();
@@ -310,7 +317,8 @@ export default function Contacts({ user }) {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to load contacts"
+          data.message ||
+            "Unable to load contacts"
         );
       }
 
@@ -388,6 +396,7 @@ export default function Contacts({ user }) {
       service: cleanText(contact.service),
       doctor: cleanText(
         contact.doctor ||
+          contact.preferredDoctor ||
           contact.owner ||
           user?.name ||
           ""
@@ -425,6 +434,19 @@ export default function Contacts({ user }) {
     }
   };
 
+  const openContactDetails = (contact) => {
+    const contactId = String(
+      contact?._id || ""
+    );
+
+    if (!contactId) {
+      return;
+    }
+
+    window.location.href =
+      `/contacts/${contactId}`;
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -459,10 +481,11 @@ export default function Contacts({ user }) {
 
       if (!response.ok) {
         throw new Error(
-          data.code === "CONTACT_LIMIT_REACHED"
+          data.code ===
+            "CONTACT_LIMIT_REACHED"
             ? data.message
             : data.message ||
-              "Unable to create contact"
+                "Unable to create contact"
         );
       }
 
@@ -471,7 +494,9 @@ export default function Contacts({ user }) {
         ...previous,
       ]);
 
-      setUsage(data.usage || usage);
+      setUsage(
+        data.usage || usage
+      );
 
       setShowAdd(false);
       resetContactForm();
@@ -482,15 +507,28 @@ export default function Contacts({ user }) {
     }
   };
 
-  const deleteContact = async (contactId) => {
-    if (!window.confirm("Delete this contact?")) {
+  const deleteContact = async (
+    contact
+  ) => {
+    if (
+      contact?.recordType === "lead" ||
+      contact?.sourceRecord === "lead"
+    ) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Delete this contact?"
+      )
+    ) {
       return;
     }
 
     try {
       const response = await fetch(
         buildApiUrl(
-          `/api/contacts/${contactId}`
+          `/api/contacts/${contact._id}`
         ),
         {
           method: "DELETE",
@@ -511,12 +549,15 @@ export default function Contacts({ user }) {
 
       setContacts((previous) =>
         previous.filter(
-          (contact) =>
-            contact._id !== contactId
+          (item) =>
+            item._id !== contact._id ||
+            item.recordType === "lead"
         )
       );
 
-      setUsage(data.usage || usage);
+      setUsage(
+        data.usage || usage
+      );
     } catch (error) {
       setMessage(error.message);
     }
@@ -537,7 +578,6 @@ export default function Contacts({ user }) {
 
   return (
     <div className="contacts-page">
-
       <header className="contacts-page-header">
         <div>
           <p className="dash-breadcrumb">
@@ -612,15 +652,12 @@ export default function Contacts({ user }) {
       ) : null}
 
       <section className="contacts-table-card">
-
         <div className="contacts-table-meta">
           {contacts.length} records
         </div>
 
         <div className="contacts-table-wrap">
-
           <table className="contacts-table">
-
             <thead>
               <tr>
                 <th>Name</th>
@@ -635,7 +672,6 @@ export default function Contacts({ user }) {
             </thead>
 
             <tbody>
-
               {loading ? (
                 <tr>
                   <td
@@ -656,25 +692,35 @@ export default function Contacts({ user }) {
                 </tr>
               ) : (
                 contacts.map((contact) => {
-
                   const displayName =
-                    cleanName(contact.name);
+                    cleanName(
+                      contact.name
+                    );
 
                   const displayPhone =
-                    cleanText(contact.phone);
+                    cleanText(
+                      contact.phone
+                    );
 
                   const displayEmail =
-                    cleanText(contact.email);
+                    cleanText(
+                      contact.email
+                    );
 
                   const displaySource =
-                    getContactSource(contact);
+                    getContactSource(
+                      contact
+                    );
 
                   const displayService =
-                    cleanText(contact.service);
+                    cleanText(
+                      contact.service
+                    );
 
                   const displayDoctor =
                     cleanText(
                       contact.doctor ||
+                        contact.preferredDoctor ||
                         contact.owner ||
                         user?.name ||
                         ""
@@ -690,16 +736,30 @@ export default function Contacts({ user }) {
                       .replace(
                         /^-+|-+$/g,
                         ""
-                      ) || "default";
+                      ) ||
+                    "default";
+
+                  const isLead =
+                    contact.recordType ===
+                      "lead" ||
+                    contact.sourceRecord ===
+                      "lead";
 
                   return (
                     <tr
-                      key={contact._id}
+                      key={`${contact.recordType || "contact"}-${contact._id}`}
+                      className="contacts-clickable-row"
+                      onClick={() =>
+                        openContactDetails(
+                          contact
+                        )
+                      }
+                      style={{
+                        cursor: "pointer",
+                      }}
                     >
-
                       <td>
                         <span className="contact-name">
-
                           <span className="contact-avatar">
                             {getInitials(
                               displayName
@@ -708,20 +768,23 @@ export default function Contacts({ user }) {
 
                           <strong
                             className="contact-name-text"
-                            title={displayName}
+                            title={
+                              displayName
+                            }
                           >
                             {displayName}
                           </strong>
-
                         </span>
                       </td>
 
                       <td>
-                        {displayPhone || "—"}
+                        {displayPhone ||
+                          "—"}
                       </td>
 
                       <td>
-                        {displayEmail || "—"}
+                        {displayEmail ||
+                          "—"}
                       </td>
 
                       <td>
@@ -733,11 +796,13 @@ export default function Contacts({ user }) {
                       </td>
 
                       <td>
-                        {displayService || "—"}
+                        {displayService ||
+                          "—"}
                       </td>
 
                       <td>
-                        {displayDoctor || "—"}
+                        {displayDoctor ||
+                          "—"}
                       </td>
 
                       <td>
@@ -748,30 +813,31 @@ export default function Contacts({ user }) {
                       </td>
 
                       <td>
-                        <button
-                          type="button"
-                          className="contact-delete-btn"
-                          onClick={() =>
-                            deleteContact(
-                              contact._id
-                            )
-                          }
-                        >
-                          Delete
-                        </button>
-                      </td>
+                        {!isLead && (
+                          <button
+                            type="button"
+                            className="contact-delete-btn"
+                            onClick={(
+                              event
+                            ) => {
+                              event.stopPropagation();
 
+                              deleteContact(
+                                contact
+                              );
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
               )}
-
             </tbody>
-
           </table>
-
         </div>
-
       </section>
 
       {showAdd && (
@@ -786,7 +852,6 @@ export default function Contacts({ user }) {
             }
           }}
         >
-
           <form
             className="lead-modal lead-form contact-modal"
             onSubmit={handleSubmit}
@@ -794,9 +859,7 @@ export default function Contacts({ user }) {
               event.stopPropagation()
             }
           >
-
             <div className="lead-modal-head">
-
               <div>
                 <h3>
                   Add contact
@@ -811,24 +874,22 @@ export default function Contacts({ user }) {
               <button
                 type="button"
                 className="lead-close-btn"
-                onClick={closeAddContact}
+                onClick={
+                  closeAddContact
+                }
                 disabled={saving}
               >
                 ×
               </button>
-
             </div>
 
             <div className="lead-form-grid">
-
               <div className="contact-field-with-suggestions">
-
                 <label>
                   Full name
                 </label>
 
                 <div className="contact-autocomplete">
-
                   <input
                     type="text"
                     value={form.name}
@@ -868,7 +929,10 @@ export default function Contacts({ user }) {
                     }}
                     onBlur={() => {
                       setTimeout(() => {
-                        setSuggestions([]);
+                        setSuggestions(
+                          []
+                        );
+
                         setSuggestionField(
                           null
                         );
@@ -880,15 +944,14 @@ export default function Contacts({ user }) {
                     "name" &&
                     form.name.trim() && (
                       <div className="contact-suggestions">
-
                         {suggestions.length >
                         0 ? (
                           suggestions.map(
-                            (contact) => (
+                            (
+                              contact
+                            ) => (
                               <button
-                                key={
-                                  contact._id
-                                }
+                                key={`${contact.recordType || "contact"}-${contact._id}`}
                                 type="button"
                                 className="contact-suggestion-item"
                                 onMouseDown={(
@@ -901,7 +964,6 @@ export default function Contacts({ user }) {
                                   );
                                 }}
                               >
-
                                 <span className="contact-suggestion-avatar">
                                   {getInitials(
                                     contact.name
@@ -909,7 +971,6 @@ export default function Contacts({ user }) {
                                 </span>
 
                                 <span className="contact-suggestion-content">
-
                                   <strong>
                                     {cleanName(
                                       contact.name
@@ -928,9 +989,7 @@ export default function Contacts({ user }) {
                                         )}`
                                       : ""}
                                   </small>
-
                                 </span>
-
                               </button>
                             )
                           )
@@ -942,12 +1001,12 @@ export default function Contacts({ user }) {
                               event
                             ) => {
                               event.preventDefault();
+
                               addNewContact(
                                 "name"
                               );
                             }}
                           >
-
                             <span className="contact-new-icon">
                               +
                             </span>
@@ -965,25 +1024,19 @@ export default function Contacts({ user }) {
                                 Create new contact
                               </small>
                             </span>
-
                           </button>
                         )}
-
                       </div>
                     )}
-
                 </div>
-
               </div>
 
               <div className="contact-field-with-suggestions">
-
                 <label>
                   Phone number
                 </label>
 
                 <div className="contact-autocomplete">
-
                   <input
                     type="text"
                     value={form.phone}
@@ -1023,7 +1076,10 @@ export default function Contacts({ user }) {
                     }}
                     onBlur={() => {
                       setTimeout(() => {
-                        setSuggestions([]);
+                        setSuggestions(
+                          []
+                        );
+
                         setSuggestionField(
                           null
                         );
@@ -1035,15 +1091,14 @@ export default function Contacts({ user }) {
                     "phone" &&
                     form.phone.trim() && (
                       <div className="contact-suggestions">
-
                         {suggestions.length >
                         0 ? (
                           suggestions.map(
-                            (contact) => (
+                            (
+                              contact
+                            ) => (
                               <button
-                                key={
-                                  contact._id
-                                }
+                                key={`${contact.recordType || "contact"}-${contact._id}`}
                                 type="button"
                                 className="contact-suggestion-item"
                                 onMouseDown={(
@@ -1056,7 +1111,6 @@ export default function Contacts({ user }) {
                                   );
                                 }}
                               >
-
                                 <span className="contact-suggestion-avatar">
                                   {getInitials(
                                     contact.name
@@ -1064,7 +1118,6 @@ export default function Contacts({ user }) {
                                 </span>
 
                                 <span className="contact-suggestion-content">
-
                                   <strong>
                                     {cleanName(
                                       contact.name
@@ -1082,9 +1135,7 @@ export default function Contacts({ user }) {
                                         )}`
                                       : ""}
                                   </small>
-
                                 </span>
-
                               </button>
                             )
                           )
@@ -1096,12 +1147,12 @@ export default function Contacts({ user }) {
                               event
                             ) => {
                               event.preventDefault();
+
                               addNewContact(
                                 "phone"
                               );
                             }}
                           >
-
                             <span className="contact-new-icon">
                               +
                             </span>
@@ -1119,15 +1170,11 @@ export default function Contacts({ user }) {
                                 Create new contact
                               </small>
                             </span>
-
                           </button>
                         )}
-
                       </div>
                     )}
-
                 </div>
-
               </div>
 
               <label>
@@ -1206,7 +1253,6 @@ export default function Contacts({ user }) {
                   }
                 />
               </label>
-
             </div>
 
             {selectedExistingContact && (
@@ -1221,11 +1267,12 @@ export default function Contacts({ user }) {
             )}
 
             <div className="contact-modal-actions">
-
               <button
                 type="button"
                 className="lead-secondary-btn"
-                onClick={closeAddContact}
+                onClick={
+                  closeAddContact
+                }
                 disabled={saving}
               >
                 Cancel
@@ -1240,14 +1287,10 @@ export default function Contacts({ user }) {
                   ? "Saving..."
                   : "Save contact"}
               </button>
-
             </div>
-
           </form>
-
         </div>
       )}
-
     </div>
   );
 }

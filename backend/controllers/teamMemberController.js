@@ -225,7 +225,7 @@ exports.listTeamMembers = async (req, res) => {
     }
 
     const members = await TeamMember.find(filter)
-      .populate("roleId", "name permissions status")
+      .populate("roleId", "name slug permissions status")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -309,13 +309,19 @@ exports.createTeamMember = async (req, res) => {
 
     const owner = context.workspaceOwnerId;
 
-    const name = String(req.body.name || "").trim();
+    const name = String(
+      req.body.name || ""
+    ).trim();
 
-    const email = String(req.body.email || "")
+    const email = String(
+      req.body.email || ""
+    )
       .trim()
       .toLowerCase();
 
-    const phone = String(req.body.phone || "").trim();
+    const phone = String(
+      req.body.phone || ""
+    ).trim();
 
     const speciality = String(
       req.body.speciality || ""
@@ -355,14 +361,7 @@ exports.createTeamMember = async (req, res) => {
       role = await Role.findOne({
         _id: roleId,
         status: "active",
-        $or: [
-          {
-            owner,
-          },
-          {
-            isSystemRole: true,
-          },
-        ],
+        isSystemRole: true,
       });
 
       if (!role) {
@@ -439,6 +438,10 @@ exports.createTeamMember = async (req, res) => {
       owner,
       memberType,
       name,
+      speciality:
+        memberType === "doctor"
+          ? speciality
+          : "",
       roleId:
         memberType === "team"
           ? role._id
@@ -499,7 +502,7 @@ exports.createTeamMember = async (req, res) => {
       await TeamMember.findById(member._id)
         .populate(
           "roleId",
-          "name permissions status"
+          "name slug permissions status"
         )
         .lean();
 
@@ -563,7 +566,8 @@ exports.updateTeamMemberStatus = async (
     if (!hasPermission(context, requiredPermission)) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to update this member.",
+        message:
+          "You do not have permission to update this member.",
       });
     }
 
@@ -587,7 +591,7 @@ exports.updateTeamMemberStatus = async (
         }
       ).populate(
         "roleId",
-        "name permissions status"
+        "name slug permissions status"
       );
 
     return res.json({
@@ -645,7 +649,8 @@ exports.updateTeamMember = async (
     if (!hasPermission(context, requiredPermission)) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to edit this member.",
+        message:
+          "You do not have permission to edit this member.",
       });
     }
 
@@ -700,19 +705,11 @@ exports.updateTeamMember = async (
         });
       }
 
-      if (!hasPermission(context, "team.edit")) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You do not have permission to change team member roles.",
-        });
-      }
-
       const role = await Role.findOne({
-  _id: roleId,
-  status: "active",
-  isSystemRole: true,
-});
+        _id: roleId,
+        status: "active",
+        isSystemRole: true,
+      });
 
       if (!role) {
         return res.status(400).json({
@@ -733,7 +730,7 @@ exports.updateTeamMember = async (
       await TeamMember.findById(member._id)
         .populate(
           "roleId",
-          "name permissions status"
+          "name slug permissions status"
         )
         .lean();
 
@@ -793,7 +790,8 @@ exports.deleteTeamMember = async (
     if (!hasPermission(context, requiredPermission)) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to delete this member.",
+        message:
+          "You do not have permission to delete this member.",
       });
     }
 

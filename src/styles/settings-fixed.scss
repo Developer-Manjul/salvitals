@@ -1119,3 +1119,33 @@
     margin-left: 8px;
     margin-top: 10px;
 }
+
+.settings-management .settings-row-actions {
+  display: flex;
+  // align-items: center;
+  // justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-management .settings-row-actions .sv-action-btn {
+  min-width: 72px;
+  height: 34px;
+  padding: 0 11px;
+  flex-direction: row !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.settings-management .settings-row-actions .sv-action-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.settings-management .settings-row-actions .sv-action-btn span {
+  display: inline-block;
+  line-height: 1;
+}

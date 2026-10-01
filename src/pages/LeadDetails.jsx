@@ -3,10 +3,10 @@ import { buildApiUrl } from "../config/api";
 
 function getToken() {
   return (
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("vitalsToken") ||
     localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
     localStorage.getItem("vitalsToken") ||
+    sessionStorage.getItem("vitalsToken") ||
     ""
   );
 }
@@ -26,7 +26,9 @@ function getInitials(name = "") {
 
 function formatDate(value, withTime = false) {
   if (!value) return "—";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "—";
 
   return new Intl.DateTimeFormat("en-IN", {
@@ -34,14 +36,20 @@ function formatDate(value, withTime = false) {
     month: "short",
     year: "numeric",
     ...(withTime
-      ? { hour: "2-digit", minute: "2-digit", hour12: true }
+      ? {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }
       : {}),
   }).format(date);
 }
 
 function formatFollowUpDate(value) {
   if (!value) return "—";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "—";
 
   return new Intl.DateTimeFormat("en-IN", {
@@ -53,7 +61,9 @@ function formatFollowUpDate(value) {
 
 function formatFollowUpTime(value) {
   if (!value) return "—";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "—";
 
   return new Intl.DateTimeFormat("en-IN", {
@@ -67,23 +77,148 @@ function normalizePhone(phone) {
   return String(phone || "").replace(/[^\d]/g, "");
 }
 
-function getOwner(lead, user) {
-  return lead?.owner || lead?.preferredDoctor || user?.name || "—";
+function normalizeStage(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\_-]+/g, " ")
+    .replace(/\s+/g, " ");
 }
 
-/**
- * Meta lead:
- * Facebook / Instagram -> show campaign name as Service.
- *
- * Website / Manual / WhatsApp / Referral etc. -> show saved lead.service.
- *
- * Supports multiple possible backend field names so the UI keeps working
- * when campaign name is returned under any of these properties.
- */
+function getNoteId(note, index) {
+  return String(note?._id || note?.id || `note-${index}`);
+}
+
+function getNoteHistory(note) {
+  if (!note) return [];
+
+  if (Array.isArray(note.editHistory)) {
+    return note.editHistory;
+  }
+
+  if (Array.isArray(note.history)) {
+    return note.history;
+  }
+
+  return [];
+}
+
+function getHistoryEditor(item, fallbackUser = "") {
+  return (
+    item?.editedBy ||
+    item?.userName ||
+    item?.createdBy ||
+    fallbackUser ||
+    "User"
+  );
+}
+
+function getHistoryDate(item) {
+  return (
+    item?.editedAt ||
+    item?.updatedAt ||
+    item?.createdAt ||
+    null
+  );
+}
+
+function renderInlineNoteHistory(
+  note,
+  index,
+  expandedHistoryIds,
+  fallbackUser
+) {
+  const history = getNoteHistory(note);
+  const noteId = getNoteId(note, index);
+
+  if (!history.length || !expandedHistoryIds.has(noteId)) {
+    return null;
+  }
+
+  return (
+    <div
+      className="lead-note-history-inline"
+      style={{
+        marginTop: "10px",
+        paddingLeft: "14px",
+        borderLeft: "2px solid #e5e7eb",
+      }}
+    >
+      {history
+        .slice()
+        .reverse()
+        .map((item, historyIndex) => (
+          <div
+            className="lead-note-history-inline-item"
+            key={`${getHistoryDate(item) || historyIndex}-${historyIndex}`}
+            style={{
+              padding: "8px 0 8px 12px",
+              borderBottom:
+                historyIndex < history.length - 1
+                  ? "1px solid #eef0f3"
+                  : "none",
+            }}
+          >
+            <div
+              className="lead-note-history-inline-meta"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexWrap: "wrap",
+                marginBottom: "4px",
+              }}
+            >
+              <strong style={{ fontSize: "12px", color: "#172033" }}>
+                Previous version
+              </strong>
+              <span style={{ fontSize: "11px", color: "#7a8495" }}>
+                {getHistoryEditor(item, fallbackUser)}
+                {getHistoryDate(item)
+                  ? ` · ${formatDate(
+                      getHistoryDate(item),
+                      true
+                    )}`
+                  : ""}
+              </span>
+            </div>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: "13px",
+                lineHeight: 1.5,
+                color: "#4b5563",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {item.oldText ||
+                item.previousText ||
+                item.from ||
+                "—"}
+            </p>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function getOwner(lead, user) {
+  return (
+    lead?.owner ||
+    lead?.preferredDoctor ||
+    user?.name ||
+    "—"
+  );
+}
+
 function getLeadService(lead) {
   if (!lead) return "—";
 
-  const source = String(lead.source || "").trim().toLowerCase();
+  const source = String(lead.source || "")
+    .trim()
+    .toLowerCase();
 
   const isMetaLead =
     source === "facebook" ||
@@ -112,7 +247,9 @@ function getLeadService(lead) {
 }
 
 function isFollowUpCompleted(followUp) {
-  const status = String(followUp?.status || "").toLowerCase();
+  const status = String(
+    followUp?.status || ""
+  ).toLowerCase();
 
   return (
     status === "completed" ||
@@ -124,14 +261,24 @@ function isFollowUpCompleted(followUp) {
 function getObjectIdDate(id) {
   const value = String(id || "");
 
-  if (!/^[a-fA-F0-9]{24}$/.test(value)) return null;
+  if (!/^[a-fA-F0-9]{24}$/.test(value)) {
+    return null;
+  }
 
-  const seconds = parseInt(value.substring(0, 8), 16);
-  if (!Number.isFinite(seconds)) return null;
+  const seconds = parseInt(
+    value.substring(0, 8),
+    16
+  );
+
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
 
   const date = new Date(seconds * 1000);
 
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
 }
 
 function getFollowUpCreatedAt(followUp) {
@@ -160,21 +307,46 @@ function getActivities(lead) {
     });
   }
 
-  (lead.notes || []).forEach((note) => {
+  (lead.notes || []).forEach((note, index) => {
+    const history = getNoteHistory(note);
+    const lastEdit =
+      history.length > 0
+        ? history[history.length - 1]
+        : null;
+
     activities.push({
       type: "notes",
       icon: "▱",
       title: "Note added",
       detail: note.text,
-      date: note.createdAt,
-      createdAt: note.createdAt,
-      user: note.userName,
+      date:
+        lastEdit?.editedAt ||
+        lastEdit?.updatedAt ||
+        note.updatedAt ||
+        note.createdAt,
+      createdAt:
+        lastEdit?.editedAt ||
+        lastEdit?.updatedAt ||
+        note.updatedAt ||
+        note.createdAt,
+      user:
+        lastEdit?.editedBy ||
+        lastEdit?.userName ||
+        note.userName,
+      noteId: getNoteId(note, index),
+      noteIndex: index,
+      note,
+      edited: history.length > 0,
+      editHistory: history,
     });
   });
 
   (lead.followUps || []).forEach((followUp) => {
-    const completed = isFollowUpCompleted(followUp);
-    const createdAt = getFollowUpCreatedAt(followUp);
+    const completed =
+      isFollowUpCompleted(followUp);
+
+    const createdAt =
+      getFollowUpCreatedAt(followUp);
 
     activities.push({
       type: "all",
@@ -182,61 +354,78 @@ function getActivities(lead) {
       title: completed
         ? "Follow-up completed"
         : "Follow-up scheduled",
-      detail: followUp.note || "Follow-up scheduled",
+      detail:
+        followUp.note ||
+        "Follow-up scheduled",
       date: followUp.date,
       followUpDate: followUp.date,
       createdAt,
       completed,
-      user: followUp.userName || followUp.createdByName,
+      user:
+        followUp.userName ||
+        followUp.createdByName,
     });
   });
 
   return activities.sort(
     (first, second) =>
-      new Date(second.createdAt || second.date || 0) -
-      new Date(first.createdAt || first.date || 0)
+      new Date(
+        second.createdAt ||
+        second.date ||
+        0
+      ) -
+      new Date(
+        first.createdAt ||
+        first.date ||
+        0
+      )
   );
 }
 
 function getNextFollowUp(lead) {
-  if (!lead?.followUps?.length) return null;
+  if (!lead?.followUps?.length) {
+    return null;
+  }
 
   const now = new Date();
 
   return (
     lead.followUps
       .filter((item) => {
-        if (!item?.date || isFollowUpCompleted(item)) return false;
+        if (
+          !item?.date ||
+          isFollowUpCompleted(item)
+        ) {
+          return false;
+        }
 
-        const followUpDate = new Date(item.date);
+        const followUpDate =
+          new Date(item.date);
 
         return (
-          !Number.isNaN(followUpDate.getTime()) &&
+          !Number.isNaN(
+            followUpDate.getTime()
+          ) &&
           followUpDate >= now
         );
       })
       .sort(
         (first, second) =>
-          new Date(first.date) - new Date(second.date)
+          new Date(first.date) -
+          new Date(second.date)
       )[0] || null
   );
 }
 
-const LEAD_STAGES = [
-  "New",
-  "Pending follow-up",
-  "Contacted",
-  "Qualified",
-  "Proposal",
-  "Converted",
-  "Lost",
-];
-
 function getSavedNotes(lead) {
-  if (!lead?.notes?.length) return [];
+  if (!lead?.notes?.length) {
+    return [];
+  }
 
   return lead.notes.filter(
-    (note) => note?.text && String(note.text).trim()
+    (note) =>
+      note?.text &&
+      String(note.text).trim()
   );
 }
 
@@ -247,22 +436,59 @@ export default function LeadDetails({
   onOpenInvoice,
 }) {
   const [lead, setLead] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [noteText, setNoteText] = useState("");
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpDate, setFollowUpDate] = useState("");
-  const [followUpNote, setFollowUpNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [savingStage, setSavingStage] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+  const [error, setError] =
+    useState("");
+  const [activeTab, setActiveTab] =
+    useState("all");
+
+  const [noteText, setNoteText] =
+    useState("");
+
+  const [showFollowUp, setShowFollowUp] =
+    useState(false);
+
+  const [followUpDate, setFollowUpDate] =
+    useState("");
+
+  const [followUpNote, setFollowUpNote] =
+    useState("");
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [notice, setNotice] =
+    useState("");
+
+  const [savingStage, setSavingStage] =
+    useState(false);
+
+  const [stages, setStages] =
+    useState([]);
+
+  const [loadingStages, setLoadingStages] =
+    useState(true);
+
+  const [editingNote, setEditingNote] =
+    useState(null);
+
+  const [editNoteText, setEditNoteText] =
+    useState("");
+
+  const [savingNoteEdit, setSavingNoteEdit] =
+    useState(false);
+
+  const [expandedHistoryIds, setExpandedHistoryIds] =
+    useState(() => new Set());
 
   const loadLead = async () => {
     const token = getToken();
 
     if (!token) {
-      setError("Authentication required. Please sign in again.");
+      setError(
+        "Authentication required. Please sign in again."
+      );
       setLoading(false);
       return;
     }
@@ -271,7 +497,9 @@ export default function LeadDetails({
 
     try {
       const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}`),
+        buildApiUrl(
+          `/api/leads/${leadId}`
+        ),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -279,16 +507,23 @@ export default function LeadDetails({
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Unable to load lead");
+        throw new Error(
+          data.message ||
+          "Unable to load lead"
+        );
       }
 
       setLead(data.lead);
       setError("");
     } catch (loadError) {
-      setError(loadError.message || "Unable to load lead");
+      setError(
+        loadError.message ||
+        "Unable to load lead"
+      );
     } finally {
       setLoading(false);
     }
@@ -298,16 +533,104 @@ export default function LeadDetails({
     loadLead();
   }, [leadId]);
 
-  const activities = useMemo(() => getActivities(lead), [lead]);
+  useEffect(() => {
+    const loadStages = async () => {
+      const token = getToken();
 
-  const visibleActivities = activities.filter((activity) => {
-    if (activeTab === "all") return true;
-    return activity.type === activeTab;
-  });
+      if (!token) {
+        setLoadingStages(false);
+        return;
+      }
 
-  const savedNotes = useMemo(() => getSavedNotes(lead), [lead]);
+      try {
+        const response = await fetch(
+          buildApiUrl(
+            "/api/lead-settings/stages"
+          ),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
-  const phone = normalizePhone(lead?.phone);
+        const data =
+          await response.json();
+
+        if (
+          response.ok &&
+          data.success
+        ) {
+          setStages(
+            (data.stages || []).filter(
+              (item) =>
+                item?.status !==
+                "inactive"
+            )
+          );
+        }
+      } catch (stageError) {
+        console.error(
+          "LOAD LEAD STAGES ERROR:",
+          stageError
+        );
+      } finally {
+        setLoadingStages(false);
+      }
+    };
+
+    loadStages();
+  }, [leadId]);
+
+  const availableStages = useMemo(() => {
+    const current = String(
+      lead?.stage || "New"
+    ).trim();
+
+    const result = [...stages];
+
+    if (
+      current &&
+      !result.some(
+        (item) =>
+          normalizeStage(item.name) ===
+          normalizeStage(current)
+      )
+    ) {
+      result.unshift({
+        _id: `current-${current}`,
+        name: current,
+      });
+    }
+
+    return result;
+  }, [stages, lead?.stage]);
+
+  const activities = useMemo(
+    () => getActivities(lead),
+    [lead]
+  );
+
+  const visibleActivities =
+    activities.filter((activity) => {
+      if (activeTab === "all") {
+        return true;
+      }
+
+      return (
+        activity.type === activeTab
+      );
+    });
+
+  const savedNotes = useMemo(
+    () => getSavedNotes(lead),
+    [lead]
+  );
+
+  const phone = normalizePhone(
+    lead?.phone
+  );
 
   const serviceName = useMemo(
     () => getLeadService(lead),
@@ -324,7 +647,9 @@ export default function LeadDetails({
 
     setTimeout(() => {
       document
-        .querySelector(".lead-activity-card")
+        .querySelector(
+          ".lead-activity-card"
+        )
         ?.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -333,13 +658,18 @@ export default function LeadDetails({
   };
 
   const openInvoicePage = () => {
-    if (typeof onOpenInvoice === "function") {
+    if (
+      typeof onOpenInvoice ===
+      "function"
+    ) {
       onOpenInvoice();
     }
   };
 
   const saveNote = async () => {
-    const text = noteText.trim();
+    const text =
+      noteText.trim();
+
     if (!text) return;
 
     setSaving(true);
@@ -347,111 +677,74 @@ export default function LeadDetails({
 
     try {
       const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}/notes`),
+        buildApiUrl(
+          `/api/leads/${leadId}/notes`
+        ),
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
             Authorization: `Bearer ${getToken()}`,
           },
           body: JSON.stringify({
             text,
-            userName: user?.name || "",
+            userName:
+              user?.name || "",
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Unable to save note");
+        throw new Error(
+          data.message ||
+          "Unable to save note"
+        );
       }
 
       setLead(data.lead);
       setNoteText("");
       setActiveTab("notes");
-      setNotice("Note saved successfully.");
-    } catch (saveError) {
-      setNotice(saveError.message || "Unable to save note");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveFollowUp = async (event) => {
-    event.preventDefault();
-
-    if (!followUpDate) {
-      setNotice("Please select date and time.");
-      return;
-    }
-
-    const selectedDate = new Date(followUpDate);
-
-    if (Number.isNaN(selectedDate.getTime())) {
-      setNotice("Please select a valid date and time.");
-      return;
-    }
-
-    if (selectedDate.getTime() < Date.now()) {
-      setNotice("Please select a future date and time.");
-      return;
-    }
-
-    setSaving(true);
-    setNotice("");
-
-    try {
-      const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}/follow-ups`),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
-          },
-          body: JSON.stringify({
-            date: selectedDate.toISOString(),
-            note: followUpNote.trim(),
-          }),
-        }
+      setNotice(
+        "Note saved successfully."
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Unable to schedule follow-up"
-        );
-      }
-
-      setLead(data.lead);
-      setFollowUpDate("");
-      setFollowUpNote("");
-      setShowFollowUp(false);
-      setNotice("Follow-up scheduled successfully.");
     } catch (saveError) {
       setNotice(
-        saveError.message || "Unable to schedule follow-up"
+        saveError.message ||
+        "Unable to save note"
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const updateLeadStage = async (stage) => {
-    if (!stage || stage === lead?.stage || savingStage) return;
+  const updateLeadStage = async (
+    stage
+  ) => {
+    if (
+      !stage ||
+      stage === lead?.stage ||
+      savingStage
+    ) {
+      return;
+    }
 
     setSavingStage(true);
     setNotice("");
 
     try {
       const response = await fetch(
-        buildApiUrl(`/api/leads/${leadId}`),
+        buildApiUrl(
+          `/api/leads/${leadId}`
+        ),
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
             Authorization: `Bearer ${getToken()}`,
           },
           body: JSON.stringify({
@@ -460,34 +753,261 @@ export default function LeadDetails({
             phone: lead?.phone || "",
             source: lead?.source || "",
             service: lead?.service || "",
-            owner: lead?.owner || user?.name || "",
+            owner:
+              lead?.owner ||
+              user?.name ||
+              "",
             stage,
-            preferredDoctor: lead?.preferredDoctor || "",
-            landingPage: lead?.landingPage || "",
-            pageUrl: lead?.pageUrl || "",
-            utmSource: lead?.utmSource || "",
-            utmMedium: lead?.utmMedium || "",
-            utmCampaign: lead?.utmCampaign || "",
-            utmTerm: lead?.utmTerm || "",
-            utmContent: lead?.utmContent || "",
-            ipAddress: lead?.ipAddress || "",
-            firstNote: lead?.firstNote || "",
+            preferredDoctor:
+              lead?.preferredDoctor ||
+              "",
+            landingPage:
+              lead?.landingPage ||
+              "",
+            pageUrl:
+              lead?.pageUrl || "",
+            utmSource:
+              lead?.utmSource || "",
+            utmMedium:
+              lead?.utmMedium || "",
+            utmCampaign:
+              lead?.utmCampaign || "",
+            utmTerm:
+              lead?.utmTerm || "",
+            utmContent:
+              lead?.utmContent || "",
+            ipAddress:
+              lead?.ipAddress || "",
+            firstNote:
+              lead?.firstNote || "",
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Unable to update status");
+        throw new Error(
+          data.message ||
+          "Unable to update status"
+        );
       }
 
       setLead(data.lead);
-      setNotice("Lead status updated successfully.");
+
+      setNotice(
+        "Lead status updated successfully."
+      );
     } catch (updateError) {
-      setNotice(updateError.message || "Unable to update status");
+      setNotice(
+        updateError.message ||
+        "Unable to update status"
+      );
     } finally {
       setSavingStage(false);
+    }
+  };
+
+  const openEditNote = (
+    note,
+    index
+  ) => {
+    setEditingNote({
+      ...note,
+      _index: index,
+    });
+
+    setEditNoteText(
+      note?.text || ""
+    );
+
+    setNotice("");
+  };
+
+  const closeEditNote = () => {
+    if (savingNoteEdit) {
+      return;
+    }
+
+    setEditingNote(null);
+    setEditNoteText("");
+  };
+
+  const saveEditedNote = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    const text =
+      editNoteText.trim();
+
+    if (
+      !text ||
+      !editingNote
+    ) {
+      return;
+    }
+
+    setSavingNoteEdit(true);
+    setNotice("");
+
+    try {
+      const noteId = getNoteId(
+        editingNote,
+        editingNote._index
+      );
+
+      const response = await fetch(
+        buildApiUrl(
+          `/api/leads/${leadId}/notes/${noteId}`
+        ),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({
+            text,
+            userName:
+              user?.name || "",
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+          "Unable to edit note"
+        );
+      }
+
+      setLead(data.lead);
+      setEditingNote(null);
+      setEditNoteText("");
+      setActiveTab("notes");
+
+      setNotice(
+        "Note edited successfully."
+      );
+    } catch (editError) {
+      setNotice(
+        editError.message ||
+        "Unable to edit note"
+      );
+    } finally {
+      setSavingNoteEdit(false);
+    }
+  };
+
+  const toggleHistory = (note) => {
+    const noteId = String(note?._id || note?.id || "");
+
+    if (!noteId) return;
+
+    setExpandedHistoryIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(noteId)) {
+        next.delete(noteId);
+      } else {
+        next.add(noteId);
+      }
+
+      return next;
+    });
+  };
+
+  const saveFollowUp = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (!followUpDate) {
+      setNotice(
+        "Please select date and time."
+      );
+      return;
+    }
+
+    const selectedDate =
+      new Date(followUpDate);
+
+    if (
+      Number.isNaN(
+        selectedDate.getTime()
+      )
+    ) {
+      setNotice(
+        "Please select a valid date and time."
+      );
+      return;
+    }
+
+    if (
+      selectedDate.getTime() <
+      Date.now()
+    ) {
+      setNotice(
+        "Please select a future date and time."
+      );
+      return;
+    }
+
+    setSaving(true);
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        buildApiUrl(
+          `/api/leads/${leadId}/follow-ups`
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({
+            date:
+              selectedDate.toISOString(),
+            note:
+              followUpNote.trim(),
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+          "Unable to schedule follow-up"
+        );
+      }
+
+      setLead(data.lead);
+      setFollowUpDate("");
+      setFollowUpNote("");
+      setShowFollowUp(false);
+
+      setNotice(
+        "Follow-up scheduled successfully."
+      );
+    } catch (saveError) {
+      setNotice(
+        saveError.message ||
+        "Unable to schedule follow-up"
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -509,7 +1029,9 @@ export default function LeadDetails({
   if (error || !lead) {
     return (
       <div className="lead-details-page-state">
-        <strong>{error || "Lead not found"}</strong>
+        <strong>
+          {error || "Lead not found"}
+        </strong>
 
         <button
           type="button"
@@ -544,18 +1066,33 @@ export default function LeadDetails({
 
               <select
                 className="lead-stage-pill lead-stage-select"
-                value={lead.stage || "New"}
-                onChange={(event) =>
-                  updateLeadStage(event.target.value)
+                value={
+                  lead.stage || "New"
                 }
-                disabled={savingStage}
+                onChange={(event) =>
+                  updateLeadStage(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  savingStage ||
+                  loadingStages
+                }
                 aria-label="Lead status"
               >
-                {LEAD_STAGES.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
+                {availableStages.map(
+                  (stage) => (
+                    <option
+                      key={String(
+                        stage._id ||
+                        stage.name
+                      )}
+                      value={stage.name}
+                    >
+                      {stage.name}
+                    </option>
+                  )
+                )}
               </select>
 
               {lead.priority && (
@@ -572,9 +1109,25 @@ export default function LeadDetails({
             </p>
 
             <div className="lead-detail-meta">
-              <span>{lead.source || "—"}</span>
-              <span>{serviceName}</span>
-              <span>{getOwner(lead, user)}</span>
+              <span>
+                {lead.source || "—"}
+              </span>
+
+              <span>
+                {serviceName}
+              </span>
+
+              <span>
+                {lead.preferredDoctor ||
+                  "—"}
+              </span>
+
+              <span>
+                {getOwner(
+                  lead,
+                  user
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -603,7 +1156,9 @@ export default function LeadDetails({
           <button
             type="button"
             className="dash-btn"
-            onClick={openFollowUpModal}
+            onClick={
+              openFollowUpModal
+            }
           >
             Follow-up
           </button>
@@ -636,29 +1191,46 @@ export default function LeadDetails({
 
         <div className="lead-detail-summary-bar">
           <div>
-            <strong>{lead.stage || "—"}</strong>
+            <strong>
+              {lead.stage || "—"}
+            </strong>
+
             <span>Status</span>
           </div>
 
           <div>
-            <strong>{formatDate(lead.createdAt, true)}</strong>
-            <span>Created date</span>
+            <strong>
+              {formatDate(
+                lead.createdAt,
+                true
+              )}
+            </strong>
+
+            <span>
+              Created date
+            </span>
           </div>
 
           <div className="lead-next-follow-up-summary">
             <strong>
               {nextFollowUp
-                ? formatFollowUpDate(nextFollowUp.date)
+                ? formatFollowUpDate(
+                  nextFollowUp.date
+                )
                 : "—"}
             </strong>
 
             <span>
               {nextFollowUp
-                ? formatFollowUpTime(nextFollowUp.date)
+                ? formatFollowUpTime(
+                  nextFollowUp.date
+                )
                 : "—"}
             </span>
 
-            <small>Follow-up</small>
+            <small>
+              Follow-up
+            </small>
           </div>
         </div>
       </section>
@@ -668,7 +1240,11 @@ export default function LeadDetails({
           <section className="lead-note-composer">
             <textarea
               value={noteText}
-              onChange={(event) => setNoteText(event.target.value)}
+              onChange={(event) =>
+                setNoteText(
+                  event.target.value
+                )
+              }
               placeholder="Add a note about this lead — what was discussed, objections, next steps..."
             />
 
@@ -676,7 +1252,9 @@ export default function LeadDetails({
               <button
                 type="button"
                 className="lead-secondary-btn"
-                onClick={openFollowUpModal}
+                onClick={
+                  openFollowUpModal
+                }
               >
                 Add follow-up
               </button>
@@ -685,42 +1263,71 @@ export default function LeadDetails({
                 type="button"
                 className="dash-btn primary"
                 onClick={saveNote}
-                disabled={saving || !noteText.trim()}
+                disabled={
+                  saving ||
+                  !noteText.trim()
+                }
               >
-                {saving ? "Saving..." : "Save note"}
+                {saving
+                  ? "Saving..."
+                  : "Save note"}
               </button>
             </div>
           </section>
 
           {notice && (
-            <p className="lead-detail-notice">{notice}</p>
+            <p className="lead-detail-notice">
+              {notice}
+            </p>
           )}
 
           <section className="lead-activity-card">
             <header>
-              <h2>Activity timeline</h2>
+              <h2>
+                Activity timeline
+              </h2>
 
               <div>
                 <button
                   type="button"
-                  className={activeTab === "all" ? "active" : ""}
-                  onClick={() => setActiveTab("all")}
+                  className={
+                    activeTab === "all"
+                      ? "active"
+                      : ""
+                  }
+                  onClick={() =>
+                    setActiveTab("all")
+                  }
                 >
                   All
                 </button>
 
                 <button
                   type="button"
-                  className={activeTab === "notes" ? "active" : ""}
-                  onClick={() => setActiveTab("notes")}
+                  className={
+                    activeTab ===
+                      "notes"
+                      ? "active"
+                      : ""
+                  }
+                  onClick={() =>
+                    setActiveTab("notes")
+                  }
                 >
                   Notes
                 </button>
 
                 <button
                   type="button"
-                  className={activeTab === "calls" ? "active" : ""}
-                  onClick={() => setActiveTab("calls")}
+                  className={
+                    activeTab ===
+                      "calls"
+                      ? "active"
+                      : ""
+                  }
+                  onClick={() =>
+                    setActiveTab("calls")
+                  }
                 >
                   Calls
                 </button>
@@ -728,90 +1335,182 @@ export default function LeadDetails({
                 <button
                   type="button"
                   className={
-                    activeTab === "whatsapp" ? "active" : ""
+                    activeTab ===
+                      "whatsapp"
+                      ? "active"
+                      : ""
                   }
-                  onClick={() => setActiveTab("whatsapp")}
+                  onClick={() =>
+                    setActiveTab(
+                      "whatsapp"
+                    )
+                  }
                 >
                   WhatsApp
                 </button>
               </div>
             </header>
 
-            {activeTab === "notes" && savedNotes.length === 0 ? (
+            {activeTab === "notes" &&
+              savedNotes.length === 0 ? (
               <div className="lead-detail-empty">
                 No notes recorded yet.
               </div>
             ) : (
               <div className="lead-activity-list">
                 {visibleActivities.length ? (
-                  visibleActivities.map((activity, index) => (
-                    <article
-                      key={`${activity.title}-${activity.date}-${index}`}
-                      className={
-                        activity.title === "Follow-up scheduled"
-                          ? "lead-follow-up-activity"
-                          : ""
-                      }
-                    >
-                      <span className="lead-activity-icon">
-                        {activity.icon}
-                      </span>
+                  visibleActivities.map(
+                    (
+                      activity,
+                      index
+                    ) => {
+                      const history =
+                        activity.note
+                          ? getNoteHistory(
+                            activity.note
+                          )
+                          : [];
 
-                      <div>
-                        <strong>{activity.title}</strong>
+                      return (
+                        <article
+                          key={`${activity.title}-${activity.date}-${index}`}
+                          className={
+                            activity.title ===
+                              "Follow-up scheduled"
+                              ? "lead-follow-up-activity"
+                              : ""
+                          }
+                        >
+                          <span className="lead-activity-icon">
+                            {activity.icon}
+                          </span>
 
-                        {activity.followUpDate && (
-                          <div
-                            className={`lead-follow-up-datetime ${
-                              activity.completed ? "completed" : ""
-                            }`}
-                          >
-                            {!activity.completed ? (
-                              <>
-                                <span>
-                                  {formatFollowUpDate(
-                                    activity.followUpDate
-                                  )}
-                                </span>
-                                <span>
-                                  {formatFollowUpTime(
-                                    activity.followUpDate
-                                  )}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span>Completed</span>
-                                <span>
-                                  {formatFollowUpDate(
-                                    activity.followUpDate
-                                  )}
-                                  {" · "}
-                                  {formatFollowUpTime(
-                                    activity.followUpDate
-                                  )}
-                                </span>
-                              </>
+                          <div>
+                            <div className="lead-activity-title-row">
+                              <strong>
+                                {
+                                  activity.title
+                                }
+                              </strong>
+
+                              {activity.note && (
+                                <div className="lead-note-inline-actions">
+                                  <button
+                                    type="button"
+                                    className="lead-note-edit-btn"
+                                    onClick={() =>
+                                      openEditNote(
+                                        activity.note,
+                                        activity.noteIndex
+                                      )
+                                    }
+                                  >
+                                    Edit
+                                  </button>
+
+                                  {history.length >
+                                    0 && (
+                                      <button
+                                        type="button"
+                                        className="lead-note-history-btn"
+                                        onClick={() =>
+                                          toggleHistory(
+                                            activity.note
+                                          )
+                                        }
+                                      >
+                                        {expandedHistoryIds.has(
+                                          getNoteId(
+                                            activity.note,
+                                            activity.noteIndex
+                                          )
+                                        )
+                                          ? "Hide edits"
+                                          : "Edited"}
+                                      </button>
+                                    )}
+                                </div>
+                              )}
+                            </div>
+
+                            {activity.followUpDate && (
+                              <div
+                                className={`lead-follow-up-datetime ${activity.completed
+                                    ? "completed"
+                                    : ""
+                                  }`}
+                              >
+                                {!activity.completed ? (
+                                  <>
+                                    <span>
+                                      {formatFollowUpDate(
+                                        activity.followUpDate
+                                      )}
+                                    </span>
+
+                                    <span>
+                                      {formatFollowUpTime(
+                                        activity.followUpDate
+                                      )}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>
+                                      Completed
+                                    </span>
+
+                                    <span>
+                                      {formatFollowUpDate(
+                                        activity.followUpDate
+                                      )}
+                                      {" · "}
+                                      {formatFollowUpTime(
+                                        activity.followUpDate
+                                      )}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             )}
+
+                            <p>
+                              {
+                                activity.detail
+                              }
+                            </p>
+
+                            {activity.note &&
+                              renderInlineNoteHistory(
+                                activity.note,
+                                activity.noteIndex,
+                                expandedHistoryIds,
+                                activity.user ||
+                                  getOwner(lead, user)
+                              )}
+
+                            <small>
+                              {activity.user ||
+                                getOwner(
+                                  lead,
+                                  user
+                                )}
+                              {" · "}
+                              {activity.createdAt
+                                ? `Created ${formatDate(
+                                  activity.createdAt,
+                                  true
+                                )}`
+                                : formatDate(
+                                  activity.date,
+                                  true
+                                )}
+                            </small>
                           </div>
-                        )}
-
-                        <p>{activity.detail}</p>
-
-                        <small>
-                          {activity.user ||
-                            getOwner(lead, user)}
-                          {" · "}
-                          {activity.createdAt
-                            ? `Created ${formatDate(
-                                activity.createdAt,
-                                true
-                              )}`
-                            : formatDate(activity.date, true)}
-                        </small>
-                      </div>
-                    </article>
-                  ))
+                        </article>
+                      );
+                    }
+                  )
                 ) : (
                   <p className="lead-detail-empty">
                     No activity recorded yet.
@@ -825,40 +1524,72 @@ export default function LeadDetails({
         <aside>
           <section className="lead-information-card">
             <header>
-              <h2>Lead information</h2>
+              <h2>
+                Lead information
+              </h2>
             </header>
 
             {[
-              ["Source", lead.source],
-              ["Service", serviceName],
+              [
+                "Source",
+                lead.source,
+              ],
+              [
+                "Service",
+                serviceName,
+              ],
               [
                 "Doctor / Preferred doctor",
                 lead.preferredDoctor,
               ],
-              ["Assigned staff / Owner", getOwner(lead, user)],
-              ["Priority", lead.priority],
+              [
+                "Assigned staff / Owner",
+                getOwner(
+                  lead,
+                  user
+                ),
+              ],
+              [
+                "Priority",
+                lead.priority,
+              ],
               [
                 "Next follow-up",
                 nextFollowUp
                   ? `${formatFollowUpDate(
-                      nextFollowUp.date
-                    )} · ${formatFollowUpTime(nextFollowUp.date)}`
+                    nextFollowUp.date
+                  )} · ${formatFollowUpTime(
+                    nextFollowUp.date
+                  )}`
                   : null,
               ],
-              ["Lead ID", lead._id],
+              [
+                "Lead ID",
+                lead._id,
+              ],
               [
                 "Created date",
-                formatDate(lead.createdAt, true),
+                formatDate(
+                  lead.createdAt,
+                  true
+                ),
               ],
-            ].map(([label, value]) => (
-              <div
-                className="lead-information-row"
-                key={label}
-              >
-                <span>{label}</span>
-                <strong>{value || "—"}</strong>
-              </div>
-            ))}
+            ].map(
+              ([label, value]) => (
+                <div
+                  className="lead-information-row"
+                  key={label}
+                >
+                  <span>
+                    {label}
+                  </span>
+
+                  <strong>
+                    {value || "—"}
+                  </strong>
+                </div>
+              )
+            )}
           </section>
 
           {savedNotes.length > 0 && (
@@ -868,25 +1599,92 @@ export default function LeadDetails({
               </header>
 
               <div className="lead-saved-notes">
-                {savedNotes.map((note, index) => (
-                  <div
-                    className="lead-saved-note"
-                    key={`${note.createdAt || "note"}-${index}`}
-                  >
-                    <p>{note.text}</p>
+                {savedNotes.map(
+                  (
+                    note,
+                    index
+                  ) => {
+                    const history =
+                      getNoteHistory(
+                        note
+                      );
 
-                    <small>
-                      {note.userName ||
-                        getOwner(lead, user)}
-                      {note.createdAt
-                        ? ` · ${formatDate(
-                            note.createdAt,
-                            true
-                          )}`
-                        : ""}
-                    </small>
-                  </div>
-                ))}
+                    return (
+                      <div
+                        className="lead-saved-note"
+                        key={`${note.createdAt || "note"}-${index}`}
+                      >
+                        <div className="lead-note-content-row">
+                          <p>
+                            {
+                              note.text
+                            }
+                          </p>
+
+                          <div className="lead-note-actions">
+                            <button
+                              type="button"
+                              className="lead-note-edit-btn"
+                              onClick={() =>
+                                openEditNote(
+                                  note,
+                                  index
+                                )
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            {history.length >
+                              0 && (
+                                <button
+                                  type="button"
+                                  className="lead-note-history-btn"
+                                  onClick={() =>
+                                    toggleHistory(
+                                      note
+                                    )
+                                  }
+                                >
+                                  {expandedHistoryIds.has(
+                                    getNoteId(
+                                      note,
+                                      index
+                                    )
+                                  )
+                                    ? "Hide edits"
+                                    : "Edited"}
+                                </button>
+                              )}
+                          </div>
+                        </div>
+
+                        <small>
+                          {note.userName ||
+                            getOwner(
+                              lead,
+                              user
+                            )}
+
+                          {note.createdAt
+                            ? ` · ${formatDate(
+                              note.createdAt,
+                              true
+                            )}`
+                            : ""}
+                        </small>
+
+                        {renderInlineNoteHistory(
+                          note,
+                          index,
+                          expandedHistoryIds,
+                          note.userName ||
+                            getOwner(lead, user)
+                        )}
+                      </div>
+                    );
+                  }
+                )}
               </div>
             </section>
           )}
@@ -894,22 +1692,30 @@ export default function LeadDetails({
           {nextFollowUp && (
             <section className="lead-information-card lead-next-follow-up-card">
               <header>
-                <h2>Next follow-up</h2>
+                <h2>
+                  Next follow-up
+                </h2>
               </header>
 
               <div className="lead-follow-up-highlight">
                 <strong>
-                  {formatFollowUpDate(nextFollowUp.date)}
+                  {formatFollowUpDate(
+                    nextFollowUp.date
+                  )}
                 </strong>
 
                 <span>
-                  {formatFollowUpTime(nextFollowUp.date)}
+                  {formatFollowUpTime(
+                    nextFollowUp.date
+                  )}
                 </span>
               </div>
 
               {nextFollowUp.note && (
                 <p className="lead-first-note">
-                  {nextFollowUp.note}
+                  {
+                    nextFollowUp.note
+                  }
                 </p>
               )}
 
@@ -942,12 +1748,19 @@ export default function LeadDetails({
       {showFollowUp && (
         <div
           className="lead-modal-backdrop"
-          onClick={() => !saving && setShowFollowUp(false)}
+          onClick={() =>
+            !saving &&
+            setShowFollowUp(false)
+          }
         >
           <form
             className="lead-follow-up-modal"
-            onSubmit={saveFollowUp}
-            onClick={(event) => event.stopPropagation()}
+            onSubmit={
+              saveFollowUp
+            }
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
             <div className="lead-follow-up-modal-header">
               <div>
@@ -955,10 +1768,13 @@ export default function LeadDetails({
                   FOLLOW-UP
                 </span>
 
-                <h2>Schedule follow-up</h2>
+                <h2>
+                  Schedule follow-up
+                </h2>
 
                 <p>
-                  Set a date and time to follow up with{" "}
+                  Set a date and time
+                  to follow up with{" "}
                   {lead.name}.
                 </p>
               </div>
@@ -966,7 +1782,11 @@ export default function LeadDetails({
               <button
                 type="button"
                 className="lead-modal-close"
-                onClick={() => setShowFollowUp(false)}
+                onClick={() =>
+                  setShowFollowUp(
+                    false
+                  )
+                }
                 disabled={saving}
                 aria-label="Close"
               >
@@ -976,26 +1796,51 @@ export default function LeadDetails({
 
             <div className="lead-follow-up-form">
               <label>
-                <span>Date & time</span>
+                <span>
+                  Date & time
+                </span>
 
                 <input
                   type="datetime-local"
-                  value={followUpDate}
-                  min={new Date().toISOString().slice(0, 16)}
-                  onChange={(event) =>
-                    setFollowUpDate(event.target.value)
+                  value={
+                    followUpDate
+                  }
+                  min={
+                    new Date()
+                      .toISOString()
+                      .slice(
+                        0,
+                        16
+                      )
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setFollowUpDate(
+                      event.target
+                        .value
+                    )
                   }
                   required
                 />
               </label>
 
               <label>
-                <span>Follow-up note</span>
+                <span>
+                  Follow-up note
+                </span>
 
                 <textarea
-                  value={followUpNote}
-                  onChange={(event) =>
-                    setFollowUpNote(event.target.value)
+                  value={
+                    followUpNote
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setFollowUpNote(
+                      event.target
+                        .value
+                    )
                   }
                   placeholder="What should you discuss or follow up on?"
                 />
@@ -1006,7 +1851,11 @@ export default function LeadDetails({
               <button
                 type="button"
                 className="lead-secondary-btn"
-                onClick={() => setShowFollowUp(false)}
+                onClick={() =>
+                  setShowFollowUp(
+                    false
+                  )
+                }
                 disabled={saving}
               >
                 Cancel
@@ -1025,6 +1874,107 @@ export default function LeadDetails({
           </form>
         </div>
       )}
+
+      {editingNote && (
+        <div
+          className="lead-modal-backdrop"
+          onClick={closeEditNote}
+        >
+          <form
+            className="lead-follow-up-modal lead-note-edit-modal"
+            onSubmit={
+              saveEditedNote
+            }
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="lead-follow-up-modal-header">
+              <div>
+                <span className="lead-follow-up-modal-label">
+                  NOTE
+                </span>
+
+                <h2>
+                  Edit note
+                </h2>
+
+                <p>
+                  Update this note.
+                  The previous text
+                  will stay in edit
+                  history.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="lead-modal-close"
+                onClick={
+                  closeEditNote
+                }
+                disabled={
+                  savingNoteEdit
+                }
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="lead-follow-up-form">
+              <label>
+                <span>Note</span>
+
+                <textarea
+                  value={
+                    editNoteText
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setEditNoteText(
+                      event.target
+                        .value
+                    )
+                  }
+                  autoFocus
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="lead-follow-up-modal-footer">
+              <button
+                type="button"
+                className="lead-secondary-btn"
+                onClick={
+                  closeEditNote
+                }
+                disabled={
+                  savingNoteEdit
+                }
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="dash-btn primary"
+                disabled={
+                  savingNoteEdit ||
+                  !editNoteText.trim()
+                }
+              >
+                {savingNoteEdit
+                  ? "Saving..."
+                  : "Save changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
     </div>
   );
 }
