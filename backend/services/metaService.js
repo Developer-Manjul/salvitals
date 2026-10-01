@@ -115,11 +115,6 @@ exports.getAuthorizationUrl = (state) => {
     "rerequest"
   );
 
-  url.searchParams.set(
-    "scope",
-    REQUIRED_PERMISSIONS.join(",")
-  );
-
   return url.toString();
 };
 
