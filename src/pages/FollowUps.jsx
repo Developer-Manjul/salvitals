@@ -34,6 +34,28 @@ function isHealthcare(user) {
   );
 }
 
+const FOLLOW_UP_STATUS_OPTIONS = [
+  {
+    value: "No answer",
+    label: "Not Answered",
+  },
+  {
+    value: "Changed mind",
+    label: "Mind Changed",
+  },
+  {
+    value: "Treatment completed",
+    label: "Surgery Done",
+  },
+];
+
+const COMPLETED_FOLLOW_UP_STATUSES = [
+  "No answer",
+  "Changed mind",
+  "Treatment completed",
+  "Converted",
+];
+
 function getInitials(name = "") {
   const value = String(name || "").trim();
 
@@ -171,13 +193,23 @@ function normalizeFollowUp(lead, followUp, index) {
 function isCompleted(item) {
   const status = String(
     item?.status || ""
-  ).toLowerCase();
+  ).trim();
 
-  return (
-    status === "completed" ||
-    status === "complete" ||
-    status === "done"
+  return COMPLETED_FOLLOW_UP_STATUSES.includes(
+    status
   );
+}
+
+function followUpStatusLabel(status) {
+  const value = String(
+    status || ""
+  ).trim();
+
+  const option = FOLLOW_UP_STATUS_OPTIONS.find(
+    (item) => item.value === value
+  );
+
+  return option?.label || value || "Scheduled";
 }
 
 function getFollowUpStatus(item) {
@@ -374,6 +406,1014 @@ function Icon({ name, size = 17 }) {
   );
 }
 
+
+function FollowUpDetails({
+  item,
+  healthcare = false,
+  onBack,
+  onSaved,
+  onReschedule,
+}) {
+  const [status, setStatus] = useState(
+    item?.status || "Scheduled"
+  );
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [statusSaved, setStatusSaved] = useState(false);
+
+  useEffect(() => {
+    setStatus(item?.status || "Scheduled");
+    setStatusError("");
+    setStatusSaved(false);
+  }, [item?._id, item?.status]);
+
+  const lead = item?.lead || {};
+  const notes = Array.isArray(lead?.notes)
+    ? lead.notes
+    : [];
+
+  const saveStatus = async () => {
+    if (!item?.leadId || !item?._id) {
+      setStatusError("Follow-up ID not found.");
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setStatusError("Your session has expired.");
+      return;
+    }
+
+    if (
+      !COMPLETED_FOLLOW_UP_STATUSES.includes(
+        status
+      )
+    ) {
+      setStatusError("Please select a status.");
+      return;
+    }
+
+    try {
+      setSavingStatus(true);
+      setStatusError("");
+      setStatusSaved(false);
+
+      const response = await fetch(
+        buildApiUrl(
+          `/api/leads/${item.leadId}/follow-ups/${item._id}`
+        ),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            date: item.date,
+            note: item.note || "",
+            service: item.service || "",
+            reminder: item.reminder !== false,
+            purpose: item.purpose || "Follow-up",
+            channel: item.channel || "Call",
+            assignedTo:
+              item.assignedTo ||
+              item.owner ||
+              "",
+            priority: item.priority || "Medium",
+            status,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+          "Unable to update follow-up status."
+        );
+      }
+
+      const updatedFollowUp =
+        data?.followUp ||
+        data?.data ||
+        {
+          ...item,
+          status,
+        };
+
+      setStatus(
+        updatedFollowUp?.status ||
+        status
+      );
+      setStatusSaved(true);
+
+      if (typeof onSaved === "function") {
+        await onSaved({
+          ...item,
+          ...updatedFollowUp,
+          status:
+            updatedFollowUp?.status ||
+            status,
+        });
+      }
+    } catch (error) {
+      setStatusError(
+        error.message ||
+        "Unable to update follow-up status."
+      );
+    } finally {
+      setSavingStatus(false);
+    }
+  };
+
+  const callLead = () => {
+    if (item?.phone) {
+      window.location.href = `tel:${item.phone}`;
+    }
+  };
+
+  const whatsappLead = () => {
+    const normalized = normalizePhone(
+      item?.phone
+    );
+
+    if (!normalized) return;
+
+    const number =
+      normalized.length === 10
+        ? `91${normalized}`
+        : normalized;
+
+    window.open(
+      `https://wa.me/${number}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
+  const terminal = isCompleted({
+    status,
+  });
+
+  return (
+    <div className="followup-detail-page">
+      <div className="followup-detail-topbar">
+        <button
+          type="button"
+          className="followup-detail-back"
+          onClick={onBack}
+        >
+          ← Back to follow-ups
+        </button>
+
+        <div className="followup-detail-top-actions">
+          <button
+            type="button"
+            onClick={callLead}
+            disabled={!item?.phone}
+          >
+            <Icon name="phone" size={15} />
+            Call
+          </button>
+
+          <button
+            type="button"
+            onClick={whatsappLead}
+            disabled={!item?.phone}
+          >
+            <Icon name="whatsapp" size={15} />
+            WhatsApp
+          </button>
+        </div>
+      </div>
+
+      <section className="followup-detail-profile">
+        <div className="followup-detail-avatar">
+          {getInitials(item?.name)}
+        </div>
+
+        <div className="followup-detail-profile-main">
+          <div className="followup-detail-title-row">
+            <h1>
+              {item?.name || "Unnamed lead"}
+            </h1>
+
+            <span
+              className={`followup-detail-status ${terminal
+                ? "completed"
+                : "active"
+                }`}
+            >
+              {followUpStatusLabel(status)}
+            </span>
+
+            <span
+              className={`followup-detail-priority ${String(
+                item?.priority || "Medium"
+              ).toLowerCase()}`}
+            >
+              {item?.priority || "Medium"}
+            </span>
+          </div>
+
+          <div className="followup-detail-profile-meta">
+            {item?.phone && (
+              <span>{item.phone}</span>
+            )}
+
+            {item?.email && (
+              <span>{item.email}</span>
+            )}
+
+            {item?.service && (
+              <span>{item.service}</span>
+            )}
+
+            {item?.channel && (
+              <span>{item.channel}</span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="followup-detail-layout">
+        <main className="followup-detail-main">
+          <section className="followup-detail-card">
+            <div className="followup-detail-card-head">
+              <div>
+                <h2>Follow-up details</h2>
+                <p>
+                  Complete record of this
+                  follow-up.
+                </p>
+              </div>
+            </div>
+
+            <div className="followup-detail-grid">
+              <div className="followup-detail-field">
+                <span>Scheduled date</span>
+                <strong>
+                  {formatDate(item?.date)}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Scheduled time</span>
+                <strong>
+                  {formatTime(item?.date)}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Created</span>
+                <strong>
+                  {formatDateTime(
+                    item?.createdAt
+                  )}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Assigned to</span>
+                <strong>
+                  {item?.owner || "Unassigned"}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Channel</span>
+                <strong>
+                  {item?.channel || "Call"}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Priority</span>
+                <strong>
+                  {item?.priority || "Medium"}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>
+                  {healthcare
+                    ? "Treatment"
+                    : "Service"}
+                </span>
+                <strong>
+                  {item?.service || "—"}
+                </strong>
+              </div>
+
+              <div className="followup-detail-field">
+                <span>Purpose</span>
+                <strong>
+                  {item?.purpose ||
+                    "Follow-up"}
+                </strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="followup-detail-card">
+            <div className="followup-detail-card-head">
+              <div>
+                <h2>Conversation & notes</h2>
+                <p>
+                  What was discussed or
+                  recorded during this
+                  follow-up.
+                </p>
+              </div>
+            </div>
+
+            <div className="followup-detail-note-primary">
+              <span>Follow-up note</span>
+
+              <p>
+                {item?.note ||
+                  "No note was added for this follow-up."}
+              </p>
+            </div>
+
+            {item?.firstNote && (
+              <div className="followup-detail-note">
+                <span>First lead note</span>
+                <p>{item.firstNote}</p>
+              </div>
+            )}
+
+            {notes.length > 0 && (
+              <div className="followup-detail-notes-list">
+                <div className="followup-detail-notes-title">
+                  Previous notes
+                </div>
+
+                {notes.map((note, index) => (
+                  <div
+                    className="followup-detail-note"
+                    key={
+                      note?._id ||
+                      `note-${index}`
+                    }
+                  >
+                    <p>
+                      {note?.text ||
+                        note?.note ||
+                        "—"}
+                    </p>
+
+                    <small>
+                      {note?.userName ||
+                        "User"}
+
+                      {" · "}
+
+                      {formatDateTime(
+                        note?.createdAt
+                      )}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="followup-detail-card">
+            <div className="followup-detail-card-head">
+              <div>
+                <h2>Follow-up timeline</h2>
+                <p>
+                  Important events for this
+                  follow-up.
+                </p>
+              </div>
+            </div>
+
+            <div className="followup-detail-timeline">
+              <div className="followup-timeline-item">
+                <span className="followup-timeline-dot" />
+
+                <div>
+                  <strong>
+                    Follow-up scheduled
+                  </strong>
+
+                  <p>
+                    {formatDateTime(
+                      item?.createdAt
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="followup-timeline-item current">
+                <span className="followup-timeline-dot" />
+
+                <div>
+                  <strong>
+                    Current status:{" "}
+                    {followUpStatusLabel(
+                      status
+                    )}
+                  </strong>
+
+                  <p>
+                    Scheduled for{" "}
+                    {formatDateTime(
+                      item?.date
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside className="followup-detail-sidebar">
+          <section className="followup-detail-card followup-status-card">
+            <div className="followup-detail-card-head">
+              <div>
+                <h2>Update status</h2>
+                <p>
+                  Mark what happened with
+                  this follow-up.
+                </p>
+              </div>
+            </div>
+
+            <div className="followup-status-body">
+              <label htmlFor="followup-status">
+                Status
+              </label>
+
+              <select
+                id="followup-status"
+                value={
+                  COMPLETED_FOLLOW_UP_STATUSES.includes(
+                    status
+                  )
+                    ? status
+                    : ""
+                }
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setStatusSaved(false);
+                  setStatusError("");
+                }}
+              >
+                <option value="">
+                  Change status
+                </option>
+
+                {FOLLOW_UP_STATUS_OPTIONS.map(
+                  (option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
+                  )
+                )}
+              </select>
+
+              {statusError && (
+                <div className="followup-status-error">
+                  {statusError}
+                </div>
+              )}
+
+              {statusSaved && (
+                <div className="followup-status-success">
+                  Status updated successfully.
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="followup-status-save"
+                onClick={saveStatus}
+                disabled={savingStatus}
+              >
+                {savingStatus
+                  ? "Saving..."
+                  : "Save status"}
+              </button>
+            </div>
+          </section>
+
+          <section className="followup-detail-card">
+            <div className="followup-detail-card-head">
+              <div>
+                <h2>Quick actions</h2>
+              </div>
+            </div>
+
+            <div className="followup-quick-actions">
+              <button
+                type="button"
+                onClick={callLead}
+                disabled={!item?.phone}
+              >
+                <Icon name="phone" size={16} />
+                Call lead
+              </button>
+
+              <button
+                type="button"
+                onClick={whatsappLead}
+                disabled={!item?.phone}
+              >
+                <Icon
+                  name="whatsapp"
+                  size={16}
+                />
+                WhatsApp
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    typeof onReschedule ===
+                    "function"
+                  ) {
+                    onReschedule(item);
+                  }
+                }}
+              >
+                <Icon
+                  name="calendar"
+                  size={16}
+                />
+                Reschedule
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <style>{`
+        .followup-detail-page {
+          padding: 28px 32px 60px;
+          min-height: 100%;
+          background: #f7f9fc;
+          color: #172033;
+          box-sizing: border-box;
+        }
+
+        .followup-detail-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          margin-bottom: 18px;
+        }
+
+        .followup-detail-back {
+          border: 0;
+          background: transparent;
+          color: #315ea8;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          padding: 5px 0;
+        }
+
+        .followup-detail-top-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .followup-detail-top-actions button {
+          min-height: 36px;
+          padding: 0 12px;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
+          background: #fff;
+          color: #29405f;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .followup-detail-top-actions button:disabled {
+          opacity: .5;
+          cursor: not-allowed;
+        }
+
+        .followup-detail-profile {
+          background: #fff;
+          border: 1px solid #e2e8f1;
+          border-radius: 16px;
+          padding: 22px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 20px;
+          box-shadow: 0 4px 20px rgba(24, 39, 75, .04);
+        }
+
+        .followup-detail-avatar {
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          background: #eaf1ff;
+          color: #2161e8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          font-weight: 800;
+          flex-shrink: 0;
+        }
+
+        .followup-detail-profile-main {
+          min-width: 0;
+        }
+
+        .followup-detail-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .followup-detail-title-row h1 {
+          margin: 0;
+          font-size: 24px;
+          line-height: 1.2;
+          color: #172033;
+        }
+
+        .followup-detail-status,
+        .followup-detail-priority {
+          display: inline-flex;
+          align-items: center;
+          min-height: 25px;
+          padding: 0 9px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .followup-detail-status.active {
+          background: #fff4dc;
+          color: #9b6400;
+        }
+
+        .followup-detail-status.completed {
+          background: #eaf8ef;
+          color: #168346;
+        }
+
+        .followup-detail-priority.low {
+          background: #edf7ff;
+          color: #2d6a9f;
+        }
+
+        .followup-detail-priority.medium {
+          background: #fff4e6;
+          color: #a96713;
+        }
+
+        .followup-detail-priority.high {
+          background: #fff0f0;
+          color: #c53030;
+        }
+
+        .followup-detail-profile-meta {
+          margin-top: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px 18px;
+          color: #718097;
+          font-size: 12px;
+        }
+
+        .followup-detail-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 340px;
+          gap: 20px;
+          align-items: start;
+        }
+
+        .followup-detail-main,
+        .followup-detail-sidebar {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .followup-detail-card {
+          background: #fff;
+          border: 1px solid #e2e8f1;
+          border-radius: 15px;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(24, 39, 75, .035);
+        }
+
+        .followup-detail-card-head {
+          min-height: 66px;
+          padding: 16px 20px;
+          border-bottom: 1px solid #e7ebf2;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          box-sizing: border-box;
+        }
+
+        .followup-detail-card-head h2 {
+          margin: 0;
+          font-size: 15px;
+          color: #172033;
+        }
+
+        .followup-detail-card-head p {
+          margin: 5px 0 0;
+          color: #7a879c;
+          font-size: 11px;
+        }
+
+        .followup-detail-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .followup-detail-field {
+          min-height: 72px;
+          padding: 15px 20px;
+          border-bottom: 1px solid #edf0f5;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          box-sizing: border-box;
+        }
+
+        .followup-detail-field:nth-child(odd) {
+          border-right: 1px solid #edf0f5;
+        }
+
+        .followup-detail-field span {
+          color: #7b889d;
+          font-size: 10px;
+        }
+
+        .followup-detail-field strong {
+          color: #27354a;
+          font-size: 13px;
+          word-break: break-word;
+        }
+
+        .followup-detail-note-primary,
+        .followup-detail-note {
+          padding: 17px 20px;
+          border-bottom: 1px solid #edf0f5;
+        }
+
+        .followup-detail-note-primary > span,
+        .followup-detail-note > span {
+          color: #7b889d;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .03em;
+        }
+
+        .followup-detail-note-primary p,
+        .followup-detail-note p {
+          margin: 8px 0 0;
+          color: #33425a;
+          font-size: 13px;
+          line-height: 1.6;
+          white-space: pre-wrap;
+        }
+
+        .followup-detail-note small {
+          display: block;
+          margin-top: 7px;
+          color: #8a96a9;
+          font-size: 10px;
+        }
+
+        .followup-detail-notes-list {
+          border-top: 1px solid #edf0f5;
+        }
+
+        .followup-detail-notes-title {
+          padding: 14px 20px 0;
+          color: #172033;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .followup-detail-timeline {
+          padding: 20px;
+        }
+
+        .followup-timeline-item {
+          position: relative;
+          display: flex;
+          gap: 13px;
+          padding-bottom: 20px;
+        }
+
+        .followup-timeline-item:last-child {
+          padding-bottom: 0;
+        }
+
+        .followup-timeline-item:not(:last-child)::before {
+          content: "";
+          position: absolute;
+          left: 5px;
+          top: 14px;
+          bottom: 0;
+          width: 1px;
+          background: #dfe6f0;
+        }
+
+        .followup-timeline-dot {
+          width: 11px;
+          height: 11px;
+          margin-top: 2px;
+          border-radius: 50%;
+          background: #d8e5ff;
+          border: 2px solid #4e7eea;
+          box-sizing: border-box;
+          flex-shrink: 0;
+        }
+
+        .followup-timeline-item strong {
+          color: #263349;
+          font-size: 12px;
+        }
+
+        .followup-timeline-item p {
+          margin: 4px 0 0;
+          color: #8290a5;
+          font-size: 11px;
+        }
+
+        .followup-status-body {
+          padding: 18px 20px 20px;
+        }
+
+        .followup-status-body label {
+          display: block;
+          margin-bottom: 7px;
+          color: #6f7d93;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .followup-status-body select {
+          width: 100%;
+          min-height: 42px;
+          padding: 0 11px;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
+          background: #fff;
+          color: #263349;
+          outline: none;
+          font-size: 12px;
+          box-sizing: border-box;
+        }
+
+        .followup-status-help {
+          margin: 9px 0 0;
+          color: #8592a6;
+          font-size: 10px;
+          line-height: 1.5;
+        }
+
+        .followup-status-error,
+        .followup-status-success {
+          margin-top: 12px;
+          padding: 9px 10px;
+          border-radius: 7px;
+          font-size: 11px;
+        }
+
+        .followup-status-error {
+          background: #fff1f1;
+          color: #c53030;
+        }
+
+        .followup-status-success {
+          background: #eaf8ef;
+          color: #168346;
+        }
+
+        .followup-status-save {
+          width: 100%;
+          margin-top: 13px;
+          min-height: 40px;
+          border: 0;
+          border-radius: 8px;
+          background: #2863dc;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .followup-status-save:disabled {
+          opacity: .65;
+          cursor: not-allowed;
+        }
+
+        .followup-quick-actions {
+          padding: 14px 20px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .followup-quick-actions button {
+          min-height: 40px;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
+          background: #fff;
+          color: #29405f;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 0 12px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          text-align: left;
+        }
+
+        .followup-quick-actions button:hover {
+          background: #f7faff;
+          border-color: #c9d8ef;
+        }
+
+        .followup-quick-actions button:disabled {
+          opacity: .5;
+          cursor: not-allowed;
+        }
+
+        @media (max-width: 1050px) {
+          .followup-detail-layout {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 700px) {
+          .followup-detail-page {
+            padding: 20px 15px 40px;
+          }
+
+          .followup-detail-topbar {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .followup-detail-profile {
+            padding: 18px;
+          }
+
+          .followup-detail-avatar {
+            width: 52px;
+            height: 52px;
+            font-size: 16px;
+          }
+
+          .followup-detail-title-row h1 {
+            font-size: 20px;
+          }
+
+          .followup-detail-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .followup-detail-field:nth-child(odd) {
+            border-right: 0;
+          }
+
+          .followup-detail-top-actions {
+            width: 100%;
+          }
+
+          .followup-detail-top-actions button {
+            flex: 1;
+            justify-content: center;
+          }
+        }
+
+      `}</style>
+    </div>
+  );
+}
+
 export default function FollowUps({
   user: passedUser,
   initialLead = null,
@@ -427,6 +1467,9 @@ export default function FollowUps({
   const [selectedFollowUpId, setSelectedFollowUpId] =
     useState("");
 
+  const [selectedFollowUp, setSelectedFollowUp] =
+    useState(null);
+
   const [selectedLeadId, setSelectedLeadId] =
     useState(
       initialLead?._id || ""
@@ -461,6 +1504,9 @@ export default function FollowUps({
     useState(false);
 
   const [error, setError] =
+    useState("");
+
+  const [updatingStatusId, setUpdatingStatusId] =
     useState("");
 
   const loadFollowUps = async () => {
@@ -652,17 +1698,17 @@ export default function FollowUps({
           const matchesAssigned =
             !assignedFilter ||
             item.owner ===
-              assignedFilter;
+            assignedFilter;
 
           const matchesPriority =
             !priorityFilter ||
             item.priority ===
-              priorityFilter;
+            priorityFilter;
 
           const matchesChannel =
             !channelFilter ||
             item.channel ===
-              channelFilter;
+            channelFilter;
 
           return (
             matchesTab &&
@@ -1160,9 +2206,9 @@ export default function FollowUps({
       if (!response.ok) {
         throw new Error(
           data?.message ||
-            (isRescheduling
-              ? "Unable to reschedule follow-up."
-              : "Unable to schedule follow-up.")
+          (isRescheduling
+            ? "Unable to reschedule follow-up."
+            : "Unable to schedule follow-up.")
         );
       }
 
@@ -1181,9 +2227,9 @@ export default function FollowUps({
 
       setError(
         err.message ||
-          (isRescheduling
-            ? "Unable to reschedule follow-up."
-            : "Unable to schedule follow-up.")
+        (isRescheduling
+          ? "Unable to reschedule follow-up."
+          : "Unable to schedule follow-up.")
       );
     } finally {
       setSaving(false);
@@ -1230,7 +2276,7 @@ export default function FollowUps({
       if (!response.ok) {
         throw new Error(
           data?.message ||
-            "Unable to delete follow-up."
+          "Unable to delete follow-up."
         );
       }
 
@@ -1243,8 +2289,85 @@ export default function FollowUps({
 
       setError(
         err.message ||
-          "Unable to delete follow-up."
+        "Unable to delete follow-up."
       );
+    }
+  };
+
+  const updateFollowUpStatus = async (
+    item,
+    nextStatus
+  ) => {
+    if (
+      !item?.leadId ||
+      !item?._id ||
+      !COMPLETED_FOLLOW_UP_STATUSES.includes(
+        nextStatus
+      )
+    ) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setError("Your session has expired.");
+      return;
+    }
+
+    try {
+      setUpdatingStatusId(item._id);
+      setError("");
+
+      const response = await fetch(
+        buildApiUrl(
+          `/api/leads/${item.leadId}/follow-ups/${item._id}`
+        ),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            date: item.date,
+            note: item.note || "",
+            service: item.service || "",
+            reminder: item.reminder !== false,
+            purpose: item.purpose || "Follow-up",
+            channel: item.channel || "Call",
+            assignedTo:
+              item.assignedTo ||
+              item.owner ||
+              "",
+            priority: item.priority || "Medium",
+            status: nextStatus,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+          "Unable to update follow-up status."
+        );
+      }
+
+      await loadFollowUps();
+    } catch (err) {
+      console.error(
+        "UPDATE FOLLOW UP STATUS ERROR:",
+        err
+      );
+
+      setError(
+        err.message ||
+        "Unable to update follow-up status."
+      );
+    } finally {
+      setUpdatingStatusId("");
     }
   };
 
@@ -1282,6 +2405,32 @@ export default function FollowUps({
         leadId
       );
     }
+  };
+
+  const openFollowUpDetails = (item) => {
+    if (!item) return;
+    setSelectedFollowUp(item);
+  };
+
+  const closeFollowUpDetails = () => {
+    setSelectedFollowUp(null);
+  };
+
+  const handleFollowUpSaved = async (
+    updatedItem
+  ) => {
+    setSelectedFollowUp(updatedItem);
+    await loadFollowUps();
+  };
+
+  const handleFollowUpReschedule = (
+    item
+  ) => {
+    setSelectedFollowUp(null);
+    openSchedule(
+      item?.lead || selectedLead || null,
+      item
+    );
   };
 
   const previousMonth = () => {
@@ -1322,8 +2471,120 @@ export default function FollowUps({
   const todayKey =
     dateKey(new Date());
 
+  if (selectedFollowUp) {
+    return (
+      <FollowUpDetails
+        item={selectedFollowUp}
+        healthcare={healthcare}
+        onBack={closeFollowUpDetails}
+        onSaved={handleFollowUpSaved}
+        onReschedule={handleFollowUpReschedule}
+      />
+    );
+  }
+
   return (
     <div className="followups-page">
+      <style>{`
+        .followup-row-status-control {
+          position: relative;
+          width: 132px;
+          height: 38px;
+          flex: 0 0 132px;
+          display: flex;
+          align-items: center;
+          border: 1px solid #dce4ef;
+          border-radius: 9px;
+          background: #ffffff;
+          box-sizing: border-box;
+          transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+
+        .followup-row-status-control:hover {
+          border-color: #bfd0e6;
+          background: #fbfdff;
+        }
+
+        .followup-row-status-control:focus-within {
+          border-color: #5a83df;
+          box-shadow: 0 0 0 3px rgba(90, 131, 223, .10);
+        }
+
+        .followup-row-status-dot {
+          width: 7px;
+          height: 7px;
+          margin-left: 11px;
+          border-radius: 50%;
+          flex: 0 0 7px;
+          background: #aeb9c8;
+          pointer-events: none;
+        }
+
+        .followup-row-status-dot.completed {
+          background: #20a464;
+          box-shadow: 0 0 0 3px rgba(32, 164, 100, .10);
+        }
+
+        .followup-row-status-dot.pending {
+          background: #f0a52b;
+          box-shadow: 0 0 0 3px rgba(240, 165, 43, .10);
+        }
+
+        .followup-row-status-select {
+          width: 100%;
+          height: 36px;
+          min-width: 0;
+          padding: 0 28px 0 8px;
+          border: 0;
+          border-radius: 8px;
+          outline: none;
+          background: transparent;
+          color: #33445d;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          appearance: none;
+          -webkit-appearance: none;
+          background-image:
+            linear-gradient(45deg, transparent 50%, #7b8ba1 50%),
+            linear-gradient(135deg, #7b8ba1 50%, transparent 50%);
+          background-position:
+            calc(100% - 15px) 15px,
+            calc(100% - 10px) 15px;
+          background-size: 5px 5px, 5px 5px;
+          background-repeat: no-repeat;
+        }
+
+        .followup-row-status-select:disabled {
+          opacity: .6;
+          cursor: wait;
+        }
+
+        .followup-row-status-select option {
+          background: #fff;
+          color: #26364d;
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .followup-actions {
+          align-items: center;
+        }
+
+        @media (max-width: 900px) {
+          .followup-row-status-control {
+            width: 124px;
+            flex-basis: 124px;
+          }
+        }
+
+        @media (max-width: 680px) {
+          .followup-row-status-control {
+            width: 100%;
+            flex-basis: 100%;
+          }
+        }
+      `}</style>
       <div className="followups-head">
         <div>
           <p className="followups-breadcrumb">
@@ -1539,20 +2800,18 @@ export default function FollowUps({
 
                 const dayItems =
                   calendarFollowUps[
-                    key
+                  key
                   ] || [];
 
                 return (
                   <div
-                    className={`followups-calendar-day ${
-                      currentMonth
-                        ? ""
-                        : "outside"
-                    } ${
-                      key === todayKey
+                    className={`followups-calendar-day ${currentMonth
+                      ? ""
+                      : "outside"
+                      } ${key === todayKey
                         ? "today"
                         : ""
-                    }`}
+                      }`}
                     key={key}
                   >
                     <div className="followups-calendar-day-number">
@@ -1574,7 +2833,7 @@ export default function FollowUps({
                                 type="button"
                                 className={`followups-calendar-event ${status} priority-${String(
                                   item.priority ||
-                                    "Medium"
+                                  "Medium"
                                 ).toLowerCase()}`}
                                 key={
                                   item._id
@@ -1608,13 +2867,13 @@ export default function FollowUps({
 
                       {dayItems.length >
                         4 && (
-                        <span className="followups-calendar-more">
-                          +
-                          {dayItems.length -
-                            4}{" "}
-                          more
-                        </span>
-                      )}
+                          <span className="followups-calendar-more">
+                            +
+                            {dayItems.length -
+                              4}{" "}
+                            more
+                          </span>
+                        )}
                     </div>
                   </div>
                 );
@@ -1863,19 +3122,18 @@ export default function FollowUps({
 
                   return (
                     <div
-                      className={`followup-row ${status} ${
-                        String(focusFollowUpId) ===
+                      className={`followup-row ${status} ${String(focusFollowUpId) ===
                         String(item._id)
-                          ? "followup-row-focus-target"
-                          : ""
-                      }`}
+                        ? "followup-row-focus-target"
+                        : ""
+                        }`}
                       data-followup-id={String(item._id)}
                       key={item._id}
                     >
                       <div
                         className={`followup-avatar priority-${String(
                           item.priority ||
-                            "Medium"
+                          "Medium"
                         ).toLowerCase()}`}
                       >
                         {getInitials(
@@ -1889,8 +3147,8 @@ export default function FollowUps({
                             type="button"
                             className="followup-lead-name"
                             onClick={() =>
-                              openLead(
-                                item.leadId
+                              openFollowUpDetails(
+                                item
                               )
                             }
                           >
@@ -1901,21 +3159,24 @@ export default function FollowUps({
                             className={`followup-status-badge ${status}`}
                           >
                             {status ===
-                            "today"
+                              "today"
                               ? "Due today"
                               : status ===
                                 "overdue"
-                              ? "Overdue"
-                              : status ===
-                                "completed"
-                              ? "Completed"
-                              : "Upcoming"}
+                                ? "Overdue"
+                                : status ===
+                                  "completed"
+                                  ? followUpStatusLabel(
+                                    item.status ||
+                                    "Completed"
+                                  )
+                                  : "Upcoming"}
                           </span>
 
                           <span
                             className={`followup-priority ${String(
                               item.priority ||
-                                "Medium"
+                              "Medium"
                             ).toLowerCase()}`}
                           >
                             {item.priority ||
@@ -1946,26 +3207,6 @@ export default function FollowUps({
                               {item.owner}
                             </span>
                           )}
-
-                          {item.service && (
-                            <span className="followup-service">
-                              {
-                                item.service
-                              }
-                            </span>
-                          )}
-
-                          {healthcare &&
-                            item.lead
-                              ?.preferredDoctor && (
-                              <span>
-                                {
-                                  item
-                                    .lead
-                                    .preferredDoctor
-                                }
-                              </span>
-                            )}
 
                           {item.createdAt && (
                             <span className="followup-created-time">
@@ -2051,6 +3292,53 @@ export default function FollowUps({
                           </span>
                         </button>
 
+                        <div className="followup-row-status-control">
+                          <span
+                            className={`followup-row-status-dot ${
+                              isCompleted(item)
+                                ? "completed"
+                                : "pending"
+                            }`}
+                          />
+
+                          <select
+                            className="followup-row-status-select"
+                            value={
+                              FOLLOW_UP_STATUS_OPTIONS.some(
+                                (option) =>
+                                  option.value === item.status
+                              )
+                                ? item.status
+                                : ""
+                            }
+                            onChange={(event) =>
+                              updateFollowUpStatus(
+                                item,
+                                event.target.value
+                              )
+                            }
+                            disabled={
+                              updatingStatusId === item._id
+                            }
+                            aria-label="Update follow-up status"
+                          >
+                            <option value="">
+                              Status
+                            </option>
+
+                            {FOLLOW_UP_STATUS_OPTIONS.map(
+                              (option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </div>
+
                         <button
                           type="button"
                           className="followup-delete-btn"
@@ -2135,8 +3423,8 @@ export default function FollowUps({
                       <span>
                         {getInitials(
                           selectedLead?.name ||
-                            initialLead?.name ||
-                            ""
+                          initialLead?.name ||
+                          ""
                         )}
                       </span>
 
@@ -2183,7 +3471,7 @@ export default function FollowUps({
                             setShowLeadResults(
                               value.trim()
                                 .length >
-                                0
+                              0
                             );
                           }}
                           autoComplete="off"
@@ -2196,48 +3484,48 @@ export default function FollowUps({
                           <div className="followup-lead-results">
                             {matchingLeads.length >
                               0 && (
-                              <div className="followup-search-results-list">
-                                {matchingLeads.map(
-                                  (
-                                    lead
-                                  ) => (
-                                    <button
-                                      type="button"
-                                      className="followup-lead-result"
-                                      key={
-                                        lead._id
-                                      }
-                                      onClick={() =>
-                                        selectExistingLead(
-                                          lead
-                                        )
-                                      }
-                                    >
-                                      <span className="followup-lead-result-avatar">
-                                        {getInitials(
-                                          lead.name
-                                        )}
-                                      </span>
+                                <div className="followup-search-results-list">
+                                  {matchingLeads.map(
+                                    (
+                                      lead
+                                    ) => (
+                                      <button
+                                        type="button"
+                                        className="followup-lead-result"
+                                        key={
+                                          lead._id
+                                        }
+                                        onClick={() =>
+                                          selectExistingLead(
+                                            lead
+                                          )
+                                        }
+                                      >
+                                        <span className="followup-lead-result-avatar">
+                                          {getInitials(
+                                            lead.name
+                                          )}
+                                        </span>
 
-                                      <span className="followup-lead-result-content">
-                                        <strong>
-                                          {lead.name ||
-                                            "Unnamed lead"}
-                                        </strong>
+                                        <span className="followup-lead-result-content">
+                                          <strong>
+                                            {lead.name ||
+                                              "Unnamed lead"}
+                                          </strong>
 
-                                        {lead.phone && (
-                                          <small>
-                                            {
-                                              lead.phone
-                                            }
-                                          </small>
-                                        )}
-                                      </span>
-                                    </button>
-                                  )
-                                )}
-                              </div>
-                            )}
+                                          {lead.phone && (
+                                            <small>
+                                              {
+                                                lead.phone
+                                              }
+                                            </small>
+                                          )}
+                                        </span>
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              )}
 
                             {!exactLeadExists && (
                               <button
@@ -2464,8 +3752,8 @@ export default function FollowUps({
                       ? "Rescheduling..."
                       : "Scheduling..."
                     : isRescheduling
-                    ? "Reschedule follow-up"
-                    : "Schedule follow-up"}
+                      ? "Reschedule follow-up"
+                      : "Schedule follow-up"}
                 </button>
               </div>
             </form>

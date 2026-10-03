@@ -230,6 +230,7 @@ const leadSchema = new mongoose.Schema(
                                 },
                             },
                         ],
+
                         default: [],
                     },
                 },
@@ -277,7 +278,11 @@ const leadSchema = new mongoose.Schema(
                     priority: {
                         type: String,
                         trim: true,
-                        enum: ["Low", "Medium", "High"],
+                        enum: [
+                            "Low",
+                            "Medium",
+                            "High",
+                        ],
                         default: "Medium",
                     },
 
@@ -291,9 +296,26 @@ const leadSchema = new mongoose.Schema(
                         default: false,
                     },
 
+                    /* =========================================
+                       FOLLOW-UP STATUS
+                    ========================================== */
+
                     status: {
                         type: String,
                         trim: true,
+
+                        enum: [
+                            "Scheduled",
+                            "Call attempted",
+                            "No answer",
+                            "Rescheduled",
+                            "Converted",
+                            "Treatment completed",
+                            "Changed mind",
+                            "Not interested",
+                            "Completed",
+                        ],
+
                         default: "Scheduled",
                     },
 
@@ -354,6 +376,10 @@ leadSchema.index(
         },
     }
 );
+
+/* =========================================
+   EXPORT MODEL
+========================================= */
 
 module.exports = mongoose.model(
     "Lead",

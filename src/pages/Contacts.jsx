@@ -47,7 +47,6 @@ function cleanText(value) {
 
 function cleanName(value) {
   const name = cleanText(value);
-
   return name || "Unnamed contact";
 }
 
@@ -76,26 +75,26 @@ function getContactSource(contact) {
 
   const sourceValue = cleanText(
     contact.source ||
-      contact.leadSource ||
-      contact.originalSource ||
-      ""
+    contact.leadSource ||
+    contact.originalSource ||
+    ""
   );
 
   const platformValue = cleanText(
     contact.metaPlatform ||
-      contact.platform ||
-      contact.leadPlatform ||
-      contact.metaSource ||
-      contact.channel ||
-      ""
+    contact.platform ||
+    contact.leadPlatform ||
+    contact.metaSource ||
+    contact.channel ||
+    ""
   );
 
   const sourceDetails = cleanText(
     contact.sourceDetails ||
-      contact.metaSourceDetails ||
-      contact.adSource ||
-      contact.originalPlatform ||
-      ""
+    contact.metaSourceDetails ||
+    contact.adSource ||
+    contact.originalPlatform ||
+    ""
   );
 
   const combined = [
@@ -230,7 +229,7 @@ function normalizeSource(value) {
 function normalizeStage(value) {
   return cleanText(value)
     .toLowerCase()
-    .replace(/[_-]+/g, " ")
+    .replace(/[\_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -238,23 +237,21 @@ function normalizeStage(value) {
 function isJunkLead(contact) {
   const recordType = String(
     contact?.recordType ||
-      contact?.sourceRecord ||
-      ""
+    contact?.sourceRecord ||
+    ""
   ).toLowerCase();
 
   const stage = normalizeStage(
     contact?.stage ||
-      contact?.leadStage ||
-      contact?.status ||
-      ""
+    contact?.leadStage ||
+    contact?.status ||
+    ""
   );
 
   return (
     recordType === "lead" &&
-    (
-      stage === "junk lead" ||
-      stage === "junk"
-    )
+    (stage === "junk lead" ||
+      stage === "junk")
   );
 }
 
@@ -384,6 +381,33 @@ function WarningIcon() {
   );
 }
 
+function ArrowIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 12H19"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13 6L19 12L13 18"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function Contacts({ user }) {
   const [contacts, setContacts] = useState([]);
   const [usage, setUsage] = useState(null);
@@ -439,7 +463,7 @@ export default function Contacts({ user }) {
       if (!response.ok) {
         throw new Error(
           data.message ||
-            "Unable to load contacts"
+          "Unable to load contacts"
         );
       }
 
@@ -523,16 +547,16 @@ export default function Contacts({ user }) {
       service: cleanText(contact.service),
       doctor: cleanText(
         contact.doctor ||
-          contact.preferredDoctor ||
-          contact.owner ||
-          user?.name ||
-          ""
+        contact.preferredDoctor ||
+        contact.owner ||
+        user?.name ||
+        ""
       ),
       owner: cleanText(
         contact.owner ||
-          contact.doctor ||
-          user?.name ||
-          ""
+        contact.doctor ||
+        user?.name ||
+        ""
       ),
     });
 
@@ -612,7 +636,7 @@ export default function Contacts({ user }) {
             "CONTACT_LIMIT_REACHED"
             ? data.message
             : data.message ||
-                "Unable to create contact"
+            "Unable to create contact"
         );
       }
 
@@ -621,9 +645,7 @@ export default function Contacts({ user }) {
         ...previous,
       ]);
 
-      setUsage(
-        data.usage || usage
-      );
+      setUsage(data.usage || usage);
 
       setShowAdd(false);
       resetContactForm();
@@ -660,9 +682,9 @@ export default function Contacts({ user }) {
 
     const isLead =
       deletingContact.recordType ===
-        "lead" ||
+      "lead" ||
       deletingContact.sourceRecord ===
-        "lead";
+      "lead";
 
     const endpoint = isLead
       ? `/api/leads/${deletingContact._id}`
@@ -684,7 +706,7 @@ export default function Contacts({ user }) {
       if (!response.ok) {
         throw new Error(
           data.message ||
-            "Unable to delete record"
+          "Unable to delete record"
         );
       }
 
@@ -706,7 +728,7 @@ export default function Contacts({ user }) {
     } catch (error) {
       setMessage(
         error.message ||
-          "Unable to delete record"
+        "Unable to delete record"
       );
     } finally {
       setDeleting(false);
@@ -731,11 +753,41 @@ export default function Contacts({ user }) {
       <style>
         {`
           .contacts-clickable-row {
-            transition: background .18s ease;
+            cursor: pointer;
+            transition:
+              background-color .18s ease,
+              box-shadow .18s ease;
           }
 
           .contacts-clickable-row:hover {
             background: #f8fbff;
+          }
+
+          .contacts-clickable-row td {
+            cursor: pointer;
+          }
+
+          .contacts-clickable-row:hover .contact-name-text {
+            color: #2563eb;
+          }
+
+          .contacts-clickable-row:hover .contact-row-arrow {
+            opacity: 1;
+            transform: translateX(2px);
+          }
+
+          .contact-row-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+            color: #2563eb;
+            opacity: 0;
+            transform: translateX(-2px);
+            transition:
+              opacity .18s ease,
+              transform .18s ease;
+            vertical-align: middle;
           }
 
           .contact-delete-btn {
@@ -799,6 +851,7 @@ export default function Contacts({ user }) {
               opacity: 0;
               transform: translateY(8px) scale(.98);
             }
+
             to {
               opacity: 1;
               transform: translateY(0) scale(1);
@@ -898,6 +951,10 @@ export default function Contacts({ user }) {
               min-width: 64px;
               padding: 0 8px;
             }
+
+            .contact-row-arrow {
+              display: none;
+            }
           }
         `}
       </style>
@@ -908,17 +965,14 @@ export default function Contacts({ user }) {
             People
           </p>
 
-          <h1>
-            Contacts
-          </h1>
+          <h1>Contacts</h1>
 
           <p className="contacts-subtitle">
             {usage
-              ? `${usage.used}${
-                  isUnlimited
-                    ? ""
-                    : ` / ${usage.limit}`
-                } contacts in your database`
+              ? `${usage.used}${isUnlimited
+                ? ""
+                : ` / ${usage.limit}`
+              } contacts in your database`
               : "Manage your contacts"}
           </p>
         </div>
@@ -1047,10 +1101,10 @@ export default function Contacts({ user }) {
                     const displayDoctor =
                       cleanText(
                         contact.doctor ||
-                          contact.preferredDoctor ||
-                          contact.owner ||
-                          user?.name ||
-                          ""
+                        contact.preferredDoctor ||
+                        contact.owner ||
+                        user?.name ||
+                        ""
                       );
 
                     const sourceClass =
@@ -1075,6 +1129,7 @@ export default function Contacts({ user }) {
                             contact
                           )
                         }
+                        title="Open contact details"
                       >
                         <td>
                           <span className="contact-name">
@@ -1092,6 +1147,10 @@ export default function Contacts({ user }) {
                             >
                               {displayName}
                             </strong>
+
+                            <span className="contact-row-arrow">
+                              <ArrowIcon />
+                            </span>
                           </span>
                         </td>
 
@@ -1126,7 +1185,7 @@ export default function Contacts({ user }) {
                         <td>
                           {formatDateTime(
                             contact.leadCreatedAt ||
-                              contact.createdAt
+                            contact.createdAt
                           )}
                         </td>
 
@@ -1178,9 +1237,7 @@ export default function Contacts({ user }) {
           >
             <div className="lead-modal-head">
               <div>
-                <h3>
-                  Add contact
-                </h3>
+                <h3>Add contact</h3>
 
                 <p>
                   Save a contact to your
@@ -1246,10 +1303,7 @@ export default function Contacts({ user }) {
                     }}
                     onBlur={() => {
                       setTimeout(() => {
-                        setSuggestions(
-                          []
-                        );
-
+                        setSuggestions([]);
                         setSuggestionField(
                           null
                         );
@@ -1262,7 +1316,7 @@ export default function Contacts({ user }) {
                     form.name.trim() && (
                       <div className="contact-suggestions">
                         {suggestions.length >
-                        0 ? (
+                          0 ? (
                           suggestions.map(
                             (
                               contact
@@ -1302,8 +1356,8 @@ export default function Contacts({ user }) {
 
                                     {contact.email
                                       ? ` · ${cleanText(
-                                          contact.email
-                                        )}`
+                                        contact.email
+                                      )}`
                                       : ""}
                                   </small>
                                 </span>
@@ -1393,10 +1447,7 @@ export default function Contacts({ user }) {
                     }}
                     onBlur={() => {
                       setTimeout(() => {
-                        setSuggestions(
-                          []
-                        );
-
+                        setSuggestions([]);
                         setSuggestionField(
                           null
                         );
@@ -1409,7 +1460,7 @@ export default function Contacts({ user }) {
                     form.phone.trim() && (
                       <div className="contact-suggestions">
                         {suggestions.length >
-                        0 ? (
+                          0 ? (
                           suggestions.map(
                             (
                               contact
@@ -1448,8 +1499,8 @@ export default function Contacts({ user }) {
 
                                     {contact.email
                                       ? ` · ${cleanText(
-                                          contact.email
-                                        )}`
+                                        contact.email
+                                      )}`
                                       : ""}
                                   </small>
                                 </span>
@@ -1632,9 +1683,7 @@ export default function Contacts({ user }) {
                 <WarningIcon />
               </div>
 
-              <h3>
-                Are you sure?
-              </h3>
+              <h3>Are you sure?</h3>
 
               <p>
                 Are you sure you want to
