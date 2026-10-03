@@ -650,14 +650,29 @@ function TodayFollowUpPopup({ items, minimized, onOpen, onMinimize, onClose, onR
   );
 }
 
+const DASHBOARD_HISTORY_KEY = "saleVitalsDashboard";
+
+function makeDashboardHistoryState({
+  active = "Dashboard",
+  selectedLeadId = null,
+  selectedContactId = null,
+} = {}) {
+  return {
+    saleVitalsDashboard: DASHBOARD_HISTORY_KEY,
+    active,
+    selectedLeadId,
+    selectedContactId,
+  };
+}
+
 export default function Dashboard() {
   const contactPathMatch =
     window.location.pathname.match(/^\/contacts\/([^/]+)$/);
 
-const [active, setActive] =
+  const [active, setActive] =
     useState(contactPathMatch ? "ContactDetails" : "Dashboard");
 
-const [selectedContactId, setSelectedContactId] =
+  const [selectedContactId, setSelectedContactId] =
     useState(contactPathMatch ? contactPathMatch[1] : null);
 
   const [settingsTab, setSettingsTab] =
@@ -734,6 +749,46 @@ const [selectedContactId, setSelectedContactId] =
   const [billingLoading, setBillingLoading] =
     useState(true);
 
+  // Keep the SPA navigation inside browser history.
+  // This changes navigation state only; the existing dashboard layout stays untouched.
+  useEffect(() => {
+    const currentState = window.history.state;
+
+    if (!currentState?.saleVitalsDashboard) {
+      window.history.replaceState(
+        makeDashboardHistoryState({
+          active,
+          selectedLeadId,
+          selectedContactId,
+        }),
+        "",
+        window.location.pathname + window.location.search
+      );
+    }
+
+    const handleDashboardPopState = (event) => {
+      const state = event.state;
+
+      if (!state?.saleVitalsDashboard) {
+        return;
+      }
+
+      setActive(state.active || "Dashboard");
+      setSelectedLeadId(state.selectedLeadId || null);
+      setSelectedContactId(state.selectedContactId || null);
+
+      setMobileOpen(false);
+      setProfileOpen(false);
+      setSearchOpen(false);
+      setSearchTerm("");
+    };
+
+    window.addEventListener("popstate", handleDashboardPopState);
+
+    return () => {
+      window.removeEventListener("popstate", handleDashboardPopState);
+    };
+  }, []);
 
   useEffect(() => {
     const dashboardParams =
@@ -1179,22 +1234,15 @@ const [selectedContactId, setSelectedContactId] =
         );
       }
 
-    if (contactsResponse.ok) {
-  const contacts = Array.isArray(
-    contactsData.contacts
-  )
-    ? contactsData.contacts
-    : [];
+      if (contactsResponse.ok) {
+        const contacts = Array.isArray(
+          contactsData.contacts
+        )
+          ? contactsData.contacts
+          : [];
 
-  const usedContacts =
-    Number(contactsData?.usage?.used);
-
-  setContactCount(
-    Number.isFinite(usedContacts)
-      ? usedContacts
-      : contacts.length
-  );
-}
+        setContactCount(contacts.length);
+      }
     } catch (error) {
       console.error(
         "LOAD SIDEBAR COUNTS ERROR:",
@@ -1336,7 +1384,7 @@ const [selectedContactId, setSelectedContactId] =
           const bTime = getLeadDate(b)?.getTime() || 0;
           return bTime - aTime;
         });
-        setDashboardLeads(normalized.slice(0, 15));
+        setDashboardLeads(normalized.slice(0, 5));
         setDashboardData(buildDashboardData(normalized));
       } catch (error) {
         console.error("LOAD DASHBOARD LEADS ERROR:", error);
@@ -1404,10 +1452,21 @@ const [selectedContactId, setSelectedContactId] =
     if (notification.leadId) {
       markLeadAsRead(notification.leadId);
 
+      window.history.pushState(
+        makeDashboardHistoryState({
+          active: "LeadDetails",
+          selectedLeadId: notification.leadId,
+          selectedContactId: null,
+        }),
+        "",
+        "/dashboard"
+      );
+
       setSelectedLeadId(
         notification.leadId
       );
 
+      setSelectedContactId(null);
       setActive("LeadDetails");
     }
   };
@@ -1482,6 +1541,25 @@ const [selectedContactId, setSelectedContactId] =
       return;
     }
 
+    const nextState = makeDashboardHistoryState({
+      active: name,
+      selectedLeadId: null,
+      selectedContactId: null,
+    });
+
+    const currentState = window.history.state;
+    const alreadyHere =
+      currentState?.saleVitalsDashboard === DASHBOARD_HISTORY_KEY &&
+      currentState?.active === name &&
+      !currentState?.selectedLeadId &&
+      !currentState?.selectedContactId;
+
+    if (!alreadyHere) {
+      window.history.pushState(nextState, "", "/dashboard");
+    }
+
+    setSelectedLeadId(null);
+    setSelectedContactId(null);
     setActive(name);
 
     if (name === "Settings") {
@@ -1517,8 +1595,21 @@ const [selectedContactId, setSelectedContactId] =
 
   const openSearchLead = (lead) => {
     if (!lead?._id) return;
+
     markLeadAsRead(lead._id);
+
+    window.history.pushState(
+      makeDashboardHistoryState({
+        active: "LeadDetails",
+        selectedLeadId: lead._id,
+        selectedContactId: null,
+      }),
+      "",
+      "/dashboard"
+    );
+
     setSelectedLeadId(lead._id);
+    setSelectedContactId(null);
     setActive("LeadDetails");
     setSearchTerm("");
     setSearchOpen(false);
@@ -1531,6 +1622,23 @@ const [selectedContactId, setSelectedContactId] =
       next.add(String(item._id));
       return next;
     });
+
+    const currentState = window.history.state;
+    const alreadyOnFollowUps =
+      currentState?.saleVitalsDashboard === DASHBOARD_HISTORY_KEY &&
+      currentState?.active === "Follow-ups";
+
+    if (!alreadyOnFollowUps) {
+      window.history.pushState(
+        makeDashboardHistoryState({
+          active: "Follow-ups",
+          selectedLeadId: null,
+          selectedContactId: null,
+        }),
+        "",
+        "/dashboard"
+      );
+    }
 
     setFocusFollowUpId(String(item._id));
     setActive("Follow-ups");
@@ -1563,26 +1671,26 @@ const [selectedContactId, setSelectedContactId] =
   }, [active, user?.permissions, user?.isOwner]);
 
 
-function ComingSoonPage({ type = "WhatsApp" }) {
-  const isWhatsApp = type === "WhatsApp";
+  function ComingSoonPage({ type = "WhatsApp" }) {
+    const isWhatsApp = type === "WhatsApp";
 
-  const title = isWhatsApp
-    ? "WhatsApp Integration"
-    : "Integrations";
+    const title = isWhatsApp
+      ? "WhatsApp Integration"
+      : "Integrations";
 
-  const description = isWhatsApp
-    ? "We are building a powerful WhatsApp integration to help you manage lead conversations, follow-ups and customer communication in one place."
-    : "We are connecting more powerful tools to help you bring your business data, leads and workflows together in one place.";
+    const description = isWhatsApp
+      ? "We are building a powerful WhatsApp integration to help you manage lead conversations, follow-ups and customer communication in one place."
+      : "We are connecting more powerful tools to help you bring your business data, leads and workflows together in one place.";
 
-  const features = isWhatsApp
-    ? [
+    const features = isWhatsApp
+      ? [
         "Send & receive WhatsApp messages",
         "Auto-create leads from WhatsApp chats",
         "Manage conversations inside CRM",
         "Use templates and quick replies",
         "Track message history and engagement",
       ]
-    : [
+      : [
         "Connect your favorite business tools",
         "Sync leads and customer data",
         "Automate your daily workflows",
@@ -1590,140 +1698,140 @@ function ComingSoonPage({ type = "WhatsApp" }) {
         "More integrations are coming soon",
       ];
 
-  return (
-    <section
-      className="dash-coming-soon"
-      style={{
-        minHeight: "calc(100vh - 170px)",
-        padding: "18px 0 50px",
-      }}
-    >
-      <div
+    return (
+      <section
+        className="dash-coming-soon"
         style={{
-          background: "#fff",
-          border: "1px solid #e3ecec",
-          borderRadius: 24,
-          minHeight: 570,
-          overflow: "hidden",
-          position: "relative",
-          boxShadow: "0 10px 35px rgba(0,101,106,.06)",
+          minHeight: "calc(100vh - 170px)",
+          padding: "18px 0 50px",
         }}
       >
         <div
           style={{
-            position: "absolute",
-            width: 420,
-            height: 420,
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(0,101,106,.12), rgba(0,101,106,0) 68%)",
-            right: 70,
-            top: 65,
-            pointerEvents: "none",
-          }}
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 0.95fr",
+            background: "#fff",
+            border: "1px solid #e3ecec",
+            borderRadius: 24,
             minHeight: 570,
-            alignItems: "center",
+            overflow: "hidden",
             position: "relative",
-            zIndex: 1,
+            boxShadow: "0 10px 35px rgba(0,101,106,.06)",
           }}
         >
           <div
             style={{
-              padding: "58px 42px 58px 48px",
-              maxWidth: 690,
+              position: "absolute",
+              width: 420,
+              height: 420,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(0,101,106,.12), rgba(0,101,106,0) 68%)",
+              right: 70,
+              top: 65,
+              pointerEvents: "none",
+            }}
+          />
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 0.95fr",
+              minHeight: 570,
+              alignItems: "center",
+              position: "relative",
+              zIndex: 1,
             }}
           >
             <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 14px",
-                borderRadius: 999,
-                background: "#e6f4f4",
-                color: "#00656A",
-                fontSize: 12,
-                fontWeight: 800,
-                letterSpacing: ".04em",
-                marginBottom: 22,
+                padding: "58px 42px 58px 48px",
+                maxWidth: 690,
               }}
             >
-              <span>🚀</span>
-              COMING SOON
-            </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  background: "#e6f4f4",
+                  color: "#00656A",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: ".04em",
+                  marginBottom: 22,
+                }}
+              >
+                <span>🚀</span>
+                COMING SOON
+              </div>
 
-            <h1
-              style={{
-                margin: 0,
-                color: "#172033",
-                fontSize: "clamp(32px, 4vw, 52px)",
-                lineHeight: 1.08,
-                fontWeight: 800,
-                letterSpacing: "-.04em",
-              }}
-            >
-              {title}
-            </h1>
+              <h1
+                style={{
+                  margin: 0,
+                  color: "#172033",
+                  fontSize: "clamp(32px, 4vw, 52px)",
+                  lineHeight: 1.08,
+                  fontWeight: 800,
+                  letterSpacing: "-.04em",
+                }}
+              >
+                {title}
+              </h1>
 
-            <p
-              style={{
-                margin: "18px 0 28px",
-                color: "#66758a",
-                fontSize: 16,
-                lineHeight: 1.75,
-                maxWidth: 610,
-              }}
-            >
-              {description}
-            </p>
+              <p
+                style={{
+                  margin: "18px 0 28px",
+                  color: "#66758a",
+                  fontSize: 16,
+                  lineHeight: 1.75,
+                  maxWidth: 610,
+                }}
+              >
+                {description}
+              </p>
 
-            <div
-              style={{
-                display: "grid",
-                gap: 13,
-                marginBottom: 32,
-              }}
-            >
-              {features.map((feature) => (
-                <div
-                  key={feature}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    color: "#344054",
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  <span
+              <div
+                style={{
+                  display: "grid",
+                  gap: 13,
+                  marginBottom: 32,
+                }}
+              >
+                {features.map((feature) => (
+                  <div
+                    key={feature}
                     style={{
-                      width: 22,
-                      height: 22,
-                      minWidth: 22,
-                      borderRadius: "50%",
-                      display: "inline-flex",
+                      display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      background: "#dff7e9",
-                      color: "#16a05d",
-                      fontSize: 13,
-                      fontWeight: 900,
+                      gap: 12,
+                      color: "#344054",
+                      fontSize: 14,
+                      fontWeight: 600,
                     }}
                   >
-                    ✓
-                  </span>
-                  {feature}
-                </div>
-              ))}
-            </div>
+                    <span
+                      style={{
+                        width: 22,
+                        height: 22,
+                        minWidth: 22,
+                        borderRadius: "50%",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#dff7e9",
+                        color: "#16a05d",
+                        fontSize: 13,
+                        fontWeight: 900,
+                      }}
+                    >
+                      ✓
+                    </span>
+                    {feature}
+                  </div>
+                ))}
+              </div>
 
-            {/* <button
+              {/* <button
               type="button"
               onClick={() => {
                 const message =
@@ -1748,93 +1856,93 @@ function ComingSoonPage({ type = "WhatsApp" }) {
             >
               Need Help? Chat on WhatsApp
             </button> */}
-          </div>
+            </div>
 
-          <div
-            style={{
-              minHeight: 500,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-          >
             <div
               style={{
-                width: 310,
-                height: 310,
-                borderRadius: "50%",
-                border: "1px dashed rgba(0,101,106,.24)",
-                position: "relative",
+                minHeight: 500,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                position: "relative",
               }}
             >
               <div
                 style={{
-                  width: 170,
-                  height: 170,
-                  borderRadius: 36,
-                  background: "linear-gradient(145deg, #25d366, #16a05a)",
+                  width: 310,
+                  height: 310,
+                  borderRadius: "50%",
+                  border: "1px dashed rgba(0,101,106,.24)",
+                  position: "relative",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#fff",
-                  boxShadow: "0 22px 55px rgba(0,101,106,.24)",
                 }}
               >
-                <Icon name={isWhatsApp ? "whatsapp" : "integration"} size={76} />
-              </div>
-
-              {[
-                ["Auto Capture", "users", { top: 8, left: -35 }],
-                ["Follow-ups", "calendar", { bottom: 12, left: -45 }],
-                ["Track & Analyze", "report", { bottom: 18, right: -55 }],
-                ["Coming Soon", "spark", { top: 8, right: -48 }],
-              ].map(([label, icon, position]) => (
                 <div
-                  key={label}
                   style={{
-                    position: "absolute",
-                    ...position,
-                    background: "#fff",
-                    border: "1px solid #e6eeee",
-                    borderRadius: 14,
-                    padding: "11px 14px",
-                    minWidth: 118,
+                    width: 170,
+                    height: 170,
+                    borderRadius: 36,
+                    background: "linear-gradient(145deg, #25d366, #16a05a)",
                     display: "flex",
                     alignItems: "center",
-                    gap: 9,
-                    boxShadow: "0 10px 25px rgba(15,23,42,.08)",
-                    color: "#253047",
-                    fontSize: 11,
-                    fontWeight: 800,
+                    justifyContent: "center",
+                    color: "#fff",
+                    boxShadow: "0 22px 55px rgba(0,101,106,.24)",
                   }}
                 >
-                  <span
+                  <Icon name={isWhatsApp ? "whatsapp" : "integration"} size={76} />
+                </div>
+
+                {[
+                  ["Auto Capture", "users", { top: 8, left: -35 }],
+                  ["Follow-ups", "calendar", { bottom: 12, left: -45 }],
+                  ["Track & Analyze", "report", { bottom: 18, right: -55 }],
+                  ["Coming Soon", "spark", { top: 8, right: -48 }],
+                ].map(([label, icon, position]) => (
+                  <div
+                    key={label}
                     style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 9,
-                      display: "inline-flex",
+                      position: "absolute",
+                      ...position,
+                      background: "#fff",
+                      border: "1px solid #e6eeee",
+                      borderRadius: 14,
+                      padding: "11px 14px",
+                      minWidth: 118,
+                      display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      background: "#e6f4f4",
-                      color: "#00656A",
+                      gap: 9,
+                      boxShadow: "0 10px 25px rgba(15,23,42,.08)",
+                      color: "#253047",
+                      fontSize: 11,
+                      fontWeight: 800,
                     }}
                   >
-                    <Icon name={icon} size={15} />
-                  </span>
-                  {label}
-                </div>
-              ))}
+                    <span
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 9,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#e6f4f4",
+                        color: "#00656A",
+                      }}
+                    >
+                      <Icon name={icon} size={15} />
+                    </span>
+                    {label}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <style>{`
+        <style>{`
         @media (max-width: 900px) {
           .dash-coming-soon > div > div {
             grid-template-columns: 1fr !important;
@@ -1861,9 +1969,9 @@ function ComingSoonPage({ type = "WhatsApp" }) {
           }
         }
       `}</style>
-    </section>
-  );
-}
+      </section>
+    );
+  }
 
   const renderDashboardSection = () => {
     if (active === "WhatsApp") {
@@ -1889,7 +1997,19 @@ function ComingSoonPage({ type = "WhatsApp" }) {
           user={user}
           onOpenLeadDetails={(leadId) => {
             markLeadAsRead(leadId);
+
+            window.history.pushState(
+              makeDashboardHistoryState({
+                active: "LeadDetails",
+                selectedLeadId: leadId,
+                selectedContactId: null,
+              }),
+              "",
+              "/dashboard"
+            );
+
             setSelectedLeadId(leadId);
+            setSelectedContactId(null);
             setActive("LeadDetails");
           }}
         />
@@ -1914,7 +2034,19 @@ function ComingSoonPage({ type = "WhatsApp" }) {
           user={user}
           onOpenLeadDetails={(leadId) => {
             markLeadAsRead(leadId);
+
+            window.history.pushState(
+              makeDashboardHistoryState({
+                active: "LeadDetails",
+                selectedLeadId: leadId,
+                selectedContactId: null,
+              }),
+              "",
+              "/dashboard"
+            );
+
             setSelectedLeadId(leadId);
+            setSelectedContactId(null);
             setActive("LeadDetails");
           }}
         />
@@ -1926,17 +2058,15 @@ function ComingSoonPage({ type = "WhatsApp" }) {
     }
 
     if (active === "ContactDetails" && selectedContactId) {
-  return (
-    <ContactDetails
-      contactId={selectedContactId}
-      onBack={() => {
-        window.history.pushState({}, "", "/dashboard");
-        setSelectedContactId(null);
-        setActive("Contacts");
-      }}
-    />
-  );
-}
+      return (
+        <ContactDetails
+          contactId={selectedContactId}
+          onBack={() => {
+            window.history.back();
+          }}
+        />
+      );
+    }
 
     if (active === "Ai Chat") {
       return (
@@ -1969,7 +2099,7 @@ function ComingSoonPage({ type = "WhatsApp" }) {
           leadId={selectedLeadId}
           user={user}
           onBack={() =>
-            setActive("Leads")
+            window.history.back()
           }
           onOpenInvoice={() =>
             setActive("Invoices")
@@ -1997,7 +2127,7 @@ function ComingSoonPage({ type = "WhatsApp" }) {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("user");
 
-    window.location.href = "/signin";
+    window.location.replace("/signin");
   };
 
   const userName =
@@ -2052,186 +2182,163 @@ function ComingSoonPage({ type = "WhatsApp" }) {
       `}</style>
       <div className="dashboard-shell">
 
-      <aside
-        className={`dash-sidebar ${mobileOpen ? "open" : ""
-          }`}
-      >
+        <aside
+          className={`dash-sidebar ${mobileOpen ? "open" : ""
+            }`}
+        >
 
-        <Brand />
+          <Brand />
 
-        <nav className="dash-nav">
+          <nav className="dash-nav">
 
-          <button
-            className={`dash-nav-item ${active === "Dashboard"
-              ? "active"
-              : ""
-              }`}
-            onClick={() =>
-              selectNav("Dashboard")
-            }
-          >
+            <button
+              className={`dash-nav-item ${active === "Dashboard"
+                ? "active"
+                : ""
+                }`}
+              onClick={() =>
+                selectNav("Dashboard")
+              }
+            >
 
-            <Icon
-              name="report"
-              size={17}
-            />
+              <Icon
+                name="report"
+                size={17}
+              />
 
-            <span>
-              Dashboard
-            </span>
+              <span>
+                Dashboard
+              </span>
 
-          </button>
+            </button>
 
-          {visibleNavGroups.map(
-            (group) => (
-              <div
-                className="dash-nav-group"
-                key={group.label}
-              >
-
-                <div className="dash-nav-label">
-                  {group.label}
-                </div>
-
-                {group.items.map(
-                  ([
-                    name,
-                    icon,
-                    count,
-                    countTone,
-                  ]) => (
-                    <button
-                      key={name}
-                      className={`dash-nav-item ${active === name
-                        ? "active"
-                        : ""
-                        }`}
-                      onClick={() =>
-                        selectNav(name)
-                      }
-                    >
-
-                      <Icon
-                        name={icon}
-                        size={17}
-                      />
-
-                      <span>
-                        {name}
-                      </span>
-
-                      {(count ||
-                        name === "Leads" ||
-                        name === "Contacts" ||
-                        name === "Follow-ups" ||
-                        (name === "Chat" && aiUnreadCount > 0)) && (
-                          <em
-                            className={
-                              name === "Leads" && leadCount > 0
-                                ? "hot"
-                                : name === "Follow-ups"
-                                  ? "hot"
-                                  : name === "Chat" && aiUnreadCount > 0
-                                    ? "hot"
-                                    : countTone === "hot"
-                                      ? "hot"
-                                      : ""
-                            }
-                          >
-                            {name === "Leads"
-                              ? leadCount
-                              : name === "Contacts"
-                                ? contactCount
-                                : name === "Follow-ups"
-                                  ? pendingFollowUpCount
-                                  : name === "Chat"
-                                    ? aiUnreadCount
-                                    : count}
-                          </em>
-                        )}
-
-                    </button>
-                  )
-                )}
-
-              </div>
-            )
-          )}
-
-        </nav>
-
-        {hasPermission("billing.view") && (
-          <div className="dash-plan">
-            {showPlans || billingLoading ? (
-              <>
-                <div className="dash-plan-top">
-                  <strong>Choose your plan</strong>
-                  <span>Get started</span>
-                </div>
-
-                <div className="dash-plan-copy">
-                  Choose a plan to unlock your workspace
-                </div>
-
-                <div className="dash-plan-bar">
-                  <i style={{ width: "0%" }} />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettingsTab("Plan & Billing");
-                    setActive("Settings");
-                    setMobileOpen(false);
-                    setProfileOpen(false);
-                  }}
+            {visibleNavGroups.map(
+              (group) => (
+                <div
+                  className="dash-nav-group"
+                  key={group.label}
                 >
-                  Choose plan
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="dash-plan-top">
-                  <strong>
-                    {billing?.subscription?.planName ||
-                      "Active plan"}
-                  </strong>
 
-                  <span>Active</span>
+                  <div className="dash-nav-label">
+                    {group.label}
+                  </div>
+
+                  {group.items.map(
+                    ([
+                      name,
+                      icon,
+                      count,
+                      countTone,
+                    ]) => (
+                      <button
+                        key={name}
+                        className={`dash-nav-item ${active === name
+                          ? "active"
+                          : ""
+                          }`}
+                        onClick={() =>
+                          selectNav(name)
+                        }
+                      >
+
+                        <Icon
+                          name={icon}
+                          size={17}
+                        />
+
+                        <span>
+                          {name}
+                        </span>
+
+                        {(count ||
+                          name === "Leads" ||
+                          name === "Contacts" ||
+                          name === "Follow-ups" ||
+                          (name === "Chat" && aiUnreadCount > 0)) && (
+                            <em
+                              className={
+                                name === "Leads" && leadCount > 0
+                                  ? "hot"
+                                  : name === "Follow-ups"
+                                    ? "hot"
+                                    : name === "Chat" && aiUnreadCount > 0
+                                      ? "hot"
+                                      : countTone === "hot"
+                                        ? "hot"
+                                        : ""
+                              }
+                            >
+                              {name === "Leads"
+                                ? leadCount
+                                : name === "Contacts"
+                                  ? contactCount
+                                  : name === "Follow-ups"
+                                    ? pendingFollowUpCount
+                                    : name === "Chat"
+                                      ? aiUnreadCount
+                                      : count}
+                            </em>
+                          )}
+
+                      </button>
+                    )
+                  )}
+
                 </div>
+              )
+            )}
 
-                <div className="dash-plan-copy">
-                  {billing?.subscription?.daysRemaining !==
-                    undefined
-                    ? `${billing.subscription.daysRemaining} days remaining`
-                    : "Your Vitals workspace is active"}
-                </div>
+          </nav>
 
-                <div className="dash-plan-usage">
-                  <div className="dash-plan-usage-row">
-                    <strong>
-                      {(() => {
-                        const used = Number(
-                          billing?.usage?.contacts?.used || 0
-                        );
+          {hasPermission("billing.view") && (
+            <div className="dash-plan">
+              {showPlans || billingLoading ? (
+                <>
+                  <div className="dash-plan-top">
+                    <strong>Choose your plan</strong>
+                    <span>Get started</span>
+                  </div>
 
-                        const total =
-                          billing?.usage?.contacts?.totalLimit ??
-                          billing?.usage?.contacts?.planLimit ??
-                          billing?.usage?.contacts?.limit;
-
-                        return total === null ||
-                          total === undefined
-                          ? `${used} contacts`
-                          : `${used} / ${Number(total) || 0}`;
-                      })()}
-                    </strong>
+                  <div className="dash-plan-copy">
+                    Choose a plan to unlock your workspace
                   </div>
 
                   <div className="dash-plan-bar">
-                    <i
-                      style={{
-                        width: `${(() => {
+                    <i style={{ width: "0%" }} />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsTab("Plan & Billing");
+                      selectNav("Settings");
+                    }}
+                  >
+                    Choose plan
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="dash-plan-top">
+                    <strong>
+                      {billing?.subscription?.planName ||
+                        "Active plan"}
+                    </strong>
+
+                    <span>Active</span>
+                  </div>
+
+                  <div className="dash-plan-copy">
+                    {billing?.subscription?.daysRemaining !==
+                      undefined
+                      ? `${billing.subscription.daysRemaining} days remaining`
+                      : "Your Vitals workspace is active"}
+                  </div>
+
+                  <div className="dash-plan-usage">
+                    <div className="dash-plan-usage-row">
+                      <strong>
+                        {(() => {
                           const used = Number(
                             billing?.usage?.contacts?.used || 0
                           );
@@ -2241,463 +2348,543 @@ function ComingSoonPage({ type = "WhatsApp" }) {
                             billing?.usage?.contacts?.planLimit ??
                             billing?.usage?.contacts?.limit;
 
-                          if (
-                            total === null ||
-                            total === undefined ||
-                            Number(total) <= 0
-                          ) {
-                            return 0;
-                          }
+                          return total === null ||
+                            total === undefined
+                            ? `${used} contacts`
+                            : `${used} / ${Number(total) || 0}`;
+                        })()}
+                      </strong>
+                    </div>
 
-                          return Math.min(
-                            100,
-                            Math.max(
-                              0,
-                              (used / Number(total)) * 100
-                            )
-                          );
-                        })()}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+                    <div className="dash-plan-bar">
+                      <i
+                        style={{
+                          width: `${(() => {
+                            const used = Number(
+                              billing?.usage?.contacts?.used || 0
+                            );
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettingsTab("Plan & Billing");
-                    setActive("Settings");
-                    setMobileOpen(false);
-                    setProfileOpen(false);
-                  }}
-                >
-                  Upgrade plan
-                </button>
-              </>
-            )}
-          </div>
-        )}
+                            const total =
+                              billing?.usage?.contacts?.totalLimit ??
+                              billing?.usage?.contacts?.planLimit ??
+                              billing?.usage?.contacts?.limit;
 
-      </aside>
-
-      {mobileOpen && (
-        <button
-          className="dash-overlay"
-          aria-label="Close menu"
-          onClick={() =>
-            setMobileOpen(false)
-          }
-        />
-      )}
-
-      <main className="dash-main">
-
-        <header className="dash-topbar">
-
-          <button
-            className="dash-menu-btn"
-            onClick={() =>
-              setMobileOpen(true)
-            }
-            aria-label="Open menu"
-          >
-
-            <span />
-            <span />
-            <span />
-
-          </button>
-
-          <div
-            className="dash-search"
-            style={{
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              gap: 9,
-            }}
-          >
-            <Icon name="search" size={18} />
-
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => {
-                setSearchTerm(event.target.value);
-                setSearchOpen(true);
-              }}
-              onFocus={() => setSearchOpen(true)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setSearchTerm("");
-                  setSearchOpen(false);
-                }
-                if (event.key === "Enter" && searchResults[0]) {
-                  openSearchLead(searchResults[0]);
-                }
-              }}
-              placeholder="Search patients, leads, invoices…"
-              aria-label="Search patients, leads, invoices"
-              style={{
-                width: "100%",
-                border: 0,
-                outline: 0,
-                background: "transparent",
-                font: "inherit",
-                color: "inherit",
-                minWidth: 0,
-              }}
-            />
-
-            <kbd>⌘K</kbd>
-
-            {searchOpen && searchTerm.trim() && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 8px)",
-                  left: 0,
-                  right: 0,
-                  minWidth: 420,
-                  maxHeight: 420,
-                  overflowY: "auto",
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 14,
-                  boxShadow: "0 18px 45px rgba(15,23,42,.14)",
-                  zIndex: 1000,
-                  padding: 8,
-                }}
-              >
-                {searchResults.length === 0 ? (
-                  <div style={{ padding: "16px 14px", color: "#6b7280", fontSize: 13 }}>
-                    No leads found for “{searchTerm.trim()}”
-                  </div>
-                ) : (
-                  searchResults.map((lead) => (
-                    <button
-                      type="button"
-                      key={lead._id}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => openSearchLead(lead)}
-                      style={{
-                        width: "100%",
-                        border: 0,
-                        background: "transparent",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "11px 12px",
-                        borderRadius: 10,
-                        textAlign: "left",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Avatar initials={getInitials(lead.name)} />
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <strong style={{ display: "block", fontSize: 13, color: "#172033" }}>
-                          {lead.name || "Unnamed lead"}
-                        </strong>
-                        <small style={{ display: "block", marginTop: 3, color: "#7b8798", fontSize: 11 }}>
-                          {lead.service || "Lead"} · {normalizeSource(lead.source)} · {lead.phone || lead.email || ""}
-                        </small>
-                      </span>
-                      <span style={{ fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>
-                        Open lead →
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="dash-top-actions">
-
-            <button
-              type="button"
-              className="dash-help-btn"
-              onClick={() => {
-                const message =
-                  "Hello SaleVitals Support, I need help with my CRM. Please assist me.";
-                window.open(
-                  `https://wa.me/919625989258?text=${encodeURIComponent(message)}`,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
-              }}
-              aria-label="Get help on WhatsApp"
-              title="Get help on WhatsApp"
-            >
-              <Icon name="help" size={17} />
-              <span>Help</span>
-            </button>
-
-            <div
-              className="dash-notification-wrap"
-              ref={notificationRef}
-            >
-
-              <button
-                className="dash-icon-btn notification"
-                onClick={() =>
-                  setNotificationsOpen(true)
-                }
-                aria-label="Notifications"
-                aria-expanded={
-                  notificationsOpen
-                }
-              >
-
-                <Icon
-                  name="bell"
-                  size={18}
-                />
-
-                {unreadNotificationCount >
-                  0 && (
-                    <b>
-                      {unreadNotificationCount >
-                        99
-                        ? "99+"
-                        : unreadNotificationCount}
-                    </b>
-                  )}
-
-              </button>
-
-              {notificationsOpen && (
-                <div className="dash-notification-panel">
-
-                  <div className="dash-notification-head">
-
-                    <strong>
-                      Notifications
-                    </strong>
-
-                    {unreadNotificationCount >
-                      0 && (
-                        <button
-                          type="button"
-                          onClick={
-                            markAllNotificationsAsRead
-                          }
-                        >
-                          Mark all as read
-                        </button>
-                      )}
-
-                  </div>
-
-                  <div className="dash-notification-list">
-
-                    {notifications.length ===
-                      0 ? (
-                      <p className="dash-notification-empty">
-                        No new notifications
-                      </p>
-                    ) : (
-                      notifications.map(
-                        (
-                          notification
-                        ) => (
-                          <button
-                            type="button"
-                            className={`dash-notification-item ${notification.isRead
-                              ? "read"
-                              : "unread"
-                              }`}
-                            key={
-                              notification._id
+                            if (
+                              total === null ||
+                              total === undefined ||
+                              Number(total) <= 0
+                            ) {
+                              return 0;
                             }
-                            onClick={() =>
-                              handleNotificationClick(
-                                notification
+
+                            return Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                (used / Number(total)) * 100
                               )
-                            }
-                          >
-
-                            <span>
-
-                              <strong>
-                                {
-                                  notification.title
-                                }
-                              </strong>
-
-                              <b>
-                                {
-                                  notification.message
-                                }
-                              </b>
-
-                              <small>
-                                {notification.source ||
-                                  "Other"}{" "}
-                                ·{" "}
-                                {getRelativeTime(
-                                  notification.createdAt
-                                )}
-                              </small>
-
-                            </span>
-
-                          </button>
-                        )
-                      )
-                    )}
-
+                            );
+                          })()}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-
-                </div>
-              )}
-
-            </div>
-
-            <div className="dash-profile-wrap">
-
-              <button
-                className="dash-profile"
-                onClick={() =>
-                  setProfileOpen(
-                    (value) =>
-                      !value
-                  )
-                }
-              >
-
-                <Avatar
-                  initials={initials}
-                  logo={clinicLogo}
-                  alt={
-                    clinicName ||
-                    "Clinic logo"
-                  }
-                />
-
-                <span>
-
-                  <strong>
-                    {userName}
-                  </strong>
-
-                  <small>
-                    {clinicName}
-                  </small>
-
-                </span>
-
-                <Icon
-                  name="chevron"
-                  size={15}
-                />
-
-              </button>
-
-              {profileOpen && (
-                <div className="dash-profile-menu">
 
                   <button
                     type="button"
                     onClick={() => {
-                      setActive(
-                        "Settings"
-                      );
-
-                      setProfileOpen(
-                        false
-                      );
+                      setSettingsTab("Plan & Billing");
+                      selectNav("Settings");
                     }}
                   >
-                    Profile & settings
+                    Upgrade plan
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={
-                      handleLogout
-                    }
-                  >
-                    Sign out
-                  </button>
-
-                </div>
+                </>
               )}
-
             </div>
+          )}
 
-          </div>
+        </aside>
 
-        </header>
-
-        <section className="dash-content">
-
-          {renderDashboardSection()}
-
-        </section>
-
-      </main>
-
-      {todayFollowUps.filter(
-        (item) =>
-          !dismissedTodayFollowUps.has(
-            String(item._id)
-          ) &&
-          new Date(item.date).getTime() > Date.now()
-      ).length > 0 && (
-          <TodayFollowUpPopup
-            items={todayFollowUps.filter(
-              (item) =>
-                !dismissedTodayFollowUps.has(
-                  String(item._id)
-                ) &&
-                new Date(item.date).getTime() > Date.now()
-            )}
-            minimized={todayFollowUpsMinimized}
-            onOpen={openTodayFollowUp}
-            onMinimize={() =>
-              setTodayFollowUpsMinimized(true)
+        {mobileOpen && (
+          <button
+            className="dash-overlay"
+            aria-label="Close menu"
+            onClick={() =>
+              setMobileOpen(false)
             }
-            onRestore={() =>
-              setTodayFollowUpsMinimized(false)
-            }
-            onClose={closeTodayFollowUps}
           />
         )}
 
-      <nav className="dash-mobile-nav">
+        <main className="dash-main">
 
-        <button
-          className={
-            active === "Dashboard"
-              ? "on"
-              : ""
-          }
-          onClick={() =>
-            selectNav("Dashboard")
-          }
-        >
+          <header className="dash-topbar">
 
-          <Icon
-            name="report"
-            size={18}
-          />
+            <button
+              className="dash-menu-btn"
+              onClick={() =>
+                setMobileOpen(true)
+              }
+              aria-label="Open menu"
+            >
 
-          <span>
-            Home
-          </span>
+              <span />
+              <span />
+              <span />
 
-        </button>
+            </button>
 
-        {canAccessNav("Leads") && (
+            <div
+              className="dash-search"
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+              }}
+            >
+              <Icon name="search" size={18} />
+
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setSearchTerm("");
+                    setSearchOpen(false);
+                  }
+                  if (event.key === "Enter" && searchResults[0]) {
+                    openSearchLead(searchResults[0]);
+                  }
+                }}
+                placeholder="Search patients, leads, invoices…"
+                aria-label="Search patients, leads, invoices"
+                style={{
+                  width: "100%",
+                  border: 0,
+                  outline: 0,
+                  background: "transparent",
+                  font: "inherit",
+                  color: "inherit",
+                  minWidth: 0,
+                }}
+              />
+
+              <kbd>⌘K</kbd>
+
+              {searchOpen && searchTerm.trim() && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    left: 0,
+                    right: 0,
+                    minWidth: 420,
+                    maxHeight: 420,
+                    overflowY: "auto",
+                    background: "#fff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 14,
+                    boxShadow: "0 18px 45px rgba(15,23,42,.14)",
+                    zIndex: 1000,
+                    padding: 8,
+                  }}
+                >
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: "16px 14px", color: "#6b7280", fontSize: 13 }}>
+                      No leads found for “{searchTerm.trim()}”
+                    </div>
+                  ) : (
+                    searchResults.map((lead) => (
+                      <button
+                        type="button"
+                        key={lead._id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => openSearchLead(lead)}
+                        style={{
+                          width: "100%",
+                          border: 0,
+                          background: "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "11px 12px",
+                          borderRadius: 10,
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Avatar initials={getInitials(lead.name)} />
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ display: "block", fontSize: 13, color: "#172033" }}>
+                            {lead.name || "Unnamed lead"}
+                          </strong>
+                          <small style={{ display: "block", marginTop: 3, color: "#7b8798", fontSize: 11 }}>
+                            {lead.service || "Lead"} · {normalizeSource(lead.source)} · {lead.phone || lead.email || ""}
+                          </small>
+                        </span>
+                        <span style={{ fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>
+                          Open lead →
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="dash-top-actions">
+
+              <button
+                type="button"
+                className="dash-help-btn"
+                onClick={() => {
+                  const message =
+                    "Hello SaleVitals Support, I need help with my CRM. Please assist me.";
+                  window.open(
+                    `https://wa.me/919625989258?text=${encodeURIComponent(message)}`,
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
+                }}
+                aria-label="Get help on WhatsApp"
+                title="Get help on WhatsApp"
+              >
+                <Icon name="help" size={17} />
+                <span>Help</span>
+              </button>
+
+              <div
+                className="dash-notification-wrap"
+                ref={notificationRef}
+              >
+
+                <button
+                  className="dash-icon-btn notification"
+                  onClick={() =>
+                    setNotificationsOpen(true)
+                  }
+                  aria-label="Notifications"
+                  aria-expanded={
+                    notificationsOpen
+                  }
+                >
+
+                  <Icon
+                    name="bell"
+                    size={18}
+                  />
+
+                  {unreadNotificationCount >
+                    0 && (
+                      <b>
+                        {unreadNotificationCount >
+                          99
+                          ? "99+"
+                          : unreadNotificationCount}
+                      </b>
+                    )}
+
+                </button>
+
+                {notificationsOpen && (
+                  <div className="dash-notification-panel">
+
+                    <div className="dash-notification-head">
+
+                      <strong>
+                        Notifications
+                      </strong>
+
+                      {unreadNotificationCount >
+                        0 && (
+                          <button
+                            type="button"
+                            onClick={
+                              markAllNotificationsAsRead
+                            }
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+
+                    </div>
+
+                    <div className="dash-notification-list">
+
+                      {notifications.length ===
+                        0 ? (
+                        <p className="dash-notification-empty">
+                          No new notifications
+                        </p>
+                      ) : (
+                        notifications.map(
+                          (
+                            notification
+                          ) => (
+                            <button
+                              type="button"
+                              className={`dash-notification-item ${notification.isRead
+                                ? "read"
+                                : "unread"
+                                }`}
+                              key={
+                                notification._id
+                              }
+                              onClick={() =>
+                                handleNotificationClick(
+                                  notification
+                                )
+                              }
+                            >
+
+                              <span>
+
+                                <strong>
+                                  {
+                                    notification.title
+                                  }
+                                </strong>
+
+                                <b>
+                                  {
+                                    notification.message
+                                  }
+                                </b>
+
+                                <small>
+                                  {notification.source ||
+                                    "Other"}{" "}
+                                  ·{" "}
+                                  {getRelativeTime(
+                                    notification.createdAt
+                                  )}
+                                </small>
+
+                              </span>
+
+                            </button>
+                          )
+                        )
+                      )}
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+
+              <div className="dash-profile-wrap">
+
+                <button
+                  className="dash-profile"
+                  onClick={() =>
+                    setProfileOpen(
+                      (value) =>
+                        !value
+                    )
+                  }
+                >
+
+                  <Avatar
+                    initials={initials}
+                    logo={clinicLogo}
+                    alt={
+                      clinicName ||
+                      "Clinic logo"
+                    }
+                  />
+
+                  <span>
+
+                    <strong>
+                      {userName}
+                    </strong>
+
+                    <small>
+                      {clinicName}
+                    </small>
+
+                  </span>
+
+                  <Icon
+                    name="chevron"
+                    size={15}
+                  />
+
+                </button>
+
+                {profileOpen && (
+                  <div className="dash-profile-menu">
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectNav("Settings");
+                        setProfileOpen(false);
+                      }}
+                    >
+                      Profile & settings
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={
+                        handleLogout
+                      }
+                    >
+                      Sign out
+                    </button>
+
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+          </header>
+
+          <section className="dash-content">
+
+            {renderDashboardSection()}
+
+          </section>
+
+        </main>
+
+        {todayFollowUps.filter(
+          (item) =>
+            !dismissedTodayFollowUps.has(
+              String(item._id)
+            ) &&
+            new Date(item.date).getTime() > Date.now()
+        ).length > 0 && (
+            <TodayFollowUpPopup
+              items={todayFollowUps.filter(
+                (item) =>
+                  !dismissedTodayFollowUps.has(
+                    String(item._id)
+                  ) &&
+                  new Date(item.date).getTime() > Date.now()
+              )}
+              minimized={todayFollowUpsMinimized}
+              onOpen={openTodayFollowUp}
+              onMinimize={() =>
+                setTodayFollowUpsMinimized(true)
+              }
+              onRestore={() =>
+                setTodayFollowUpsMinimized(false)
+              }
+              onClose={closeTodayFollowUps}
+            />
+          )}
+
+        <nav className="dash-mobile-nav">
+
           <button
             className={
-              active === "Leads"
+              active === "Dashboard"
                 ? "on"
                 : ""
             }
             onClick={() =>
-              selectNav("Leads")
+              selectNav("Dashboard")
+            }
+          >
+
+            <Icon
+              name="report"
+              size={18}
+            />
+
+            <span>
+              Home
+            </span>
+
+          </button>
+
+          {canAccessNav("Leads") && (
+            <button
+              className={
+                active === "Leads"
+                  ? "on"
+                  : ""
+              }
+              onClick={() =>
+                selectNav("Leads")
+              }
+            >
+
+              <Icon
+                name="users"
+                size={18}
+              />
+
+              <span>
+                Leads
+              </span>
+
+            </button>
+          )}
+
+          {canAccessNav("Follow-ups") && (
+            <button
+              className={
+                active === "Follow-ups"
+                  ? "on"
+                  : ""
+              }
+              onClick={() =>
+                selectNav("Follow-ups")
+              }
+            >
+
+              <Icon
+                name="pipeline"
+                size={18}
+              />
+
+              <span>
+                Follow-ups
+              </span>
+
+            </button>
+          )}
+
+          {canAccessNav("Calendar") && (
+            <button
+              className={
+                active === "Calendar"
+                  ? "on"
+                  : ""
+              }
+              onClick={() =>
+                selectNav("Calendar")
+              }
+            >
+
+              <Icon
+                name="calendar"
+                size={18}
+              />
+
+              <span>
+                Calendar
+              </span>
+
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              setMobileOpen(true)
             }
           >
 
@@ -2707,80 +2894,14 @@ function ComingSoonPage({ type = "WhatsApp" }) {
             />
 
             <span>
-              Leads
+              More
             </span>
 
           </button>
-        )}
 
-        {canAccessNav("Follow-ups") && (
-          <button
-            className={
-              active === "Follow-ups"
-                ? "on"
-                : ""
-            }
-            onClick={() =>
-              selectNav("Follow-ups")
-            }
-          >
+        </nav>
 
-            <Icon
-              name="pipeline"
-              size={18}
-            />
-
-            <span>
-              Follow-ups
-            </span>
-
-          </button>
-        )}
-
-        {canAccessNav("Calendar") && (
-          <button
-            className={
-              active === "Calendar"
-                ? "on"
-                : ""
-            }
-            onClick={() =>
-              selectNav("Calendar")
-            }
-          >
-
-            <Icon
-              name="calendar"
-              size={18}
-            />
-
-            <span>
-              Calendar
-            </span>
-
-          </button>
-        )}
-
-        <button
-          onClick={() =>
-            setMobileOpen(true)
-          }
-        >
-
-          <Icon
-            name="users"
-            size={18}
-          />
-
-          <span>
-            More
-          </span>
-
-        </button>
-
-      </nav>
-
-    </div>
+      </div>
     </>
   );
 }

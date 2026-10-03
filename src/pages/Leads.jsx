@@ -691,31 +691,31 @@ export default function Leads({
     showAddModal,
   ]);
 
-  const summary = useMemo(() => {
-    return {
-      total: leads.length,
+  // const summary = useMemo(() => {
+  //   return {
+  //     total: leads.length,
 
-      new: leads.filter(
-        (lead) =>
-          lead.stage === "New"
-      ).length,
+  //     new: leads.filter(
+  //       (lead) =>
+  //         lead.stage === "New"
+  //     ).length,
 
-      contacted: leads.filter(
-        (lead) =>
-          lead.stage === "Contacted"
-      ).length,
+  //     contacted: leads.filter(
+  //       (lead) =>
+  //         lead.stage === "Contacted"
+  //     ).length,
 
-      qualified: leads.filter(
-        (lead) =>
-          lead.stage === "Qualified"
-      ).length,
+  //     qualified: leads.filter(
+  //       (lead) =>
+  //         lead.stage === "Qualified"
+  //     ).length,
 
-      converted: leads.filter(
-        (lead) =>
-          lead.stage === "Converted"
-      ).length,
-    };
-  }, [leads]);
+  //     converted: leads.filter(
+  //       (lead) =>
+  //         lead.stage === "Converted"
+  //     ).length,
+  //   };
+  // }, [leads]);
 
   const filteredLeads = useMemo(() => {
     const normalizedSearch =
@@ -763,35 +763,16 @@ export default function Leads({
 
       const matchesEnquiry =
         enquiryFilter === "all" ||
-        (
-          enquiryFilter ===
-          "pending" &&
-          lead.stage ===
-          "Pending follow-up"
-        ) ||
-        (
-          enquiryFilter ===
-          "in-progress" &&
-          [
-            "Contacted",
-            "Qualified",
-            "Proposal",
-          ].includes(
+        (enquiryFilter === "new" &&
+          lead.stage === "New") ||
+        (enquiryFilter === "relevant" &&
+          ["Contacted", "Qualified", "Proposal"].includes(
             lead.stage
-          )
-        ) ||
-        (
-          enquiryFilter ===
-          "converted" &&
-          lead.stage ===
-          "Converted"
-        ) ||
-        (
-          enquiryFilter ===
-          "lost" &&
-          lead.stage ===
-          "Lost"
-        );
+          )) ||
+        (enquiryFilter === "converted" &&
+          lead.stage === "Converted") ||
+        (enquiryFilter === "junk" &&
+          lead.stage === "Lost");
 
       const matchesOwner =
         ownerFilter ===
@@ -1534,33 +1515,39 @@ export default function Leads({
 
   const summaryCards = [
     {
-      label:
-        "Total Leads",
-      value:
-        summary.total,
+      key: "all",
+      label: "Total Leads",
+      value: leads.length,
     },
     {
+      key: "new",
       label: "New",
-      value:
-        summary.new,
+      value: leads.filter(
+        (lead) => lead.stage === "New"
+      ).length,
     },
     {
-      label:
-        "Contacted",
-      value:
-        summary.contacted,
+      key: "relevant",
+      label: "Relevant",
+      value: leads.filter((lead) =>
+        ["Contacted", "Qualified", "Proposal"].includes(
+          lead.stage
+        )
+      ).length,
     },
     {
-      label:
-        "Qualified",
-      value:
-        summary.qualified,
+      key: "converted",
+      label: "Converted",
+      value: leads.filter(
+        (lead) => lead.stage === "Converted"
+      ).length,
     },
     {
-      label:
-        "Converted",
-      value:
-        summary.converted,
+      key: "junk",
+      label: "Junk",
+      value: leads.filter(
+        (lead) => lead.stage === "Lost"
+      ).length,
     },
   ];
 
@@ -1703,26 +1690,30 @@ export default function Leads({
       </div>
 
       <div className="leads-summary">
-
-        {summaryCards.map(
-          (item) => (
-            <div
-              className="lead-summary-card"
-              key={
-                item.label
+        {summaryCards.map((item) => (
+          <button
+            type="button"
+            className={`lead-summary-card ${enquiryFilter === item.key ? "active" : ""
+              }`}
+            key={item.key}
+            onClick={() => {
+              if (item.key === "all") {
+                setEnquiryFilter("all");
+              } else if (item.key === "new") {
+                setEnquiryFilter("new");
+              } else if (item.key === "relevant") {
+                setEnquiryFilter("relevant");
+              } else if (item.key === "converted") {
+                setEnquiryFilter("converted");
+              } else if (item.key === "junk") {
+                setEnquiryFilter("junk");
               }
-            >
-              <span>
-                {item.label}
-              </span>
-
-              <strong>
-                {item.value}
-              </strong>
-            </div>
-          )
-        )}
-
+            }}
+          >
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+          </button>
+        ))}
       </div>
 
       <div className="lead-filter-panel">
