@@ -609,12 +609,6 @@ export default function Leads({
   useEffect(() => {
     loadLeads();
     loadServices();
-
-    const interval = setInterval(() => {
-      loadLeads();
-    }, 15000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const configuredSourceOptions = useMemo(() => {

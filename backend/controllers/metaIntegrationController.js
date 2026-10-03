@@ -1883,35 +1883,17 @@ exports.debugMetaPermissions =
                         integration.pageName,
                 },
 
-                token: {
-                    appId:
-                        tokenData.app_id ||
-                        "",
-
-                    type:
-                        tokenData.type ||
-                        "",
-
-                    application:
-                        tokenData.application ||
-                        "",
-
-                    expiresAt:
-                        tokenData.expires_at ||
-                        null,
-
-                    dataAccessExpiresAt:
-                        tokenData.data_access_expiration_time ||
-                        null,
-
-                    isValid:
-                        Boolean(
-                            tokenData.is_valid
-                        ),
-
-                    scopes,
-                },
-
+               token: {
+    appId: tokenData.app_id || "",
+    userId: tokenData.user_id || "",
+    type: tokenData.type || "",
+    application: tokenData.application || "",
+    expiresAt: tokenData.expires_at || null,
+    dataAccessExpiresAt:
+        tokenData.data_access_expiration_time || null,
+    isValid: Boolean(tokenData.is_valid),
+    scopes,
+},
                 requiredPermissions,
 
                 permissionStatus,
