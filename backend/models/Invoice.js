@@ -49,7 +49,6 @@ const invoiceItemSchema = new mongoose.Schema(
     }
 );
 
-
 const billedBySchema = new mongoose.Schema(
     {
         name: {
@@ -107,24 +106,14 @@ const billedBySchema = new mongoose.Schema(
     }
 );
 
-
 const invoiceSchema = new mongoose.Schema(
     {
-        /* =========================================
-           OWNER / USER
-        ========================================= */
-
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true,
             index: true,
         },
-
-
-        /* =========================================
-           INVOICE DETAILS
-        ========================================= */
 
         invoiceNumber: {
             type: String,
@@ -136,11 +125,6 @@ const invoiceSchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
-
-
-        /* =========================================
-           CUSTOMER
-        ========================================= */
 
         customerId: {
             type: String,
@@ -176,30 +160,29 @@ const invoiceSchema = new mongoose.Schema(
             default: "",
         },
 
-
-        /* =========================================
-           BUSINESS / BILLING DETAILS
-        ========================================= */
+        paymentMode: {
+            type: String,
+            enum: [
+                "",
+                "Credit Card",
+                "Debit Card",
+                "Cash",
+                "UPI",
+                "Bank Transfer",
+            ],
+            default: "",
+            trim: true,
+        },
 
         billedBy: {
             type: billedBySchema,
             default: {},
         },
 
-
-        /* =========================================
-           ITEMS
-        ========================================= */
-
         items: {
             type: [invoiceItemSchema],
             default: [],
         },
-
-
-        /* =========================================
-           AMOUNTS
-        ========================================= */
 
         subtotal: {
             type: Number,
@@ -216,38 +199,21 @@ const invoiceSchema = new mongoose.Schema(
             default: 0,
         },
 
-
-        /* =========================================
-           NOTES
-        ========================================= */
-
         notes: {
             type: String,
             default: "",
         },
 
-
-        /* =========================================
-           STATUS
-        ========================================= */
-
         status: {
             type: String,
-
             enum: [
                 "Draft",
                 "Sent",
                 "Paid",
                 "Cancelled",
             ],
-
             default: "Draft",
         },
-
-
-        /* =========================================
-           WHATSAPP TRACKING
-        ========================================= */
 
         whatsappSentAt: {
             type: Date,
@@ -259,26 +225,15 @@ const invoiceSchema = new mongoose.Schema(
             default: "",
         },
     },
-
     {
         timestamps: true,
     }
 );
 
-
-/* =========================================
-   INDEX
-========================================= */
-
 invoiceSchema.index({
     userId: 1,
     createdAt: -1,
 });
-
-
-/* =========================================
-   EXPORT
-========================================= */
 
 module.exports = mongoose.model(
     "Invoice",

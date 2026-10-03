@@ -110,13 +110,13 @@ export default function Invoice() {
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [profile, setProfile] = useState(null);
+  const [billingProfile, setBillingProfile] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [serviceSearchOpen, setServiceSearchOpen] = useState("");
   const [addingCustomer, setAddingCustomer] = useState(false);
-  const [pendingPdfDownload, setPendingPdfDownload] = useState(null);
   const pdfExportRef = useRef(null);
 
   const [invoice, setInvoice] = useState({
@@ -128,6 +128,7 @@ export default function Invoice() {
     customerEmail: "",
     customerPhone: "",
     customerAddress: "",
+    paymentMode: "",
     notes: "",
     items: [emptyItem()],
   });
@@ -150,73 +151,15 @@ export default function Invoice() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  useEffect(() => {
-    if (!pendingPdfDownload || !pdfExportRef.current) return undefined;
-
-    let cancelled = false;
-
-    const exportInvoice = async () => {
-      setSaving(true);
-
-      try {
-        if (document.fonts?.ready) await document.fonts.ready;
-
-        const images = Array.from(pdfExportRef.current.querySelectorAll("img"));
-        await Promise.all(images.map((image) => image.decode?.().catch(() => undefined)));
-        const { default: html2pdf } = await import("html2pdf.js");
-
-        await html2pdf()
-          .set({
-            margin: 0,
-            filename: pendingPdfDownload.filename,
-            image: { type: "jpeg", quality: 0.98 },
-            html2canvas: {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: "#ffffff",
-              scrollX: 0,
-              scrollY: 0,
-            },
-            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-            pagebreak: { mode: ["css", "legacy"] },
-          })
-          .from(pdfExportRef.current)
-          .save();
-
-        if (!cancelled) {
-          setSuccess("Invoice PDF downloaded.");
-          if (pendingPdfDownload.returnToList) {
-            setShowPreview(false);
-            setView("list");
-          }
-        }
-      } catch (exportError) {
-        if (!cancelled) {
-          setError(exportError.message || "Unable to download invoice PDF.");
-          if (pendingPdfDownload.returnToList) {
-            setShowPreview(false);
-            setView("list");
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setSaving(false);
-          setPendingPdfDownload(null);
-        }
-      }
-    };
-
-    exportInvoice();
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingPdfDownload]);
 
   const loadProfile = async () => {
     try {
       const data = await api("/api/auth/profile");
       if (data.success) {
         setProfile(data.user);
+        if (data.workspaceOwnerProfile) {
+          setBillingProfile(data.workspaceOwnerProfile);
+        }
       }
     } catch (error) {
       console.error("Profile load error:", error);
@@ -227,7 +170,18 @@ export default function Invoice() {
     try {
       setLoading(true);
       const data = await api("/api/invoices");
-      setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+      const invoiceList = Array.isArray(data.invoices) ? data.invoices : [];
+      setInvoices(invoiceList);
+      const ownerBilling = invoiceList.find(
+        (item) =>
+          item?.billedBy &&
+          Object.values(item.billedBy).some(
+            (value) => value !== null && value !== undefined && String(value).trim()
+          )
+      )?.billedBy || null;
+      if (ownerBilling) {
+        setBillingProfile(ownerBilling);
+      }
     } catch (error) {
       console.error("Invoice load error:", error);
       setInvoices([]);
@@ -243,8 +197,8 @@ export default function Invoice() {
         Array.isArray(data.services)
           ? data.services
           : Array.isArray(data.data)
-          ? data.data
-          : []
+            ? data.data
+            : []
       );
     } catch (error) {
       console.error("Services load error:", error);
@@ -259,10 +213,10 @@ export default function Invoice() {
         Array.isArray(data.contacts)
           ? data.contacts
           : Array.isArray(data.customers)
-          ? data.customers
-          : Array.isArray(data.data)
-          ? data.data
-          : []
+            ? data.customers
+            : Array.isArray(data.data)
+              ? data.data
+              : []
       );
     } catch (error) {
       console.error("Customer load error:", error);
@@ -324,30 +278,37 @@ export default function Invoice() {
     });
   };
 
+  const getBillingProfile = () => {
+    const isTeamMember = Boolean(profile?.workspaceOwner);
+    if (billingProfile) return billingProfile;
+    if (!isTeamMember) return profile || {};
+    return {};
+  };
+
   const getBusinessName = () =>
-    getProfileValue(profile, ["displayName", "clinicName", "businessName", "name"]) ||
+    getProfileValue(getBillingProfile(), ["displayName", "clinicName", "businessName", "name"]) ||
     "SaleVitals";
 
   const getBusinessOwner = () =>
-    getProfileValue(profile, ["name", "ownerName", "doctorName"]);
+    getProfileValue(getBillingProfile(), ["name", "ownerName", "doctorName"]);
 
   const getBusinessAddress = () =>
-    getProfileValue(profile, ["address", "clinicAddress", "businessAddress"]);
+    getProfileValue(getBillingProfile(), ["address", "clinicAddress", "businessAddress"]);
 
   const getBusinessPhone = () =>
-    getProfileValue(profile, ["phone", "mobile", "contactNumber"]);
+    getProfileValue(getBillingProfile(), ["phone", "mobile", "contactNumber"]);
 
   const getBusinessEmail = () =>
-    getProfileValue(profile, ["email", "businessEmail"]);
+    getProfileValue(getBillingProfile(), ["email", "businessEmail"]);
 
   const getBusinessGstin = () =>
-    getProfileValue(profile, ["gstin", "gstNumber", "gstNo"]);
+    getProfileValue(getBillingProfile(), ["gstin", "gstNumber", "gstNo"]);
 
   const getBusinessPan = () =>
-    getProfileValue(profile, ["pan", "panNumber", "pan_number"]);
+    getProfileValue(getBillingProfile(), ["pan", "panNumber", "pan_number"]);
 
   const getBusinessLogo = () =>
-    getProfileValue(profile, ["clinicLogo", "logo", "businessLogo", "profileImage"]);
+    getProfileValue(getBillingProfile(), ["clinicLogo", "logo", "businessLogo", "profileImage"]);
 
   const openCreateInvoice = () => {
     setError("");
@@ -368,6 +329,7 @@ export default function Invoice() {
       customerEmail: "",
       customerPhone: "",
       customerAddress: "",
+      paymentMode: "",
       notes: "",
       items: [emptyItem()],
     });
@@ -542,12 +504,12 @@ export default function Invoice() {
       items: prev.items.map((item) =>
         item.id === itemId
           ? {
-              ...item,
-              serviceId: service._id || service.id || "",
-              serviceName,
-              cost: serviceCost,
-              gst: Number(service.gst) || 18,
-            }
+            ...item,
+            serviceId: service._id || service.id || "",
+            serviceName,
+            cost: serviceCost,
+            gst: Number(service.gst) || 18,
+          }
           : item
       ),
     }));
@@ -597,19 +559,9 @@ export default function Invoice() {
     customerEmail: invoice.customerEmail,
     customerPhone: invoice.customerPhone,
     customerAddress: invoice.customerAddress,
+    paymentMode: invoice.paymentMode,
     notes: invoice.notes,
-    billedBy: {
-      name: profile?.name || "",
-      businessName: profile?.clinicName || profile?.businessName || "",
-      displayName: profile?.displayName || profile?.clinicName || profile?.businessName || "",
-      phone: profile?.phone || "",
-      email: profile?.email || "",
-      address: profile?.address || "",
-      gstin: profile?.gstin || profile?.gstNumber || "",
-      pan: profile?.pan || profile?.panNumber || "",
-      website: profile?.website || "",
-      logo: profile?.clinicLogo || profile?.logo || "",
-    },
+    billedBy: getBillingProfile(),
     items: invoice.items.map((item) => {
       const result = calculateItem(item);
 
@@ -665,41 +617,62 @@ export default function Invoice() {
     });
   };
 
-  const downloadInvoicePDF = (invoiceRecord, returnToList = false) => {
+  const downloadInvoicePDF = async (invoiceRecord, returnToList = false) => {
     const invoiceId = invoiceRecord?._id || invoiceRecord?.id;
-    if (!invoiceId) throw new Error("Invoice ID is missing.");
 
-    setInvoice({
-      invoiceNumber: invoiceRecord.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
-      invoiceDate: invoiceRecord.invoiceDate || today(),
-      customerId: invoiceRecord.customerId || "",
-      patientId: invoiceRecord.patientId || "",
-      customerName: invoiceRecord.customerName || "",
-      customerEmail: invoiceRecord.customerEmail || "",
-      customerPhone: invoiceRecord.customerPhone || "",
-      customerAddress: invoiceRecord.customerAddress || "",
-      notes: invoiceRecord.notes || "",
-      items: Array.isArray(invoiceRecord.items) && invoiceRecord.items.length
-        ? invoiceRecord.items.map((item) => ({
-            id: item._id || Date.now() + Math.random(),
-            serviceId: item.serviceId || "",
-            serviceName: item.serviceName || item.name || "",
-            cost: item.cost || "",
-            gst: item.gst ?? 18,
-          }))
-        : [emptyItem()],
-    });
-    setEditingInvoiceId(String(invoiceId));
-    setView("create");
-    setShowPreview(true);
-    setSuccess("");
-    setPendingPdfDownload({
-      filename: `${String(invoiceRecord.invoiceNumber || "invoice").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`,
-      returnToList,
-    });
+    if (!invoiceId) {
+      throw new Error("Invoice ID is missing.");
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+
+      const token = getToken();
+      const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}/download`, {
+        method: "GET",
+        headers: {
+          Accept: "application/pdf",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || "Unable to download invoice PDF.");
+        }
+        throw new Error("Unable to download invoice PDF.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const filename = `${String(invoiceRecord.invoiceNumber || "invoice").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setSuccess("Invoice PDF downloaded.");
+
+      if (returnToList) {
+        setShowPreview(false);
+        setView("list");
+      }
+    } catch (error) {
+      setError(error.message || "Unable to download invoice PDF.");
+      throw error;
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const saveInvoice = async (sendInvoice = false, downloadAfterSave = false) => {
+  const saveInvoice = async (downloadAfterSave = false) => {
     setError("");
     setSuccess("");
 
@@ -742,20 +715,11 @@ export default function Invoice() {
       }
 
       if (downloadAfterSave) {
-        downloadInvoicePDF(data.invoice, true);
+        await downloadInvoicePDF(data.invoice, true);
         return;
-      } else if (sendInvoice) {
-        try {
-          await sendInvoiceToWhatsApp(data.invoice || buildPayload());
-          setSuccess("Invoice created and sent to the customer's WhatsApp as a PDF.");
-        } catch (whatsappError) {
-          console.error("WhatsApp invoice send error:", whatsappError);
-          setSuccess("Invoice was created, but WhatsApp delivery failed.");
-          setError(whatsappError.message || "Unable to send invoice on WhatsApp.");
-        }
-      } else {
-        setSuccess("Invoice saved successfully.");
       }
+
+      setSuccess("Invoice saved successfully.");
 
       setView("list");
       setShowPreview(false);
@@ -820,16 +784,17 @@ export default function Invoice() {
       customerEmail: item.customerEmail || "",
       customerPhone: item.customerPhone || "",
       customerAddress: item.customerAddress || "",
+      paymentMode: item.paymentMode || "",
       notes: item.notes || "",
       items:
         Array.isArray(item.items) && item.items.length
           ? item.items.map((service) => ({
-              id: service._id || Date.now() + Math.random(),
-              serviceId: service.serviceId || "",
-              serviceName: service.serviceName || service.name || "",
-              cost: service.cost || "",
-              gst: service.gst || 18,
-            }))
+            id: service._id || Date.now() + Math.random(),
+            serviceId: service.serviceId || "",
+            serviceName: service.serviceName || service.name || "",
+            cost: service.cost || "",
+            gst: service.gst || 18,
+          }))
           : [emptyItem()],
     });
 
@@ -845,9 +810,210 @@ export default function Invoice() {
     setShowPreview(true);
   };
 
-  const printInvoice = () => {
-    setShowPreview(true);
-    setTimeout(() => window.print(), 150);
+  const printInvoice = async () => {
+    const invoiceElement = pdfExportRef.current;
+
+    if (!invoiceElement) {
+      setShowPreview(true);
+      setTimeout(() => printInvoice(), 300);
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "width=1000,height=1200");
+
+    if (!printWindow) {
+      setError("Please allow pop-ups to print the invoice.");
+      return;
+    }
+
+    try {
+      const styles = Array.from(
+        document.querySelectorAll('link[rel="stylesheet"], style')
+      )
+        .map((node) => {
+          if (node.tagName.toLowerCase() === "link") {
+            return `<link rel="stylesheet" href="${node.href}">`;
+          }
+
+          return node.outerHTML;
+        })
+        .join("\n");
+
+      const invoiceHtml = invoiceElement.outerHTML;
+
+      printWindow.document.open();
+      printWindow.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>${invoice.invoiceNumber || "Invoice"}</title>
+            ${styles}
+            <style>
+              @page {
+                size: A4;
+                margin: 0;
+              }
+
+              html,
+              body {
+                width: 210mm !important;
+                min-height: 297mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+              }
+
+              body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+
+              .invoice-document {
+                display: block !important;
+                width: 210mm !important;
+                min-height: 297mm !important;
+                max-width: 210mm !important;
+                margin: 0 !important;
+                padding: 14mm !important;
+                box-sizing: border-box !important;
+                background: #ffffff !important;
+                box-shadow: none !important;
+                border: none !important;
+                overflow: visible !important;
+                visibility: visible !important;
+              }
+
+              .invoice-document * {
+                visibility: visible !important;
+              }
+
+              .invoice-preview-overlay,
+              .invoice-preview-modal,
+              .invoice-preview-head,
+              .invoice-preview-footer {
+                display: none !important;
+              }
+
+              table {
+                border-collapse: collapse !important;
+              }
+
+              img {
+                max-width: 100% !important;
+              }
+
+              *,
+              *::before,
+              *::after {
+                box-sizing: border-box;
+              }
+
+              @media print {
+                html,
+                body {
+                  width: 210mm !important;
+                  min-height: 297mm !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  background: #ffffff !important;
+                }
+
+                .invoice-document {
+                  width: 210mm !important;
+                  min-height: 297mm !important;
+                  max-width: 210mm !important;
+                  margin: 0 !important;
+                  padding: 14mm !important;
+                  box-shadow: none !important;
+                  border: none !important;
+                  overflow: visible !important;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            ${invoiceHtml}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+
+      const waitForImages = async () => {
+        const images = Array.from(printWindow.document.images);
+
+        await Promise.all(
+          images.map((image) => {
+            if (image.complete) {
+              return Promise.resolve();
+            }
+
+            return new Promise((resolve) => {
+              image.onload = resolve;
+              image.onerror = resolve;
+            });
+          })
+        );
+      };
+
+      const waitForFonts = async () => {
+        if (printWindow.document.fonts?.ready) {
+          try {
+            await printWindow.document.fonts.ready;
+          } catch {
+          }
+        }
+      };
+
+      const waitForStyles = async () => {
+        const links = Array.from(
+          printWindow.document.querySelectorAll('link[rel="stylesheet"]')
+        );
+
+        await Promise.all(
+          links.map(
+            (link) =>
+              new Promise((resolve) => {
+                if (link.sheet) {
+                  resolve();
+                  return;
+                }
+
+                link.onload = resolve;
+                link.onerror = resolve;
+              })
+          )
+        );
+      };
+
+      await waitForStyles();
+      await waitForImages();
+      await waitForFonts();
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 500);
+      });
+
+      printWindow.focus();
+      printWindow.print();
+
+      setTimeout(() => {
+        try {
+          printWindow.close();
+        } catch {
+        }
+      }, 1500);
+    } catch (error) {
+      console.error("Print invoice error:", error);
+
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch (printError) {
+        console.error("Fallback print error:", printError);
+        setError("Unable to print invoice.");
+      }
+    }
   };
 
   const renderInvoiceDocument = () => {
@@ -894,6 +1060,7 @@ export default function Invoice() {
           <div>
             <span>BILLED TO</span>
             <strong>{invoice.customerName || "—"}</strong>
+            {invoice.paymentMode && <p><strong>Payment Mode: {invoice.paymentMode}</strong></p>}
             {invoice.customerPhone && <p>{invoice.customerPhone}</p>}
             {invoice.customerEmail && <p>{invoice.customerEmail}</p>}
             {invoice.customerAddress && <p>{invoice.customerAddress}</p>}
@@ -1014,11 +1181,12 @@ export default function Invoice() {
             <thead>
               <tr>
                 <th>INVOICE NUMBER</th>
-                  <th>PATIENT ID</th>
+                <th>PATIENT ID</th>
                 <th>CUSTOMER</th>
                 <th>DATE</th>
                 <th>SERVICE</th>
                 <th>COST</th>
+                <th>PAYMENT MODE</th>
                 <th>STATUS</th>
                 <th>ACTION</th>
               </tr>
@@ -1027,11 +1195,11 @@ export default function Invoice() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="invoice-empty">Loading invoices...</td>
+                  <td colSpan="9" className="invoice-empty">Loading invoices...</td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="invoice-empty">
+                  <td colSpan="9" className="invoice-empty">
                     <div className="invoice-empty-icon">₹</div>
                     <strong>No invoices found</strong>
                     <span>Create your first invoice to get started.</span>
@@ -1061,6 +1229,9 @@ export default function Invoice() {
                       <strong>{formatCurrency(item.total || item.grandTotal || 0)}</strong>
                     </td>
                     <td>
+                      <span className="invoice-payment-mode">{item.paymentMode || "-"}</span>
+                    </td>
+                    <td>
                       <span
                         className={`invoice-status ${String(item.status || "Draft")
                           .toLowerCase()
@@ -1075,11 +1246,7 @@ export default function Invoice() {
                         <button
                           type="button"
                           onClick={() => {
-                            try {
-                              downloadInvoicePDF(item, true);
-                            } catch (downloadError) {
-                              setError(downloadError.message);
-                            }
+                            downloadInvoicePDF(item, true).catch(() => undefined)
                           }}
                         >
                           Download
@@ -1096,16 +1263,17 @@ export default function Invoice() {
                               customerEmail: item.customerEmail || "",
                               customerPhone: item.customerPhone || "",
                               customerAddress: item.customerAddress || "",
+                              paymentMode: item.paymentMode || "",
                               notes: item.notes || "",
                               items:
                                 Array.isArray(item.items) && item.items.length
                                   ? item.items.map((service) => ({
-                                      id: service._id || Date.now() + Math.random(),
-                                      serviceId: service.serviceId || "",
-                                      serviceName: service.serviceName || service.name || "",
-                                      cost: service.cost || "",
-                                      gst: service.gst || 18,
-                                    }))
+                                    id: service._id || Date.now() + Math.random(),
+                                    serviceId: service.serviceId || "",
+                                    serviceName: service.serviceName || service.name || "",
+                                    cost: service.cost || "",
+                                    gst: service.gst || 18,
+                                  }))
                                   : [emptyItem()],
                             });
                             setEditingInvoiceId(String(item._id || item.id || ""));
@@ -1312,24 +1480,24 @@ export default function Invoice() {
                                 "";
                               return name.trim().toLowerCase() === query;
                             }) && (
-                              <button
-                                type="button"
-                                className="invoice-search-add"
-                                disabled={addingCustomer}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={addNewCustomer}
-                              >
-                                <span className="invoice-search-add-icon">+</span>
-                                <div className="invoice-search-add-content">
-                                  <strong>
-                                    {addingCustomer
-                                      ? "Adding customer..."
-                                      : `Add "${customerQuery.trim()}"`}
-                                  </strong>
-                                  <small>Save as a new customer</small>
-                                </div>
-                              </button>
-                            )}
+                                <button
+                                  type="button"
+                                  className="invoice-search-add"
+                                  disabled={addingCustomer}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={addNewCustomer}
+                                >
+                                  <span className="invoice-search-add-icon">+</span>
+                                  <div className="invoice-search-add-content">
+                                    <strong>
+                                      {addingCustomer
+                                        ? "Adding customer..."
+                                        : `Add "${customerQuery.trim()}"`}
+                                    </strong>
+                                    <small>Save as a new customer</small>
+                                  </div>
+                                </button>
+                              )}
 
                             {!matches.length && !query && (
                               <div className="invoice-search-empty">
@@ -1342,6 +1510,21 @@ export default function Invoice() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="invoice-field">
+                <label>Payment Mode</label>
+                <select
+                  value={invoice.paymentMode}
+                  onChange={(e) => setInvoice((prev) => ({ ...prev, paymentMode: e.target.value }))}
+                >
+                  <option value="">Select payment mode</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
               </div>
 
               <div className="invoice-field">
@@ -1468,9 +1651,9 @@ export default function Invoice() {
                                       <span>
                                         {formatCurrency(
                                           service?.cost ??
-                                            service?.price ??
-                                            service?.amount ??
-                                            0
+                                          service?.price ??
+                                          service?.amount ??
+                                          0
                                         )}
                                       </span>
                                     </div>
@@ -1486,21 +1669,21 @@ export default function Invoice() {
                                   "";
                                 return name.trim().toLowerCase() === query;
                               }) && (
-                                <button
-                                  type="button"
-                                  className="invoice-search-add"
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => addCustomService(item.id)}
-                                >
-                                  <span className="invoice-search-add-icon">+</span>
-                                  <div className="invoice-search-add-content">
-                                    <strong>
-                                      Add "{item.serviceName.trim()}"
-                                    </strong>
-                                    <small>Use as a custom service</small>
-                                  </div>
-                                </button>
-                              )}
+                                  <button
+                                    type="button"
+                                    className="invoice-search-add"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => addCustomService(item.id)}
+                                  >
+                                    <span className="invoice-search-add-icon">+</span>
+                                    <div className="invoice-search-add-content">
+                                      <strong>
+                                        Add "{item.serviceName.trim()}"
+                                      </strong>
+                                      <small>Use as a custom service</small>
+                                    </div>
+                                  </button>
+                                )}
 
                               {!matches.length && !query && (
                                 <div className="invoice-search-empty">
@@ -1591,10 +1774,10 @@ export default function Invoice() {
             <button
               type="button"
               className="invoice-send-btn"
-              onClick={() => saveInvoice(true)}
+              onClick={() => saveInvoice(false)}
               disabled={saving}
             >
-              ➤ Send Invoice
+              {saving ? "Saving..." : "Save Invoice"}
             </button>
 
             <button
@@ -1608,7 +1791,7 @@ export default function Invoice() {
             <button
               type="button"
               className="invoice-outline-action"
-              onClick={() => saveInvoice(false, true)}
+              onClick={() => saveInvoice(true)}
               disabled={saving}
             >
               ↓ Download PDF
@@ -1640,6 +1823,10 @@ export default function Invoice() {
             <div>
               <span>Customer</span>
               <strong>{invoice.customerName || "Not selected"}</strong>
+            </div>
+            <div>
+              <span>Payment Mode</span>
+              <strong>{invoice.paymentMode || "Not selected"}</strong>
             </div>
             <div>
               <span>Total</span>
@@ -1677,7 +1864,7 @@ export default function Invoice() {
                       .catch((error) =>
                         setError(
                           error.message ||
-                            "Unable to send invoice on WhatsApp."
+                          "Unable to send invoice on WhatsApp."
                         )
                       )
                   }
@@ -1701,14 +1888,6 @@ export default function Invoice() {
             <div className="invoice-preview-footer">
               <button type="button" className="invoice-secondary-btn" onClick={() => setShowPreview(false)}>
                 Close
-              </button>
-              <button
-                type="button"
-                className="invoice-primary-btn"
-                onClick={() => saveInvoice(true)}
-                disabled={saving}
-              >
-                ➤ {saving ? "Sending..." : "Send Invoice"}
               </button>
             </div>
           </div>
