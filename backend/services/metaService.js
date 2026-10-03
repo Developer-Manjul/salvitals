@@ -142,20 +142,154 @@ exports.exchangeCodeForToken =
       }
     );
 
-exports.getPages =
-  (accessToken) =>
-    graphRequest(
+exports.getPages = async (accessToken) => {
+  const pagesMap = new Map();
+
+  const addPages = (items = [], business = null) => {
+    for (const page of items) {
+      if (!page?.id) {
+        continue;
+      }
+
+      const existing = pagesMap.get(String(page.id));
+
+      pagesMap.set(String(page.id), {
+        ...(existing || {}),
+        ...page,
+        businessId:
+          page.business?.id ||
+          existing?.businessId ||
+          business?.id ||
+          "",
+        businessName:
+          page.business?.name ||
+          existing?.businessName ||
+          business?.name ||
+          "",
+      });
+    }
+  };
+
+  try {
+    const directPages = await graphRequest(
       "/me/accounts",
       {
         params: {
           fields:
             "id,name,access_token,instagram_business_account,business",
-
-          access_token:
-            accessToken,
+          access_token: accessToken,
+          limit: 100,
         },
       }
     );
+
+    addPages(directPages?.data || []);
+
+    console.log(
+      "META DIRECT PAGES:",
+      (directPages?.data || []).map((page) => ({
+        id: page.id,
+        name: page.name,
+        hasPageAccessToken: Boolean(page.access_token),
+      }))
+    );
+  } catch (error) {
+    console.error(
+      "META DIRECT PAGES ERROR:",
+      error.metaError || error.message
+    );
+  }
+
+  try {
+    const businesses = await graphRequest(
+      "/me/businesses",
+      {
+        params: {
+          fields: "id,name",
+          access_token: accessToken,
+          limit: 100,
+        },
+      }
+    );
+
+    console.log(
+      "META BUSINESSES:",
+      businesses?.data || []
+    );
+
+    for (const business of businesses?.data || []) {
+      for (const edge of ["owned_pages", "client_pages"]) {
+        try {
+          const businessPages =
+            await graphRequest(
+              `/${encodeURIComponent(
+                business.id
+              )}/${edge}`,
+              {
+                params: {
+                  fields:
+                    "id,name,access_token,instagram_business_account,business",
+                  access_token: accessToken,
+                  limit: 100,
+                },
+              }
+            );
+
+          console.log(
+            `META BUSINESS ${edge.toUpperCase()}:`,
+            business.id,
+            (businessPages?.data || []).map(
+              (page) => ({
+                id: page.id,
+                name: page.name,
+                hasPageAccessToken:
+                  Boolean(page.access_token),
+              })
+            )
+          );
+
+          addPages(
+            businessPages?.data || [],
+            business
+          );
+        } catch (error) {
+          console.error(
+            `META BUSINESS ${edge.toUpperCase()} ERROR:`,
+            business.id,
+            error.metaError || error.message
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error(
+      "META BUSINESS LIST ERROR:",
+      error.metaError || error.message
+    );
+  }
+
+  const pages = Array.from(
+    pagesMap.values()
+  );
+
+  console.log(
+    "META FINAL PAGES:",
+    pages.map((page) => ({
+      id: page.id,
+      name: page.name,
+      hasPageAccessToken:
+        Boolean(page.access_token),
+      businessId:
+        page.businessId || "",
+      businessName:
+        page.businessName || "",
+    }))
+  );
+
+  return {
+    data: pages,
+  };
+};
 
 exports.getPageDetails =
   async (
