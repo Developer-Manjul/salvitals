@@ -3,19 +3,15 @@ const User = require("../models/User");
 const TeamMember = require("../models/TeamMember");
 
 const getTokenUser = (req) => {
-  const authorization =
-    req.headers.authorization || "";
+  const authorization = req.headers.authorization || "";
 
   if (!authorization.startsWith("Bearer ")) {
     return null;
   }
 
   try {
-    const token =
-      authorization.slice(7);
-
     return jwt.verify(
-      token,
+      authorization.slice(7),
       process.env.JWT_SECRET
     );
   } catch (error) {
@@ -30,8 +26,9 @@ const getWorkspaceContext = async (req) => {
     return null;
   }
 
-  const user =
-    await User.findById(decoded.id).lean();
+  const user = await User.findById(decoded.id)
+    .select("_id name email workspaceOwner isActive role")
+    .lean();
 
   if (!user) {
     return null;
@@ -41,52 +38,42 @@ const getWorkspaceContext = async (req) => {
     return null;
   }
 
-  const isOwner =
-    !user.workspaceOwner;
+  const isOwner = !user.workspaceOwner;
 
-  const workspaceOwnerId =
-    isOwner
-      ? user._id.toString()
-      : user.workspaceOwner.toString();
+  const workspaceOwnerId = isOwner
+    ? user._id.toString()
+    : user.workspaceOwner.toString();
 
   if (isOwner) {
     return {
       user,
-
-      userId:
-        user._id.toString(),
-
+      userId: user._id.toString(),
       workspaceOwnerId,
-
       isOwner: true,
-
       isTeamMember: false,
-
       teamMember: null,
-
       role: {
         name: "Owner",
         slug: "owner",
         permissions: ["*"],
       },
-
       permissions: ["*"],
     };
   }
 
-  const teamMember =
-    await TeamMember.findOne({
-      userId: user._id,
-      owner: user.workspaceOwner,
-      memberType: "team",
-      status: "active",
-      invitationStatus: "accepted",
-    })
-      .populate(
-        "roleId",
-        "name slug permissions status isSystemRole"
-      )
-      .lean();
+  const teamMember = await TeamMember.findOne({
+    userId: user._id,
+    owner: user.workspaceOwner,
+    memberType: "team",
+    status: "active",
+    invitationStatus: "accepted",
+  })
+    .select("_id userId owner roleId memberType status invitationStatus")
+    .populate(
+      "roleId",
+      "name slug permissions status isSystemRole"
+    )
+    .lean();
 
   if (!teamMember) {
     return null;
@@ -96,9 +83,7 @@ const getWorkspaceContext = async (req) => {
     return null;
   }
 
-  if (
-    teamMember.roleId.status !== "active"
-  ) {
+  if (teamMember.roleId.status !== "active") {
     return null;
   }
 
@@ -110,20 +95,12 @@ const getWorkspaceContext = async (req) => {
 
   return {
     user,
-
-    userId:
-      user._id.toString(),
-
+    userId: user._id.toString(),
     workspaceOwnerId,
-
     isOwner: false,
-
     isTeamMember: true,
-
     teamMember,
-
     role: teamMember.roleId,
-
     permissions,
   };
 };
@@ -140,17 +117,11 @@ const hasPermission = (
     return true;
   }
 
-  if (
-    !Array.isArray(
-      context.permissions
-    )
-  ) {
+  if (!Array.isArray(context.permissions)) {
     return false;
   }
 
-  if (
-    context.permissions.includes("*")
-  ) {
+  if (context.permissions.includes("*")) {
     return true;
   }
 

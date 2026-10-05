@@ -1,9 +1,12 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const User = require("./models/User");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
 dotenv.config();
+
+mongoose.set("bufferCommands", false);
 
 const app = express();
 
@@ -56,6 +59,8 @@ app.use(
         limit: "10mb",
     })
 );
+
+
 
 const authRoutes = require("./routes/authRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
@@ -148,7 +153,29 @@ app.get("/api/health", (req, res) => {
     res.status(200).json({
         success: true,
         message: "Vitals Backend API is running",
+        mongo: mongoose.connection.readyState === 1,
     });
+});
+
+app.get("/api/db-health", async (req, res) => {
+    const start = Date.now();
+
+    try {
+        await mongoose.connection.db.admin().ping();
+
+        res.json({
+            success: true,
+            mongo: true,
+            responseTime: `${Date.now() - start}ms`,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            mongo: false,
+            error: error.message,
+            responseTime: `${Date.now() - start}ms`,
+        });
+    }
 });
 
 app.get("/", (req, res) => {
@@ -167,65 +194,99 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+const mongoOptions = {
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    maxConnecting: 10,
+    maxIdleTimeMS: 60000,
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000,
+    socketTimeoutMS: 30000,
+    heartbeatFrequencyMS: 10000,
+    family: 4,
+    bufferTimeoutMS: 5000,
+};
+
 mongoose
-    .connect(process.env.MONGODB_URI)
+    .connect(process.env.MONGODB_URI, mongoOptions)
     .then(async () => {
+        console.log("MongoDB connected successfully");
         console.log(
-            "MongoDB connected successfully"
+            `MongoDB readyState: ${mongoose.connection.readyState}`
         );
+
+        await User.collection.createIndex(
+            { email: 1 },
+            {
+                unique: true,
+                name: "email_1",
+            }
+        );
+
+        console.log("User email index ready");
 
         await seedLeadSettings();
 
-        app.listen(
-            PORT,
-            "0.0.0.0",
-            () => {
-                console.log(
-                    `Backend running on http://localhost:${PORT}`
-                );
+        app.listen(PORT, "0.0.0.0", () => {
+            console.log(
+                `Backend running on http://localhost:${PORT}`
+            );
 
-                console.log(
-                    `Health check: http://localhost:${PORT}/api/health`
-                );
+            console.log(
+                `Health check: http://localhost:${PORT}/api/health`
+            );
 
-                console.log(
-                    `Services API: http://localhost:${PORT}/api/services`
-                );
+            console.log(
+                `DB health check: http://localhost:${PORT}/api/db-health`
+            );
 
-                console.log(
-                    `Leads API: http://localhost:${PORT}/api/leads`
-                );
+            console.log(
+                `Services API: http://localhost:${PORT}/api/services`
+            );
 
-                console.log(
-                    `Lead Settings API: http://localhost:${PORT}/api/lead-settings`
-                );
+            console.log(
+                `Leads API: http://localhost:${PORT}/api/leads`
+            );
 
-                console.log(
-                    `Roles API: http://localhost:${PORT}/api/roles`
-                );
+            console.log(
+                `Lead Settings API: http://localhost:${PORT}/api/lead-settings`
+            );
 
-                console.log(
-                    `Website Lead API: http://localhost:${PORT}/api/integrations/website/lead`
-                );
+            console.log(
+                `Roles API: http://localhost:${PORT}/api/roles`
+            );
 
-                console.log(
-                    `Invoices API: http://localhost:${PORT}/api/invoices`
-                );
+            console.log(
+                `Website Lead API: http://localhost:${PORT}/api/integrations/website/lead`
+            );
 
-                console.log(
-                    `Billing API: http://localhost:${PORT}/api/billing`
-                );
+            console.log(
+                `Invoices API: http://localhost:${PORT}/api/invoices`
+            );
 
-                console.log(
-                    `AI Widget API: http://localhost:${PORT}/api/ai-widget`
-                );
-            }
-        );
+            console.log(
+                `Billing API: http://localhost:${PORT}/api/billing`
+            );
+
+            console.log(
+                `AI Widget API: http://localhost:${PORT}/api/ai-widget`
+            );
+        });
     })
     .catch((error) => {
-        console.error(
-            "MongoDB connection failed:"
-        );
-
-        console.error(error.message);
+        console.error("MongoDB connection failed:");
+        console.error(error);
+        process.exit(1);
     });
+
+mongoose.connection.on("connected", () => {
+    console.log("MongoDB connection established");
+});
+
+mongoose.connection.on("disconnected", () => {
+    console.error("MongoDB disconnected");
+});
+
+mongoose.connection.on("error", (error) => {
+    console.error("MongoDB error:", error.message);
+});

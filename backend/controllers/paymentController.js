@@ -300,7 +300,8 @@ function getAddonDates() {
 }
 
 async function sendInvoiceIfNeeded(
-    order
+    order,
+    existingUser = null
 ) {
     if (
         order.invoiceEmailSentAt
@@ -309,9 +310,10 @@ async function sendInvoiceIfNeeded(
     }
 
     const user =
-        await User.findById(
-            order.userId
-        );
+    existingUser ||
+    await User.findById(
+        order.userId
+    );
 
     if (
         !user ||
@@ -607,7 +609,7 @@ async function activatePaidOrder(
 }
 
 async function ensureSubscriptionForPaidOrder(
-    userId,
+    user,
     paidOrder
 ) {
     if (!paidOrder) {
@@ -621,15 +623,7 @@ async function ensureSubscriptionForPaidOrder(
         return null;
     }
 
-    const user =
-        await User.findById(
-            userId
-        );
-
-    if (!user) {
-        return null;
-    }
-
+   
     const subscription =
         user.subscription || {};
 
@@ -734,9 +728,10 @@ async function recoverPaidSubscriptionOrder(
         pendingOrder
     );
 
-    await sendInvoiceIfNeeded(
-        pendingOrder
-    );
+   await sendInvoiceIfNeeded(
+    paidOrder,
+    user
+);
 
     return pendingOrder;
 }
@@ -780,10 +775,7 @@ exports.getPaymentStatus =
             const userId =
                 context.workspaceOwnerId;
 
-            let user =
-                await User.findById(
-                    userId
-                );
+           let user = context.user;
 
             if (!user) {
                 return res.status(404).json({
@@ -829,10 +821,10 @@ exports.getPaymentStatus =
             if (paidOrder) {
                 try {
                     user =
-                        await ensureSubscriptionForPaidOrder(
-                            userId,
-                            paidOrder
-                        );
+    await ensureSubscriptionForPaidOrder(
+        user,
+        paidOrder
+    );
                 } catch (
                     subscriptionError
                 ) {

@@ -109,13 +109,7 @@ function applyInstagramDetails(integration, details) {
 }
 
 function cleanMetaServiceName(name) {
-    const value = String(name || "").trim();
-
-    if (!value) {
-        return "";
-    }
-
-    return value.split("|")[0].trim();
+    return String(name || "").trim();
 }
 
 function getIndiaDateStart(daysAgo = 0) {
@@ -1930,3 +1924,5 @@ exports.debugMetaPermissions =
             });
         }
     };
+
+ 
