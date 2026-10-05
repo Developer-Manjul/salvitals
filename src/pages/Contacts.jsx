@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "../config/api";
-
 function getToken() {
   return (
     sessionStorage.getItem("token") ||
@@ -10,16 +9,12 @@ function getToken() {
     ""
   );
 }
-
 function formatDateTime(value) {
   if (!value) return "—";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
@@ -28,12 +23,10 @@ function formatDateTime(value) {
     minute: "2-digit",
   }).format(date);
 }
-
 function cleanText(value) {
   if (value === null || value === undefined) {
     return "";
   }
-
   return String(value)
     .normalize("NFKC")
     .replace(
@@ -44,19 +37,15 @@ function cleanText(value) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
 function cleanName(value) {
   const name = cleanText(value);
   return name || "Unnamed contact";
 }
-
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
-
 function getInitials(name = "") {
   const clean = cleanName(name);
-
   const initials = clean
     .split(/\s+/)
     .filter(Boolean)
@@ -64,22 +53,18 @@ function getInitials(name = "") {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
   return initials || "C";
 }
-
 function getContactSource(contact) {
   if (!contact) {
     return "Other";
   }
-
   const sourceValue = cleanText(
     contact.source ||
     contact.leadSource ||
     contact.originalSource ||
     ""
   );
-
   const platformValue = cleanText(
     contact.metaPlatform ||
     contact.platform ||
@@ -88,7 +73,6 @@ function getContactSource(contact) {
     contact.channel ||
     ""
   );
-
   const sourceDetails = cleanText(
     contact.sourceDetails ||
     contact.metaSourceDetails ||
@@ -96,7 +80,6 @@ function getContactSource(contact) {
     contact.originalPlatform ||
     ""
   );
-
   const combined = [
     sourceValue,
     platformValue,
@@ -105,7 +88,6 @@ function getContactSource(contact) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-
   if (
     combined.includes("instagram") ||
     combined.includes("instagram lead") ||
@@ -114,7 +96,6 @@ function getContactSource(contact) {
   ) {
     return "Instagram";
   }
-
   if (
     combined.includes("facebook") ||
     combined.includes("facebook lead") ||
@@ -122,30 +103,25 @@ function getContactSource(contact) {
   ) {
     return "Facebook";
   }
-
   if (combined.includes("whatsapp")) {
     return "WhatsApp";
   }
-
   if (
     combined.includes("website") ||
     combined.includes("web")
   ) {
     return "Website";
   }
-
   if (
     combined.includes("google") ||
     combined.includes("google ads") ||
     combined.includes("googlead")
   ) {
-    return "Google";
+    return "Google Ads";
   }
-
   if (combined.includes("referral")) {
     return "Referral";
   }
-
   if (
     combined.includes("walk-in") ||
     combined.includes("walk in") ||
@@ -153,60 +129,47 @@ function getContactSource(contact) {
   ) {
     return "Walk-in";
   }
-
   if (combined.includes("campaign")) {
     return "Campaign";
   }
-
   if (combined.includes("manual")) {
     return "Manual";
   }
-
   return sourceValue || "Other";
 }
-
 function normalizeSource(value) {
   const source = cleanText(value);
-
   if (!source) {
     return "Other";
   }
-
   const normalized = source.toLowerCase();
-
   if (
     normalized.includes("instagram") ||
     normalized === "ig"
   ) {
     return "Instagram";
   }
-
   if (
     normalized.includes("facebook") ||
     normalized === "fb"
   ) {
     return "Facebook";
   }
-
   if (normalized.includes("whatsapp")) {
     return "WhatsApp";
   }
-
   if (
     normalized.includes("website") ||
     normalized === "web"
   ) {
     return "Website";
   }
-
   if (normalized.includes("google")) {
-    return "Google";
+    return "Google Ads";
   }
-
   if (normalized.includes("referral")) {
     return "Referral";
   }
-
   if (
     normalized.includes("walk-in") ||
     normalized.includes("walk in") ||
@@ -214,47 +177,39 @@ function normalizeSource(value) {
   ) {
     return "Walk-in";
   }
-
   if (normalized.includes("campaign")) {
     return "Campaign";
   }
-
   if (normalized.includes("manual")) {
     return "Manual";
   }
-
   return source;
 }
-
 function normalizeStage(value) {
   return cleanText(value)
     .toLowerCase()
-    .replace(/[\_-]+/g, " ")
+    .replace(/[\\_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
-
 function isJunkLead(contact) {
   const recordType = String(
     contact?.recordType ||
     contact?.sourceRecord ||
     ""
   ).toLowerCase();
-
   const stage = normalizeStage(
     contact?.stage ||
     contact?.leadStage ||
     contact?.status ||
     ""
   );
-
   return (
     recordType === "lead" &&
     (stage === "junk lead" ||
       stage === "junk")
   );
 }
-
 const emptyForm = {
   name: "",
   email: "",
@@ -264,7 +219,6 @@ const emptyForm = {
   doctor: "",
   owner: "",
 };
-
 function getDefaultForm(user) {
   return {
     ...emptyForm,
@@ -272,38 +226,30 @@ function getDefaultForm(user) {
     owner: cleanText(user?.name || ""),
   };
 }
-
 function getSuggestions(value, field, contacts) {
   const search = cleanText(value).toLowerCase();
-
   if (!search) {
     return [];
   }
-
   const phoneSearch = normalizePhone(value);
-
   return contacts
     .filter((contact) => {
       const name = cleanText(
         contact.name
       ).toLowerCase();
-
       const phone = normalizePhone(
         contact.phone
       );
-
       if (field === "phone") {
         return (
           phoneSearch.length > 0 &&
           phone.includes(phoneSearch)
         );
       }
-
       return name.includes(search);
     })
     .slice(0, 6);
 }
-
 function DeleteIcon() {
   return (
     <svg
@@ -348,7 +294,6 @@ function DeleteIcon() {
     </svg>
   );
 }
-
 function WarningIcon() {
   return (
     <svg
@@ -380,7 +325,6 @@ function WarningIcon() {
     </svg>
   );
 }
-
 function ArrowIcon() {
   return (
     <svg
@@ -407,47 +351,38 @@ function ArrowIcon() {
     </svg>
   );
 }
-
 export default function Contacts({ user }) {
   const [contacts, setContacts] = useState([]);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const contactsPerPage = 50;
   const [showAdd, setShowAdd] = useState(false);
-
   const [form, setForm] = useState(() =>
     getDefaultForm(user)
   );
-
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionField, setSuggestionField] =
     useState(null);
-
   const [
     selectedExistingContact,
     setSelectedExistingContact,
   ] = useState(null);
-
   const [
     deletingContact,
     setDeletingContact,
   ] = useState(null);
-
   const [deleting, setDeleting] =
     useState(false);
-
   const loadContacts = async () => {
     const token = getToken();
-
     if (!token) {
       setLoading(false);
       return;
     }
-
     setLoading(true);
-
     try {
       const response = await fetch(
         buildApiUrl("/api/contacts"),
@@ -457,76 +392,81 @@ export default function Contacts({ user }) {
           },
         }
       );
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(
           data.message ||
           "Unable to load contacts"
         );
       }
-
       setContacts(
         Array.isArray(data.contacts)
           ? data.contacts
           : []
       );
-
       setUsage(data.usage || null);
+      setCurrentPage(1);
     } catch (error) {
       setMessage(error.message);
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadContacts();
   }, []);
-
   useEffect(() => {
     setForm(getDefaultForm(user));
   }, [user]);
-
   const visibleContacts = useMemo(() => {
-    return contacts.filter(
-      (contact) => !isJunkLead(contact)
-    );
+    return contacts.filter((contact) => !isJunkLead(contact));
   }, [contacts]);
-
+  const totalPages = Math.max(1, Math.ceil(visibleContacts.length / contactsPerPage));
+  const paginatedContacts = useMemo(() => {
+    const start = (currentPage - 1) * contactsPerPage;
+    return visibleContacts.slice(start, start + contactsPerPage);
+  }, [visibleContacts, currentPage]);
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    const items = [1];
+    if (currentPage > 4) items.push("...");
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let page = start; page <= end; page += 1) items.push(page);
+    if (currentPage < totalPages - 3) items.push("...");
+    items.push(totalPages);
+    return items;
+  }, [currentPage, totalPages]);
   const resetContactForm = () => {
     setForm(getDefaultForm(user));
     setSuggestions([]);
     setSuggestionField(null);
     setSelectedExistingContact(null);
   };
-
   const openAddContact = () => {
     setMessage("");
     resetContactForm();
     setShowAdd(true);
   };
-
   const closeAddContact = () => {
     if (saving) return;
-
     setShowAdd(false);
     resetContactForm();
   };
-
   const updateField = (field, value) => {
     setSelectedExistingContact(null);
-
     setForm((previous) => ({
       ...previous,
       [field]: value,
     }));
   };
-
   const handleSearch = (field, value) => {
     setSuggestionField(field);
-
     setSuggestions(
       getSuggestions(
         value,
@@ -535,10 +475,8 @@ export default function Contacts({ user }) {
       )
     );
   };
-
   const selectExistingContact = (contact) => {
     const source = getContactSource(contact);
-
     setForm({
       name: cleanName(contact.name),
       phone: cleanText(contact.phone),
@@ -559,24 +497,20 @@ export default function Contacts({ user }) {
         ""
       ),
     });
-
     setSelectedExistingContact(contact);
     setSuggestions([]);
     setSuggestionField(null);
   };
-
   const addNewContact = (field) => {
     setSelectedExistingContact(null);
     setSuggestions([]);
     setSuggestionField(null);
-
     if (field === "name") {
       setForm((previous) => ({
         ...previous,
         name: cleanText(previous.name),
       }));
     }
-
     if (field === "phone") {
       setForm((previous) => ({
         ...previous,
@@ -584,26 +518,20 @@ export default function Contacts({ user }) {
       }));
     }
   };
-
   const openContactDetails = (contact) => {
     const contactId = String(
       contact?._id || ""
     );
-
     if (!contactId) {
       return;
     }
-
     window.location.href =
       `/contacts/${contactId}`;
   };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     setSaving(true);
     setMessage("");
-
     const cleanedForm = {
       ...form,
       name: cleanName(form.name),
@@ -614,7 +542,6 @@ export default function Contacts({ user }) {
       doctor: cleanText(form.doctor),
       owner: cleanText(form.owner),
     };
-
     try {
       const response = await fetch(
         buildApiUrl("/api/contacts"),
@@ -627,9 +554,7 @@ export default function Contacts({ user }) {
           body: JSON.stringify(cleanedForm),
         }
       );
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(
           data.code ===
@@ -639,14 +564,12 @@ export default function Contacts({ user }) {
             "Unable to create contact"
         );
       }
-
       setContacts((previous) => [
         data.contact,
         ...previous,
       ]);
-
       setUsage(data.usage || usage);
-
+      setCurrentPage(1);
       setShowAdd(false);
       resetContactForm();
     } catch (error) {
@@ -655,41 +578,32 @@ export default function Contacts({ user }) {
       setSaving(false);
     }
   };
-
   const askDeleteContact = (
     event,
     contact
   ) => {
     event.stopPropagation();
-
     setMessage("");
     setDeletingContact(contact);
   };
-
   const closeDeleteModal = () => {
     if (deleting) return;
-
     setDeletingContact(null);
   };
-
   const confirmDelete = async () => {
     if (!deletingContact) {
       return;
     }
-
     setDeleting(true);
     setMessage("");
-
     const isLead =
       deletingContact.recordType ===
       "lead" ||
       deletingContact.sourceRecord ===
       "lead";
-
     const endpoint = isLead
       ? `/api/leads/${deletingContact._id}`
       : `/api/contacts/${deletingContact._id}`;
-
     try {
       const response = await fetch(
         buildApiUrl(endpoint),
@@ -700,16 +614,13 @@ export default function Contacts({ user }) {
           },
         }
       );
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(
           data.message ||
           "Unable to delete record"
         );
       }
-
       setContacts((previous) =>
         previous.filter(
           (item) =>
@@ -719,11 +630,9 @@ export default function Contacts({ user }) {
             )
         )
       );
-
       if (data.usage) {
         setUsage(data.usage);
       }
-
       setDeletingContact(null);
     } catch (error) {
       setMessage(
@@ -734,20 +643,16 @@ export default function Contacts({ user }) {
       setDeleting(false);
     }
   };
-
   const isUnlimited =
     usage?.limit === null;
-
   const isOverLimit =
     usage &&
     !isUnlimited &&
     usage.used > usage.limit;
-
   const isLimitReached =
     usage &&
     !isUnlimited &&
     usage.used >= usage.limit;
-
   return (
     <div className="contacts-page">
       <style>
@@ -758,24 +663,19 @@ export default function Contacts({ user }) {
               background-color .18s ease,
               box-shadow .18s ease;
           }
-
           .contacts-clickable-row:hover {
             background: #f8fbff;
           }
-
           .contacts-clickable-row td {
             cursor: pointer;
           }
-
           .contacts-clickable-row:hover .contact-name-text {
             color: #2563eb;
           }
-
           .contacts-clickable-row:hover .contact-row-arrow {
             opacity: 1;
             transform: translateX(2px);
           }
-
           .contact-row-arrow {
             display: inline-flex;
             align-items: center;
@@ -789,7 +689,6 @@ export default function Contacts({ user }) {
               transform .18s ease;
             vertical-align: middle;
           }
-
           .contact-delete-btn {
             display: inline-flex;
             align-items: center;
@@ -807,23 +706,19 @@ export default function Contacts({ user }) {
             cursor: pointer;
             transition: all .18s ease;
           }
-
           .contact-delete-btn:hover {
             background: #fee2e2;
             border-color: #fca5a5;
             color: #b91c1c;
             transform: translateY(-1px);
           }
-
           .contact-delete-btn svg {
             flex-shrink: 0;
           }
-
           .contact-delete-cell {
             text-align: right;
             width: 90px;
           }
-
           .contact-delete-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -835,7 +730,6 @@ export default function Contacts({ user }) {
             background: rgba(15, 23, 42, .48);
             backdrop-filter: blur(3px);
           }
-
           .contact-delete-modal {
             width: min(420px, 100%);
             background: #fff;
@@ -845,23 +739,19 @@ export default function Contacts({ user }) {
             overflow: hidden;
             animation: contactDeleteModalIn .18s ease-out;
           }
-
           @keyframes contactDeleteModalIn {
             from {
               opacity: 0;
               transform: translateY(8px) scale(.98);
             }
-
             to {
               opacity: 1;
               transform: translateY(0) scale(1);
             }
           }
-
           .contact-delete-modal-content {
             padding: 24px;
           }
-
           .contact-delete-warning {
             width: 46px;
             height: 46px;
@@ -873,26 +763,22 @@ export default function Contacts({ user }) {
             color: #dc2626;
             margin-bottom: 16px;
           }
-
           .contact-delete-modal h3 {
             margin: 0 0 7px;
             color: #172033;
             font-size: 17px;
             font-weight: 700;
           }
-
           .contact-delete-modal p {
             margin: 0;
             color: #64748b;
             font-size: 13px;
             line-height: 1.55;
           }
-
           .contact-delete-modal-name {
             color: #172033;
             font-weight: 700;
           }
-
           .contact-delete-modal-actions {
             display: flex;
             align-items: center;
@@ -902,7 +788,6 @@ export default function Contacts({ user }) {
             border-top: 1px solid #edf1f5;
             background: #fbfcfe;
           }
-
           .contact-delete-cancel {
             height: 36px;
             padding: 0 15px;
@@ -914,11 +799,9 @@ export default function Contacts({ user }) {
             font-weight: 600;
             cursor: pointer;
           }
-
           .contact-delete-cancel:hover {
             background: #f8fafc;
           }
-
           .contact-delete-confirm {
             height: 36px;
             padding: 0 16px;
@@ -930,43 +813,85 @@ export default function Contacts({ user }) {
             font-weight: 600;
             cursor: pointer;
           }
-
           .contact-delete-confirm:hover {
             background: #b91c1c;
             border-color: #b91c1c;
           }
-
           .contact-delete-confirm:disabled,
           .contact-delete-cancel:disabled {
             opacity: .6;
             cursor: not-allowed;
           }
-
+          .contacts-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 16px;
+            padding: 14px 4px 24px;
+          }
+          .contacts-pagination-info {
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          .contacts-pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .contacts-pagination-btn {
+            min-width: 34px;
+            height: 34px;
+            padding: 0 10px;
+            border: 1px solid #dbe3ed;
+            border-radius: 8px;
+            background: #fff;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+          .contacts-pagination-btn:hover:not(:disabled) {
+            border-color: #2563eb;
+            color: #2563eb;
+            background: #f8fbff;
+          }
+          .contacts-pagination-btn.active {
+            border-color: #2563eb;
+            background: #2563eb;
+            color: #fff;
+          }
+          .contacts-pagination-btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+          }
+          .contacts-pagination-dots {
+            width: 24px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
+          }
           @media (max-width: 900px) {
             .contact-delete-cell {
               width: 75px;
             }
-
             .contact-delete-btn {
               min-width: 64px;
               padding: 0 8px;
             }
-
             .contact-row-arrow {
               display: none;
             }
           }
         `}
       </style>
-
       <header className="contacts-page-header">
         <div>
           <p className="dash-breadcrumb">
             People
           </p>
-
           <h1>Contacts</h1>
-
           <p className="contacts-subtitle">
             {usage
               ? `${usage.used}${isUnlimited
@@ -976,7 +901,6 @@ export default function Contacts({ user }) {
               : "Manage your contacts"}
           </p>
         </div>
-
         <button
           type="button"
           className="dash-btn primary"
@@ -985,13 +909,11 @@ export default function Contacts({ user }) {
           + Add contact
         </button>
       </header>
-
       {message && (
         <div className="contact-message">
           {message}
         </div>
       )}
-
       {isOverLimit ? (
         <div className="contact-limit-banner">
           Your current plan allows{" "}
@@ -1012,7 +934,6 @@ export default function Contacts({ user }) {
           <strong>
             {usage.used} / {usage.limit} contacts used
           </strong>
-
           <span>
             {usage.available} contacts remaining
           </span>
@@ -1022,18 +943,15 @@ export default function Contacts({ user }) {
           <strong>
             {usage.used} contacts used
           </strong>
-
           <span>
             Enterprise capacity
           </span>
         </div>
       ) : null}
-
       <section className="contacts-table-card">
         <div className="contacts-table-meta">
           {visibleContacts.length} records
         </div>
-
         <div className="contacts-table-wrap">
           <table className="contacts-table">
             <thead>
@@ -1050,7 +968,6 @@ export default function Contacts({ user }) {
                 </th>
               </tr>
             </thead>
-
             <tbody>
               {loading ? (
                 <tr>
@@ -1071,33 +988,28 @@ export default function Contacts({ user }) {
                   </td>
                 </tr>
               ) : (
-                visibleContacts.map(
+                paginatedContacts.map(
                   (contact) => {
                     const displayName =
                       cleanName(
                         contact.name
                       );
-
                     const displayPhone =
                       cleanText(
                         contact.phone
                       );
-
                     const displayEmail =
                       cleanText(
                         contact.email
                       );
-
                     const displaySource =
                       getContactSource(
                         contact
                       );
-
                     const displayService =
                       cleanText(
                         contact.service
                       );
-
                     const displayDoctor =
                       cleanText(
                         contact.doctor ||
@@ -1106,7 +1018,6 @@ export default function Contacts({ user }) {
                         user?.name ||
                         ""
                       );
-
                     const sourceClass =
                       displaySource
                         .toLowerCase()
@@ -1119,7 +1030,6 @@ export default function Contacts({ user }) {
                           ""
                         ) ||
                       "default";
-
                     return (
                       <tr
                         key={`${contact.recordType || "contact"}-${contact._id}`}
@@ -1138,7 +1048,6 @@ export default function Contacts({ user }) {
                                 displayName
                               )}
                             </span>
-
                             <strong
                               className="contact-name-text"
                               title={
@@ -1147,23 +1056,19 @@ export default function Contacts({ user }) {
                             >
                               {displayName}
                             </strong>
-
                             <span className="contact-row-arrow">
                               <ArrowIcon />
                             </span>
                           </span>
                         </td>
-
                         <td>
                           {displayPhone ||
                             "—"}
                         </td>
-
                         <td>
                           {displayEmail ||
                             "—"}
                         </td>
-
                         <td>
                           <span
                             className={`lead-source-badge source-${sourceClass}`}
@@ -1171,24 +1076,20 @@ export default function Contacts({ user }) {
                             {displaySource}
                           </span>
                         </td>
-
                         <td>
                           {displayService ||
                             "—"}
                         </td>
-
                         <td>
                           {displayDoctor ||
                             "—"}
                         </td>
-
                         <td>
                           {formatDateTime(
                             contact.leadCreatedAt ||
                             contact.createdAt
                           )}
                         </td>
-
                         <td className="contact-delete-cell">
                           <button
                             type="button"
@@ -1215,7 +1116,22 @@ export default function Contacts({ user }) {
           </table>
         </div>
       </section>
-
+      {visibleContacts.length > 0 && (
+        <div className="contacts-pagination">
+          <div className="contacts-pagination-info">
+            Showing {((currentPage - 1) * contactsPerPage) + 1}–{Math.min(currentPage * contactsPerPage, visibleContacts.length)} of {visibleContacts.length}
+          </div>
+          <div className="contacts-pagination-controls">
+            <button type="button" className="contacts-pagination-btn" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>Previous</button>
+            {paginationItems.map((item, index) => item === "..." ? (
+              <span key={`dots-${index}`} className="contacts-pagination-dots">...</span>
+            ) : (
+              <button key={item} type="button" className={`contacts-pagination-btn contacts-pagination-number ${currentPage === item ? "active" : ""}`} onClick={() => setCurrentPage(item)}>{item}</button>
+            ))}
+            <button type="button" className="contacts-pagination-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>Next</button>
+          </div>
+        </div>
+      )}
       {showAdd && (
         <div
           className="lead-modal-backdrop"
@@ -1238,13 +1154,11 @@ export default function Contacts({ user }) {
             <div className="lead-modal-head">
               <div>
                 <h3>Add contact</h3>
-
                 <p>
                   Save a contact to your
                   current plan capacity.
                 </p>
               </div>
-
               <button
                 type="button"
                 className="lead-close-btn"
@@ -1256,13 +1170,11 @@ export default function Contacts({ user }) {
                 ×
               </button>
             </div>
-
             <div className="lead-form-grid">
               <div className="contact-field-with-suggestions">
                 <label>
                   Full name
                 </label>
-
                 <div className="contact-autocomplete">
                   <input
                     type="text"
@@ -1277,7 +1189,6 @@ export default function Contacts({ user }) {
                         setSuggestionField(
                           "name"
                         );
-
                         setSuggestions(
                           getSuggestions(
                             form.name,
@@ -1290,12 +1201,10 @@ export default function Contacts({ user }) {
                     onChange={(event) => {
                       const value =
                         event.target.value;
-
                       updateField(
                         "name",
                         value
                       );
-
                       handleSearch(
                         "name",
                         value
@@ -1310,7 +1219,6 @@ export default function Contacts({ user }) {
                       }, 180);
                     }}
                   />
-
                   {suggestionField ===
                     "name" &&
                     form.name.trim() && (
@@ -1329,7 +1237,6 @@ export default function Contacts({ user }) {
                                   event
                                 ) => {
                                   event.preventDefault();
-
                                   selectExistingContact(
                                     contact
                                   );
@@ -1340,20 +1247,17 @@ export default function Contacts({ user }) {
                                     contact.name
                                   )}
                                 </span>
-
                                 <span className="contact-suggestion-content">
                                   <strong>
                                     {cleanName(
                                       contact.name
                                     )}
                                   </strong>
-
                                   <small>
                                     {cleanText(
                                       contact.phone
                                     ) ||
                                       "No phone"}
-
                                     {contact.email
                                       ? ` · ${cleanText(
                                         contact.email
@@ -1372,7 +1276,6 @@ export default function Contacts({ user }) {
                               event
                             ) => {
                               event.preventDefault();
-
                               addNewContact(
                                 "name"
                               );
@@ -1381,7 +1284,6 @@ export default function Contacts({ user }) {
                             <span className="contact-new-icon">
                               +
                             </span>
-
                             <span>
                               <strong>
                                 Add "
@@ -1390,7 +1292,6 @@ export default function Contacts({ user }) {
                                 )}
                                 "
                               </strong>
-
                               <small>
                                 Create new contact
                               </small>
@@ -1401,12 +1302,10 @@ export default function Contacts({ user }) {
                     )}
                 </div>
               </div>
-
               <div className="contact-field-with-suggestions">
                 <label>
                   Phone number
                 </label>
-
                 <div className="contact-autocomplete">
                   <input
                     type="text"
@@ -1421,7 +1320,6 @@ export default function Contacts({ user }) {
                         setSuggestionField(
                           "phone"
                         );
-
                         setSuggestions(
                           getSuggestions(
                             form.phone,
@@ -1434,12 +1332,10 @@ export default function Contacts({ user }) {
                     onChange={(event) => {
                       const value =
                         event.target.value;
-
                       updateField(
                         "phone",
                         value
                       );
-
                       handleSearch(
                         "phone",
                         value
@@ -1454,7 +1350,6 @@ export default function Contacts({ user }) {
                       }, 180);
                     }}
                   />
-
                   {suggestionField ===
                     "phone" &&
                     form.phone.trim() && (
@@ -1473,7 +1368,6 @@ export default function Contacts({ user }) {
                                   event
                                 ) => {
                                   event.preventDefault();
-
                                   selectExistingContact(
                                     contact
                                   );
@@ -1484,19 +1378,16 @@ export default function Contacts({ user }) {
                                     contact.name
                                   )}
                                 </span>
-
                                 <span className="contact-suggestion-content">
                                   <strong>
                                     {cleanName(
                                       contact.name
                                     )}
                                   </strong>
-
                                   <small>
                                     {cleanText(
                                       contact.phone
                                     )}
-
                                     {contact.email
                                       ? ` · ${cleanText(
                                         contact.email
@@ -1515,7 +1406,6 @@ export default function Contacts({ user }) {
                               event
                             ) => {
                               event.preventDefault();
-
                               addNewContact(
                                 "phone"
                               );
@@ -1524,7 +1414,6 @@ export default function Contacts({ user }) {
                             <span className="contact-new-icon">
                               +
                             </span>
-
                             <span>
                               <strong>
                                 Add "
@@ -1533,7 +1422,6 @@ export default function Contacts({ user }) {
                                 )}
                                 "
                               </strong>
-
                               <small>
                                 Create new contact
                               </small>
@@ -1544,10 +1432,8 @@ export default function Contacts({ user }) {
                     )}
                 </div>
               </div>
-
               <label>
                 Email
-
                 <input
                   type="email"
                   value={form.email}
@@ -1560,10 +1446,8 @@ export default function Contacts({ user }) {
                   }
                 />
               </label>
-
               <label>
                 Source
-
                 <input
                   type="text"
                   value={form.source}
@@ -1575,10 +1459,8 @@ export default function Contacts({ user }) {
                   }
                 />
               </label>
-
               <label>
                 Service
-
                 <input
                   type="text"
                   value={form.service}
@@ -1591,10 +1473,8 @@ export default function Contacts({ user }) {
                   }
                 />
               </label>
-
               <label>
                 Doctor
-
                 <input
                   type="text"
                   value={form.doctor}
@@ -1606,10 +1486,8 @@ export default function Contacts({ user }) {
                   }
                 />
               </label>
-
               <label>
                 Owner
-
                 <input
                   type="text"
                   value={form.owner}
@@ -1622,7 +1500,6 @@ export default function Contacts({ user }) {
                 />
               </label>
             </div>
-
             {selectedExistingContact && (
               <div className="contact-selected-info">
                 Existing contact selected:{" "}
@@ -1633,7 +1510,6 @@ export default function Contacts({ user }) {
                 </strong>
               </div>
             )}
-
             <div className="contact-modal-actions">
               <button
                 type="button"
@@ -1645,7 +1521,6 @@ export default function Contacts({ user }) {
               >
                 Cancel
               </button>
-
               <button
                 type="submit"
                 className="dash-btn primary"
@@ -1659,7 +1534,6 @@ export default function Contacts({ user }) {
           </form>
         </div>
       )}
-
       {deletingContact && (
         <div
           className="contact-delete-modal-backdrop"
@@ -1682,9 +1556,7 @@ export default function Contacts({ user }) {
               <div className="contact-delete-warning">
                 <WarningIcon />
               </div>
-
               <h3>Are you sure?</h3>
-
               <p>
                 Are you sure you want to
                 delete{" "}
@@ -1697,7 +1569,6 @@ export default function Contacts({ user }) {
                 undone.
               </p>
             </div>
-
             <div className="contact-delete-modal-actions">
               <button
                 type="button"
@@ -1709,7 +1580,6 @@ export default function Contacts({ user }) {
               >
                 Cancel
               </button>
-
               <button
                 type="button"
                 className="contact-delete-confirm"

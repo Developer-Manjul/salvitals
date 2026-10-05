@@ -112,34 +112,30 @@ function normalizeSource(value = "", configuredSources = []) {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
- const source = raw
-  .toLowerCase()
-  .replace(/[_-]+/g, " ")
-  .replace(/\s+/g, " ");
+  const source = raw
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
-const names = Array.isArray(configuredSources)
-  ? configuredSources
+  const names = Array.isArray(configuredSources)
+    ? configuredSources
       .map((item) => String(item || "").trim())
       .filter(Boolean)
-  : [];
+    : [];
 
-/**
- * Google Ads landing-page leads
- * should always display as "Google Ad".
- */
-if (
-  source === "google ad" ||
-  source === "google ads" ||
-  source === "google"
-) {
-  return "Google Ad";
-}
+  if (
+    source === "google ad" ||
+    source === "google ads" ||
+    source === "google"
+  ) {
+    return "Google Ad";
+  }
 
-const exactMatch = names.find(
-  (item) => item.toLowerCase() === raw.toLowerCase()
-);
+  const exactMatch = names.find(
+    (item) => item.toLowerCase() === raw.toLowerCase()
+  );
 
-if (exactMatch) return exactMatch;
+  if (exactMatch) return exactMatch;
 
   const aliases = [
     { match: ["google", "google ads", "google lead", "google leads"], includes: "google", name: ["google ads", "google"] },
@@ -233,6 +229,18 @@ function getStageTone(stage) {
   if (value.includes("pending") || value.includes("follow") || value.includes("proposal")) return "stage-proposal";
 
   return "stage-default";
+}
+
+function getLeadCategory(stage = "") {
+  const value = String(stage || "").trim().toLowerCase().replace(/[\s_-]+/g, " ");
+
+  if (value === "new") return "new";
+  if (value.includes("convert")) return "converted";
+  if (value === "lost" || value === "junk" || value.includes("not answered") || value.includes("not answer")) return "junk";
+  if (value.includes("pending") || value.includes("follow up") || value.includes("follow-up")) return "pending";
+  if (value.includes("relevant") || value.includes("contact") || value.includes("qualif") || value.includes("proposal") || value.includes("in progress")) return "relevant";
+
+  return "other";
 }
 
 function formatDate(value) {
@@ -333,6 +341,9 @@ export default function Leads({
 
   const [serviceFilter, setServiceFilter] =
     useState("All services");
+
+  const LEADS_PER_PAGE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [activeView, setActiveView] =
     useState("list");
@@ -626,16 +637,21 @@ export default function Leads({
 
   useEffect(() => {
     loadLeads();
-    loadServices();
   }, []);
 
- const configuredSourceOptions = useMemo(() => {
-  return [...new Set(
-    leadSources
-      .map((item) => String(item || "").trim())
-      .filter(Boolean)
-  )];
-}, [leadSources]);
+  useEffect(() => {
+    if (showAddModal) {
+      loadServices();
+    }
+  }, [showAddModal]);
+
+  const configuredSourceOptions = useMemo(() => {
+    return [...new Set(
+      leadSources
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )];
+  }, [leadSources]);
 
   const configuredStageOptions = useMemo(() => {
     const values = ["New", ...leadStages];
@@ -709,32 +725,6 @@ export default function Leads({
     showAddModal,
   ]);
 
-  // const summary = useMemo(() => {
-  //   return {
-  //     total: leads.length,
-
-  //     new: leads.filter(
-  //       (lead) =>
-  //         lead.stage === "New"
-  //     ).length,
-
-  //     contacted: leads.filter(
-  //       (lead) =>
-  //         lead.stage === "Contacted"
-  //     ).length,
-
-  //     qualified: leads.filter(
-  //       (lead) =>
-  //         lead.stage === "Qualified"
-  //     ).length,
-
-  //     converted: leads.filter(
-  //       (lead) =>
-  //         lead.stage === "Converted"
-  //     ).length,
-  //   };
-  // }, [leads]);
-
   const filteredLeads = useMemo(() => {
     const normalizedSearch =
       search
@@ -779,18 +769,10 @@ export default function Leads({
         lead.stage ===
         stageFilter;
 
+      const leadCategory = getLeadCategory(lead?.stage);
       const matchesEnquiry =
         enquiryFilter === "all" ||
-        (enquiryFilter === "new" &&
-          lead.stage === "New") ||
-        (enquiryFilter === "relevant" &&
-          ["Contacted", "Qualified", "Proposal"].includes(
-            lead.stage
-          )) ||
-        (enquiryFilter === "converted" &&
-          lead.stage === "Converted") ||
-        (enquiryFilter === "junk" &&
-          lead.stage === "Lost");
+        leadCategory === enquiryFilter;
 
       const matchesOwner =
         ownerFilter ===
@@ -825,6 +807,32 @@ export default function Leads({
     serviceFilter,
     configuredSourceOptions,
   ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, sourceFilter, stageFilter, enquiryFilter, ownerFilter, serviceFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / LEADS_PER_PAGE));
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * LEADS_PER_PAGE;
+    return filteredLeads.slice(start, start + LEADS_PER_PAGE);
+  }, [filteredLeads, currentPage]);
+
+  const paginationStart = filteredLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PER_PAGE + 1;
+  const paginationEnd = Math.min(currentPage * LEADS_PER_PAGE, filteredLeads.length);
+
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+    const end = Math.min(totalPages, start + 4);
+    for (let page = start; page <= end; page += 1) pages.push(page);
+    return pages;
+  }, [currentPage, totalPages]);
 
   const openAddLeadModal = () => {
     setEditingLeadId(null);
@@ -1531,95 +1539,23 @@ export default function Leads({
       }
     };
 
+  const countByCategory = (category) =>
+    leads.reduce((count, lead) => count + (getLeadCategory(lead?.stage) === category ? 1 : 0), 0);
+
   const summaryCards = [
-    {
-      key: "all",
-      label: "Total Leads",
-      value: leads.length,
-    },
-    {
-      key: "new",
-      label: "New",
-      value: leads.filter(
-        (lead) => lead.stage === "New"
-      ).length,
-    },
-    {
-      key: "relevant",
-      label: "Relevant",
-      value: leads.filter((lead) =>
-        ["Contacted", "Qualified", "Proposal"].includes(
-          lead.stage
-        )
-      ).length,
-    },
-    {
-      key: "converted",
-      label: "Converted",
-      value: leads.filter(
-        (lead) => lead.stage === "Converted"
-      ).length,
-    },
-    {
-      key: "junk",
-      label: "Junk",
-      value: leads.filter(
-        (lead) => lead.stage === "Lost"
-      ).length,
-    },
+    { key: "all", label: "Total Leads", value: leads.length },
+    { key: "new", label: "New", value: countByCategory("new") },
+    { key: "relevant", label: "Relevant", value: countByCategory("relevant") },
+    { key: "converted", label: "Converted", value: countByCategory("converted") },
+    { key: "junk", label: "Junk", value: countByCategory("junk") },
   ];
 
   const enquiryTabs = [
-    [
-      "all",
-      "All Enquiries",
-      leads.length,
-    ],
-
-    [
-      "pending",
-      "Pending",
-      leads.filter(
-        (lead) =>
-          lead.stage ===
-          "Pending follow-up"
-      ).length,
-    ],
-
-    [
-      "in-progress",
-      "In Progress",
-      leads.filter(
-        (lead) =>
-          [
-            "Contacted",
-            "Qualified",
-            "Proposal",
-          ].includes(
-            lead.stage
-          )
-      ).length,
-    ],
-
-    [
-      "converted",
-      "Converted",
-      leads.filter(
-        (lead) =>
-          lead.stage ===
-          "Converted"
-      ).length,
-    ],
-
-    [
-      "lost",
-      "Lost",
-      leads.filter(
-        (lead) =>
-          lead.stage ===
-          "Lost"
-      ).length,
-    ],
+    ["all", "All Enquiries", leads.length],
+    ["pending", "Pending", countByCategory("pending")],
+    ["relevant", "In Progress", countByCategory("relevant")],
+    ["converted", "Converted", countByCategory("converted")],
+    ["junk", "Lost", countByCategory("junk")],
   ];
 
   return (
@@ -1690,11 +1626,10 @@ export default function Leads({
                   : ""
               }
               key={value}
-              onClick={() =>
-                setEnquiryFilter(
-                  value
-                )
-              }
+              onClick={() => {
+                setEnquiryFilter(value);
+                setStageFilter("All stages");
+              }}
             >
               {label}
 
@@ -1715,17 +1650,8 @@ export default function Leads({
               }`}
             key={item.key}
             onClick={() => {
-              if (item.key === "all") {
-                setEnquiryFilter("all");
-              } else if (item.key === "new") {
-                setEnquiryFilter("new");
-              } else if (item.key === "relevant") {
-                setEnquiryFilter("relevant");
-              } else if (item.key === "converted") {
-                setEnquiryFilter("converted");
-              } else if (item.key === "junk") {
-                setEnquiryFilter("junk");
-              }
+              setEnquiryFilter(item.key);
+              setStageFilter("All stages");
             }}
           >
             <span>{item.label}</span>
@@ -1818,63 +1744,9 @@ export default function Leads({
             )}
           </select>
 
-          {/* <select
-            value={
-              ownerFilter
-            }
-            onChange={(
-              event
-            ) =>
-              setOwnerFilter(
-                event.target
-                  .value
-              )
-            }
-          >
-            <option value="All owners">
-              Owner
-            </option>
+          {}
 
-            {ownerOptions.map(
-              (owner) => (
-                <option
-                  value={owner}
-                  key={owner}
-                >
-                  {owner}
-                </option>
-              )
-            )}
-          </select> */}
-
-          {/* <select
-            value={
-              serviceFilter
-            }
-            onChange={(
-              event
-            ) =>
-              setServiceFilter(
-                event.target
-                  .value
-              )
-            }
-          >
-            <option value="All services">
-              Service
-            </option>
-
-            {availableServices.map(
-              (service) => (
-                <option
-                  value={service}
-                  key={service}
-                >
-                  {service}
-                </option>
-              )
-            )}
-          </select> */}
+          {}
 
           <button
             type="button"
@@ -2034,7 +1906,7 @@ export default function Leads({
                     </td>
                   </tr>
                 ) : (
-                  filteredLeads.map(
+                  paginatedLeads.map(
                     (lead) => {
                       const displayName =
                         getLeadName(lead);
@@ -2242,17 +2114,7 @@ export default function Leads({
                                     >
                                       Edit lead
                                     </button>
-                                    {/* 
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleDeleteLead(
-                                          lead._id
-                                        )
-                                      }
-                                    >
-                                      Delete lead
-                                    </button> */}
+                                    {}
 
                                   </div>
                                 )}
@@ -2270,6 +2132,25 @@ export default function Leads({
               </tbody>
 
             </table>
+
+            {filteredLeads.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 16px", borderTop: "1px solid #e7edf5", background: "#fff", flexWrap: "wrap" }}>
+                <span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>
+                  Showing {paginationStart}-{paginationEnd} of {filteredLeads.length} leads
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button type="button" onClick={() => setCurrentPage(1)} disabled={currentPage === 1} style={{ minWidth: 34, height: 34, border: "1px solid #dbe4ef", borderRadius: 8, background: currentPage === 1 ? "#f8fafc" : "#fff", color: currentPage === 1 ? "#a0aec0" : "#334155", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontWeight: 600 }}>«</button>
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} style={{ minWidth: 34, height: 34, border: "1px solid #dbe4ef", borderRadius: 8, background: currentPage === 1 ? "#f8fafc" : "#fff", color: currentPage === 1 ? "#a0aec0" : "#334155", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontWeight: 600 }}>‹</button>
+                  {pageNumbers.map((page) => (
+                    <button key={page} type="button" onClick={() => setCurrentPage(page)} style={{ minWidth: 34, height: 34, padding: "0 9px", border: page === currentPage ? "1px solid #2563eb" : "1px solid #dbe4ef", borderRadius: 8, background: page === currentPage ? "#2563eb" : "#fff", color: page === currentPage ? "#fff" : "#334155", cursor: "pointer", fontWeight: 700 }}>
+                      {page}
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} style={{ minWidth: 34, height: 34, border: "1px solid #dbe4ef", borderRadius: 8, background: currentPage === totalPages ? "#f8fafc" : "#fff", color: currentPage === totalPages ? "#a0aec0" : "#334155", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontWeight: 600 }}>›</button>
+                  <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} style={{ minWidth: 34, height: 34, border: "1px solid #dbe4ef", borderRadius: 8, background: currentPage === totalPages ? "#f8fafc" : "#fff", color: currentPage === totalPages ? "#a0aec0" : "#334155", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontWeight: 600 }}>»</button>
+                </div>
+              </div>
+            )}
 
           </div>
         )}
@@ -2389,7 +2270,7 @@ export default function Leads({
                 No leads match your current filters.
               </div>
             ) : (
-              filteredLeads.map(
+              paginatedLeads.map(
                 (lead) => {
                   const displayName =
                     getLeadName(lead);

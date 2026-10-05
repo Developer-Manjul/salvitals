@@ -14,7 +14,6 @@ import Invoice from "./Invoice";
 import AIAssistant from "./AIAssistant";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 
-
 const navGroups = [
   {
     label: "Acquire",
@@ -562,7 +561,6 @@ function ActualDashboardContent({ user, dashboardLeads, dashboardData, todayFoll
         </section>
       </div>
 
-
       <div className="dash-grid-two lower">
         <section className="dash-card">
           <div className="dash-card-head">
@@ -749,8 +747,6 @@ export default function Dashboard() {
   const [billingLoading, setBillingLoading] =
     useState(true);
 
-  // Keep the SPA navigation inside browser history.
-  // This changes navigation state only; the existing dashboard layout stays untouched.
   useEffect(() => {
     const currentState = window.history.state;
 
@@ -964,433 +960,191 @@ export default function Dashboard() {
   const isTodayDate = (value) => {
     const date = new Date(value);
     const today = new Date();
-
-    if (Number.isNaN(date.getTime())) {
-      return false;
-    }
-
-    return (
-      date.getFullYear() === today.getFullYear() &&
-      date.getMonth() === today.getMonth() &&
-      date.getDate() === today.getDate()
-    );
+    if (Number.isNaN(date.getTime())) return false;
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
   };
 
   const isCompletedFollowUp = (followUp) => {
-    const status = String(
-      followUp?.status || "Scheduled"
-    ).toLowerCase();
-
-    return (
-      status === "completed" ||
-      status === "complete" ||
-      status === "done"
-    );
+    const status = String(followUp?.status || "Scheduled").toLowerCase();
+    return status === "completed" || status === "complete" || status === "done";
   };
 
-  const loadTodayFollowUps = async () => {
-    const token = getAuthToken();
+  const processDashboardLeads = (rawLeads) => {
+    const leads = Array.isArray(rawLeads) ? rawLeads : [];
+    const normalized = leads.map((lead) => ({
+      ...lead,
+      source: normalizeSource(lead?.source),
+      stage: normalizeStage(lead?.stage),
+    }));
 
-    if (!token) {
-      return;
-    }
+    setAllLeads(normalized);
+
+    const sorted = [...normalized].sort((a, b) => {
+      const aTime = getLeadDate(a)?.getTime() || 0;
+      const bTime = getLeadDate(b)?.getTime() || 0;
+      return bTime - aTime;
+    });
+
+    setDashboardLeads(sorted.slice(0, 5));
+    setDashboardData(buildDashboardData(normalized));
+
+    const storageKey = getLeadReadStorageKey();
+    let readLeadIds = [];
 
     try {
-      const response = await fetch(
-        buildApiUrl("/api/leads"),
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      readLeadIds = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    } catch {
+      readLeadIds = [];
+    }
+
+    if (!Array.isArray(readLeadIds)) readLeadIds = [];
+
+    const currentLeadIdSet = new Set(
+      leads.map((lead) => String(lead?._id || "")).filter(Boolean)
+    );
+
+    readLeadIds = readLeadIds.filter((id) => currentLeadIdSet.has(String(id)));
+    localStorage.setItem(storageKey, JSON.stringify(readLeadIds));
+
+    const readLeadIdSet = new Set(readLeadIds.map((id) => String(id)));
+
+    const unreadNewLeadCount = leads.filter((lead) => {
+      const id = String(lead?._id || "");
+      const stage = String(lead?.stage || "New").trim().toLowerCase();
+      return id && stage === "new" && !readLeadIdSet.has(id);
+    }).length;
+
+    setLeadCount(unreadNewLeadCount);
+
+    const now = Date.now();
+    let pendingCount = 0;
+    const followUpItems = [];
+
+    leads.forEach((lead) => {
+      if (!Array.isArray(lead.followUps)) return;
+
+      lead.followUps.forEach((followUp, index) => {
+        const followUpTime = new Date(followUp?.date || "").getTime();
+        if (!followUp?.date || !Number.isFinite(followUpTime) || followUpTime <= now || isCompletedFollowUp(followUp)) return;
+
+        const status = String(followUp?.status || "Scheduled").toLowerCase();
+        const followUpDate = new Date(followUp.date);
+
+        if (!["completed", "complete", "done"].includes(status) && Number.isFinite(followUpDate.getTime()) && followUpDate.getTime() >= now) {
+          pendingCount += 1;
         }
-      );
 
-      const data = await response.json();
+        if (!isTodayDate(followUp.date)) return;
 
-      if (!response.ok) {
-        return;
-      }
-
-      const leads = Array.isArray(data.leads)
-        ? data.leads
-        : [];
-
-      const items = [];
-
-      leads.forEach((lead) => {
-        if (!Array.isArray(lead.followUps)) {
-          return;
-        }
-
-        lead.followUps.forEach((followUp, index) => {
-          const followUpTime = new Date(
-            followUp?.date || ""
-          ).getTime();
-
-          if (
-            !followUp?.date ||
-            !Number.isFinite(followUpTime) ||
-            followUpTime <= Date.now() ||
-            isCompletedFollowUp(followUp) ||
-            !isTodayDate(followUp.date)
-          ) {
-            return;
-          }
-
-          items.push({
-            ...followUp,
-            _id:
-              followUp._id ||
-              `${lead._id}-followup-${index}`,
-            leadId: lead._id,
-            leadName: lead.name || "Unnamed lead",
-            phone: lead.phone || "",
-            service:
-              followUp.service ||
-              lead.service ||
-              "",
-            owner:
-              followUp.assignedTo ||
-              lead.owner ||
-              "Unassigned",
-            purpose:
-              followUp.purpose ||
-              followUp.note ||
-              "Follow-up",
-          });
+        followUpItems.push({
+          ...followUp,
+          _id: followUp._id || `${lead._id}-followup-${index}`,
+          leadId: lead._id,
+          leadName: lead.name || "Unnamed lead",
+          phone: lead.phone || "",
+          service: followUp.service || lead.service || "",
+          owner: followUp.assignedTo || lead.owner || "Unassigned",
+          purpose: followUp.purpose || followUp.note || "Follow-up",
         });
       });
+    });
 
-      items.sort(
-        (a, b) =>
-          new Date(a.date).getTime() -
-          new Date(b.date).getTime()
-      );
+    followUpItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-      setTodayFollowUps(items);
-    } catch (error) {
-      console.error(
-        "LOAD TODAY FOLLOW UPS ERROR:",
-        error
-      );
-    }
+    setTodayFollowUps(followUpItems);
+    setPendingFollowUpCount(pendingCount);
   };
 
-  const loadSidebarCounts = async () => {
+  const loadInitialData = async () => {
     const token = getAuthToken();
+    if (!token) return;
 
-    if (!token) {
-      return;
-    }
-
-    try {
-      const [leadsResponse, contactsResponse, aiResponse] =
-        await Promise.all([
-          fetch(
-            buildApiUrl("/api/leads"),
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          ),
-          fetch(
-            buildApiUrl("/api/contacts"),
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          ),
-          fetch(
-            buildApiUrl("/api/ai-conversations/unread-count"),
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          ),
-        ]);
-
-      const [leadsData, contactsData, aiData] =
-        await Promise.all([
-          leadsResponse.json(),
-          contactsResponse.json(),
-          aiResponse.json(),
-        ]);
-
-      if (leadsResponse.ok) {
-        const leads = Array.isArray(
-          leadsData.leads
-        )
-          ? leadsData.leads
-          : [];
-
-        const readStorageKey = getLeadReadStorageKey();
-
-        let readLeadIds = [];
-
-        try {
-          readLeadIds = JSON.parse(
-            localStorage.getItem(readStorageKey) || "[]"
-          );
-        } catch {
-          readLeadIds = [];
-        }
-
-        if (!Array.isArray(readLeadIds)) {
-          readLeadIds = [];
-        }
-
-        const currentLeadIds = leads
-          .map((lead) => String(lead?._id || ""))
-          .filter(Boolean);
-
-        const currentLeadIdSet = new Set(currentLeadIds);
-
-        readLeadIds = readLeadIds.filter((id) =>
-          currentLeadIdSet.has(String(id))
-        );
-
-        localStorage.setItem(
-          readStorageKey,
-          JSON.stringify(readLeadIds)
-        );
-
-        const readLeadIdSet = new Set(
-          readLeadIds.map((id) => String(id))
-        );
-
-        const unreadNewLeadCount = leads.filter((lead) => {
-          const id = String(lead?._id || "");
-
-          const stage = String(
-            lead?.stage || "New"
-          )
-            .trim()
-            .toLowerCase();
-
-          return (
-            id &&
-            stage === "new" &&
-            !readLeadIdSet.has(id)
-          );
-        }).length;
-
-        setLeadCount(unreadNewLeadCount);
-
-        const now = new Date();
-
-        const count = leads.reduce(
-          (total, lead) => {
-            const pending =
-              Array.isArray(lead.followUps)
-                ? lead.followUps.filter(
-                  (followUp) => {
-                    if (!followUp?.date) {
-                      return false;
-                    }
-
-                    const status =
-                      String(
-                        followUp.status ||
-                        "Scheduled"
-                      ).toLowerCase();
-
-                    if (
-                      status === "completed" ||
-                      status === "complete" ||
-                      status === "done"
-                    ) {
-                      return false;
-                    }
-
-                    const date =
-                      new Date(
-                        followUp.date
-                      );
-
-                    return (
-                      !Number.isNaN(
-                        date.getTime()
-                      ) &&
-                      date >= now
-                    );
-                  }
-                )
-                : [];
-
-            return total + pending.length;
-          },
-          0
-        );
-
-        setPendingFollowUpCount(count);
-      }
-
-      if (aiResponse.ok) {
-        setAiUnreadCount(
-          Number(aiData?.count || 0)
-        );
-      }
-
-      if (contactsResponse.ok) {
-        const contacts = Array.isArray(
-          contactsData.contacts
-        )
-          ? contactsData.contacts
-          : [];
-
-        setContactCount(contacts.length);
-      }
-    } catch (error) {
-      console.error(
-        "LOAD SIDEBAR COUNTS ERROR:",
-        error
-      );
-    }
-  };
-
-  const loadNotifications = async () => {
-    const token = getAuthToken();
-
-    if (!token) {
-      return;
-    }
+    const authHeaders = {
+      Authorization: `Bearer ${token}`,
+    };
 
     try {
       const [
+        leadsResponse,
+        contactsResponse,
+        aiResponse,
         notificationsResponse,
-        countResponse,
+        notificationCountResponse,
       ] = await Promise.all([
-        fetch(
-          buildApiUrl(
-            "/api/notifications?limit=20"
-          ),
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        ),
-        fetch(
-          buildApiUrl(
-            "/api/notifications/unread-count"
-          ),
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        ),
+        fetch(buildApiUrl("/api/leads"), {
+          headers: authHeaders,
+          cache: "no-store",
+        }),
+        fetch(buildApiUrl("/api/contacts"), {
+          headers: authHeaders,
+          cache: "no-store",
+        }),
+        fetch(buildApiUrl("/api/ai-conversations/unread-count"), {
+          headers: authHeaders,
+          cache: "no-store",
+        }),
+        fetch(buildApiUrl("/api/notifications?limit=20"), {
+          headers: authHeaders,
+          cache: "no-store",
+        }),
+        fetch(buildApiUrl("/api/notifications/unread-count"), {
+          headers: authHeaders,
+          cache: "no-store",
+        }),
       ]);
 
-      const notificationsData =
-        await notificationsResponse.json();
+      const [
+        leadsData,
+        contactsData,
+        aiData,
+        notificationsData,
+        notificationCountData,
+      ] = await Promise.all([
+        leadsResponse.json().catch(() => ({})),
+        contactsResponse.json().catch(() => ({})),
+        aiResponse.json().catch(() => ({})),
+        notificationsResponse.json().catch(() => ({})),
+        notificationCountResponse.json().catch(() => ({})),
+      ]);
 
-      const countData =
-        await countResponse.json();
+      if (leadsResponse.ok) {
+        processDashboardLeads(Array.isArray(leadsData.leads) ? leadsData.leads : []);
+      }
+
+      if (contactsResponse.ok) {
+        const contacts = Array.isArray(contactsData.contacts) ? contactsData.contacts : [];
+        setContactCount(contacts.length);
+      }
+
+      if (aiResponse.ok) {
+        setAiUnreadCount(Number(aiData?.count || 0));
+      }
 
       if (notificationsResponse.ok) {
-        setNotifications(
-          Array.isArray(
-            notificationsData.notifications
-          )
-            ? notificationsData.notifications
-            : []
-        );
+        setNotifications(Array.isArray(notificationsData.notifications) ? notificationsData.notifications : []);
       }
 
-      if (countResponse.ok) {
-        setUnreadNotificationCount(
-          Number(countData.count) || 0
-        );
+      if (notificationCountResponse.ok) {
+        setUnreadNotificationCount(Number(notificationCountData?.count) || 0);
       }
     } catch (error) {
-      console.error(
-        "LOAD NOTIFICATIONS ERROR:",
-        error
-      );
+      console.error("LOAD DASHBOARD DATA ERROR:", error);
     }
   };
 
   useEffect(() => {
-    loadNotifications();
+    loadInitialData();
   }, []);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(event.target)
-      ) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setNotificationsOpen(false);
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick
-    );
-
-    return () =>
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-  }, []);
-
-  useEffect(() => {
-    loadSidebarCounts();
-  }, []);
-
-  useEffect(() => {
-    const handleLeadRead = () => {
-      loadSidebarCounts();
-    };
-
-    window.addEventListener(
-      "saleVitals:lead-read",
-      handleLeadRead
-    );
-
-    return () =>
-      window.removeEventListener(
-        "saleVitals:lead-read",
-        handleLeadRead
-      );
-  }, []);
-
-  useEffect(() => {
-    loadTodayFollowUps();
-  }, []);
-
-  useEffect(() => {
-    const loadDashboardLeads = async () => {
-      const token = getAuthToken();
-      if (!token) return;
-      try {
-        const response = await fetch(buildApiUrl("/api/leads"), {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = await response.json();
-        if (!response.ok) return;
-        const leads = Array.isArray(data.leads) ? data.leads : [];
-        const normalized = leads.map((lead) => ({ ...lead, source: normalizeSource(lead.source), stage: normalizeStage(lead.stage) }));
-        setAllLeads(normalized);
-        normalized.sort((a, b) => {
-          const aTime = getLeadDate(a)?.getTime() || 0;
-          const bTime = getLeadDate(b)?.getTime() || 0;
-          return bTime - aTime;
-        });
-        setDashboardLeads(normalized.slice(0, 5));
-        setDashboardData(buildDashboardData(normalized));
-      } catch (error) {
-        console.error("LOAD DASHBOARD LEADS ERROR:", error);
-      }
-    };
-    loadDashboardLeads();
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   const markNotificationAsRead = async (
@@ -1670,7 +1424,6 @@ export default function Dashboard() {
     }
   }, [active, user?.permissions, user?.isOwner]);
 
-
   function ComingSoonPage({ type = "WhatsApp" }) {
     const isWhatsApp = type === "WhatsApp";
 
@@ -1831,31 +1584,6 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* <button
-              type="button"
-              onClick={() => {
-                const message =
-                  "Hello SaleVitals Support, I need help with my CRM. Please assist me.";
-                window.open(
-                  `https://wa.me/919625989258?text=${encodeURIComponent(message)}`,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
-              }}
-              style={{
-                border: 0,
-                borderRadius: 11,
-                padding: "13px 20px",
-                background: "#00656A",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 800,
-                cursor: "pointer",
-                boxShadow: "0 8px 20px rgba(0,101,106,.18)",
-              }}
-            >
-              Need Help? Chat on WhatsApp
-            </button> */}
             </div>
 
             <div
