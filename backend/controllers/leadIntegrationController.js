@@ -1,7 +1,9 @@
 const crypto = require("crypto");
+
 const LeadApiKey = require("../models/LeadApiKey");
-const { processNewLead } = require("../services/leadProcessingService");
 const Lead = require("../models/Lead");
+const { processNewLead } = require("../services/leadProcessingService");
+
 const {
   getWorkspaceContext,
   hasPermission,
@@ -15,6 +17,7 @@ async function requireIntegrationPermission(req, res) {
       success: false,
       message: "Authentication required",
     });
+
     return null;
   }
 
@@ -23,6 +26,7 @@ async function requireIntegrationPermission(req, res) {
       success: false,
       message: "You do not have permission to manage integrations",
     });
+
     return null;
   }
 
@@ -51,6 +55,7 @@ function getClientIp(req) {
 exports.createWebsiteApiKey = async (req, res) => {
   try {
     const context = await requireIntegrationPermission(req, res);
+
     if (!context) return;
 
     if (!hasPermission(context, "integrations.create")) {
@@ -106,6 +111,7 @@ exports.createWebsiteApiKey = async (req, res) => {
 exports.getWebsiteApiKeys = async (req, res) => {
   try {
     const context = await requireIntegrationPermission(req, res);
+
     if (!context) return;
 
     const apiKeys = await LeadApiKey.find({
@@ -138,6 +144,7 @@ exports.getWebsiteApiKeys = async (req, res) => {
 exports.toggleWebsiteApiKey = async (req, res) => {
   try {
     const context = await requireIntegrationPermission(req, res);
+
     if (!context) return;
 
     if (!hasPermission(context, "integrations.edit")) {
@@ -183,7 +190,7 @@ exports.toggleWebsiteApiKey = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to update API key",
+      message: "Unable to update website API key",
     });
   }
 };
@@ -191,6 +198,7 @@ exports.toggleWebsiteApiKey = async (req, res) => {
 exports.deleteWebsiteApiKey = async (req, res) => {
   try {
     const context = await requireIntegrationPermission(req, res);
+
     if (!context) return;
 
     if (!hasPermission(context, "integrations.delete")) {
@@ -224,7 +232,7 @@ exports.deleteWebsiteApiKey = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to delete API key",
+      message: "Unable to delete website API key",
     });
   }
 };
@@ -263,6 +271,7 @@ exports.createWebsiteLead = async (req, res) => {
       service,
       landingPage,
       pageUrl,
+      pageType,
       utmSource,
       utmMedium,
       utmCampaign,
@@ -270,6 +279,11 @@ exports.createWebsiteLead = async (req, res) => {
       utmContent,
       firstNote,
     } = req.body;
+
+    console.log("========== WEBSITE LEAD ==========");
+    console.log("PAGE TYPE RECEIVED:", pageType);
+    console.log("FULL REQUEST BODY:", req.body);
+    console.log("==================================");
 
     if (!String(name || "").trim()) {
       return res.status(400).json({
@@ -285,41 +299,45 @@ exports.createWebsiteLead = async (req, res) => {
       });
     }
 
+    const normalizedPageType = String(
+      pageType || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const leadSource =
+      normalizedPageType === "landing"
+        ? "Google Ad"
+        : "Website";
+
+    console.log(
+      "NORMALIZED PAGE TYPE:",
+      normalizedPageType
+    );
+
+    console.log(
+      "FINAL LEAD SOURCE:",
+      leadSource
+    );
+
     const lead = await Lead.create({
       userId: integration.userId,
-
       name: String(name).trim(),
-
       email: String(email || "").trim(),
-
       phone: String(phone).trim(),
-
-      source: "Website",
-
+      source: leadSource,
       service: String(service || "").trim(),
-
       owner: "",
-
       stage: "New",
-
       preferredDoctor: "",
-
       landingPage: String(landingPage || "").trim(),
-
       pageUrl: String(pageUrl || "").trim(),
-
       utmSource: String(utmSource || "").trim(),
-
       utmMedium: String(utmMedium || "").trim(),
-
       utmCampaign: String(utmCampaign || "").trim(),
-
       utmTerm: String(utmTerm || "").trim(),
-
       utmContent: String(utmContent || "").trim(),
-
       ipAddress: getClientIp(req),
-
       firstNote: String(firstNote || "").trim(),
     });
 

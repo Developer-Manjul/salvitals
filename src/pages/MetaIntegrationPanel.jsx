@@ -233,6 +233,7 @@ const GoogleAccountModal = ({
           >
             Select Google Ads Account
           </div>
+
           <div
             style={{
               marginTop: 4,
@@ -299,7 +300,8 @@ const GoogleAccountModal = ({
                       selectedId === id ? "#93c5fd" : "#e2e8f0"
                     }`,
                     borderRadius: 10,
-                    background: selectedId === id ? "#eff6ff" : "#fff",
+                    background:
+                      selectedId === id ? "#eff6ff" : "#fff",
                     cursor: "pointer",
                   }}
                 >
@@ -345,7 +347,9 @@ const GoogleAccountModal = ({
                         }}
                       >
                         {account.currencyCode || ""}
-                        {account.currencyCode && account.timeZone ? " • " : ""}
+                        {account.currencyCode && account.timeZone
+                          ? " • "
+                          : ""}
                         {account.timeZone || ""}
                       </div>
                     )}
@@ -491,7 +495,9 @@ const MetaPageModal = ({
                   gap: 12,
                   padding: 13,
                   border: `1px solid ${
-                    selectedId === page.id ? "#93c5fd" : "#e2e8f0"
+                    selectedId === page.id
+                      ? "#93c5fd"
+                      : "#e2e8f0"
                   }`,
                   borderRadius: 10,
                   background:
@@ -575,26 +581,41 @@ const MetaPageModal = ({
 
 export default function MetaIntegrationPanel() {
   const [loading, setLoading] = useState(true);
+
   const [metaConnected, setMetaConnected] = useState(false);
   const [metaPage, setMetaPage] = useState(null);
   const [metaPages, setMetaPages] = useState([]);
   const [showMetaPageModal, setShowMetaPageModal] = useState(false);
   const [selectedMetaPage, setSelectedMetaPage] = useState("");
+
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleAccount, setGoogleAccount] = useState(null);
   const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [selectedGoogleAccount, setSelectedGoogleAccount] =
+    useState("");
+
+  const [websiteApiKeys, setWebsiteApiKeys] = useState([]);
+  const [websiteKeyBusy, setWebsiteKeyBusy] = useState(false);
+  const [websiteDisconnecting, setWebsiteDisconnecting] =
+    useState(false);
+  const [newWebsiteKey, setNewWebsiteKey] = useState("");
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
   const [connectingMeta, setConnectingMeta] = useState(false);
-  const [disconnectingMeta, setDisconnectingMeta] = useState(false);
+  const [disconnectingMeta, setDisconnectingMeta] =
+    useState(false);
+
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState("");
+  const [googleDisconnecting, setGoogleDisconnecting] =
+    useState(false);
 
   const loadMetaStatus = async () => {
     try {
       const data = await api("/api/integrations/meta/status");
+
       const connected = Boolean(data.connected);
 
       setMetaConnected(connected);
@@ -607,7 +628,8 @@ export default function MetaIntegrationPanel() {
               name: integration.pageName || "",
               pageName: integration.pageName || "",
               pageId: integration.pageId || "",
-              instagramUsername: integration.instagramUsername || "",
+              instagramUsername:
+                integration.instagramUsername || "",
               instagramName: integration.instagramName || "",
             }
           : null
@@ -623,6 +645,7 @@ export default function MetaIntegrationPanel() {
   const loadMetaPages = async () => {
     try {
       const data = await api("/api/integrations/meta/pages");
+
       const pages = data.pages || [];
 
       setMetaPages(pages);
@@ -641,15 +664,140 @@ export default function MetaIntegrationPanel() {
 
   const loadGoogleStatus = async () => {
     try {
-      const data = await api("/api/integrations/google/accounts");
+      const data = await api(
+        "/api/integrations/google/accounts"
+      );
 
       setGoogleConnected(Boolean(data.connected));
-      setGoogleAccount(data.account || data.selectedAccount || null);
-      setGoogleAccounts(data.accounts || data.availableAccounts || []);
+
+      setGoogleAccount(
+        data.account || data.selectedAccount || null
+      );
+
+      setGoogleAccounts(
+        data.accounts || data.availableAccounts || []
+      );
     } catch (err) {
       setGoogleConnected(false);
       setGoogleAccount(null);
       setGoogleAccounts([]);
+    }
+  };
+
+  const loadWebsiteApiKeys = async () => {
+    try {
+      const data = await api(
+        "/api/integrations/website/api-keys"
+      );
+
+      setWebsiteApiKeys(data.apiKeys || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const generateWebsiteApiKey = async () => {
+    const activeKey = websiteApiKeys.find(
+      (key) => key.isActive
+    );
+
+    if (activeKey) {
+      setMessage("Website is already connected.");
+      return;
+    }
+
+    setWebsiteKeyBusy(true);
+    setError("");
+    setMessage("");
+    setNewWebsiteKey("");
+
+    try {
+      const data = await api(
+        "/api/integrations/website/api-key",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "WFY Website",
+          }),
+        }
+      );
+
+      const key = data.apiKey?.key || "";
+
+      if (!key) {
+        throw new Error("API key was not returned.");
+      }
+
+      setNewWebsiteKey(key);
+
+      setMessage(
+        "API key generated successfully. Copy it now."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWebsiteKeyBusy(false);
+    }
+  };
+
+  const copyWebsiteApiKey = async () => {
+    if (!newWebsiteKey) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(newWebsiteKey);
+
+      setNewWebsiteKey("");
+
+      await loadWebsiteApiKeys();
+
+      setMessage(
+        "API key copied successfully. Website is now connected."
+      );
+    } catch (err) {
+      setError("Unable to copy API key.");
+    }
+  };
+
+  const disconnectWebsite = async () => {
+    const activeKey = websiteApiKeys.find(
+      (key) => key.isActive
+    );
+
+    if (!activeKey?._id && !activeKey?.id) {
+      setError("Active website API key was not found.");
+      return;
+    }
+
+    const keyId = activeKey._id || activeKey.id;
+
+    setWebsiteDisconnecting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await api(
+        `/api/integrations/website/api-key/${keyId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            isActive: false,
+          }),
+        }
+      );
+
+      setNewWebsiteKey("");
+
+      await loadWebsiteApiKeys();
+
+      setMessage(
+        "Website disconnected successfully. You can generate a new API key now."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWebsiteDisconnecting(false);
     }
   };
 
@@ -659,6 +807,7 @@ export default function MetaIntegrationPanel() {
 
     await loadMetaStatus();
     await loadGoogleStatus();
+    await loadWebsiteApiKeys();
 
     setLoading(false);
   };
@@ -693,14 +842,18 @@ export default function MetaIntegrationPanel() {
               name: integration.pageName || "",
               pageName: integration.pageName || "",
               pageId: integration.pageId || "",
-              instagramUsername: integration.instagramUsername || "",
+              instagramUsername:
+                integration.instagramUsername || "",
               instagramName: integration.instagramName || "",
             }
           : null
       );
 
       setShowMetaPageModal(false);
-      setMessage("Facebook Page connected successfully.");
+
+      setMessage(
+        "Facebook Page connected successfully."
+      );
 
       await loadMetaStatus();
     } catch (err) {
@@ -744,9 +897,12 @@ export default function MetaIntegrationPanel() {
     setMessage("");
 
     try {
-      await api("/api/integrations/meta/disconnect", {
-        method: "POST",
-      });
+      await api(
+        "/api/integrations/meta/disconnect",
+        {
+          method: "POST",
+        }
+      );
 
       setMetaConnected(false);
       setMetaPage(null);
@@ -796,11 +952,22 @@ export default function MetaIntegrationPanel() {
     setMessage("");
 
     try {
-      const data = await api("/api/integrations/google/accounts");
-      const accounts = data.accounts || data.availableAccounts || [];
+      const data = await api(
+        "/api/integrations/google/accounts"
+      );
+
+      const accounts =
+        data.accounts ||
+        data.availableAccounts ||
+        [];
 
       setGoogleAccounts(accounts);
-      setGoogleAccount(data.account || data.selectedAccount || null);
+
+      setGoogleAccount(
+        data.account ||
+          data.selectedAccount ||
+          null
+      );
 
       const currentId =
         data.account?.customerId ||
@@ -808,6 +975,7 @@ export default function MetaIntegrationPanel() {
         "";
 
       setSelectedGoogleAccount(currentId);
+
       setShowGoogleModal(true);
     } catch (err) {
       setError(err.message);
@@ -843,13 +1011,17 @@ export default function MetaIntegrationPanel() {
           data.selectedAccount ||
           googleAccounts.find(
             (account) =>
-              account.customerId === selectedGoogleAccount
+              account.customerId ===
+              selectedGoogleAccount
           ) ||
           null
       );
 
       setShowGoogleModal(false);
-      setMessage("Google Ads account connected successfully.");
+
+      setMessage(
+        "Google Ads account connected successfully."
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -863,15 +1035,20 @@ export default function MetaIntegrationPanel() {
     setMessage("");
 
     try {
-      await api("/api/integrations/google/disconnect", {
-        method: "POST",
-      });
+      await api(
+        "/api/integrations/google/disconnect",
+        {
+          method: "POST",
+        }
+      );
 
       setGoogleConnected(false);
       setGoogleAccount(null);
       setSelectedGoogleAccount("");
 
-      setMessage("Google Ads disconnected successfully.");
+      setMessage(
+        "Google Ads disconnected successfully."
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -882,13 +1059,19 @@ export default function MetaIntegrationPanel() {
   useEffect(() => {
     loadStatus();
 
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
     const googleState = params.get("google");
     const metaState = params.get("meta");
-    const metaSelectPage = params.get("metaSelectPage");
+    const metaSelectPage =
+      params.get("metaSelectPage");
 
     if (googleState === "connected") {
-      setMessage("Google Ads connected successfully.");
+      setMessage(
+        "Google Ads connected successfully."
+      );
     }
 
     if (googleState === "select_account") {
@@ -904,40 +1087,70 @@ export default function MetaIntegrationPanel() {
     }
 
     if (googleState === "cancelled") {
-      setMessage("Google Ads connection was cancelled.");
+      setMessage(
+        "Google Ads connection was cancelled."
+      );
     }
 
     if (googleState === "error") {
-      setError("Google Ads connection failed.");
+      setError(
+        "Google Ads connection failed."
+      );
     }
 
     if (metaState === "connected") {
-      setMessage("Meta connected successfully.");
+      setMessage(
+        "Meta connected successfully."
+      );
     }
 
     if (metaState === "cancelled") {
-      setMessage("Meta connection was cancelled.");
+      setMessage(
+        "Meta connection was cancelled."
+      );
     }
 
     if (metaState === "error") {
-      setError("Meta connection failed.");
+      setError(
+        "Meta connection failed."
+      );
     }
 
     if (metaSelectPage === "true") {
       loadMetaPages();
     }
 
-    if (googleState || metaState || metaSelectPage) {
-      const url = new URL(window.location.href);
+    if (
+      googleState ||
+      metaState ||
+      metaSelectPage
+    ) {
+      const url = new URL(
+        window.location.href
+      );
 
       url.searchParams.delete("google");
       url.searchParams.delete("meta");
-      url.searchParams.delete("metaSelectPage");
+      url.searchParams.delete(
+        "metaSelectPage"
+      );
       url.searchParams.delete("message");
 
-      window.history.replaceState({}, "", url.pathname);
+      window.history.replaceState(
+        {},
+        "",
+        url.pathname
+      );
     }
   }, []);
+
+  const websiteConnected = websiteApiKeys.some(
+    (key) => key.isActive
+  );
+
+  const activeWebsiteKey = websiteApiKeys.find(
+    (key) => key.isActive
+  );
 
   if (loading) {
     return (
@@ -993,7 +1206,11 @@ export default function MetaIntegrationPanel() {
           </div>
         )}
 
-        <div style={{ marginBottom: 18 }}>
+        <div
+          style={{
+            marginBottom: 18,
+          }}
+        >
           <h2
             style={{
               margin: 0,
@@ -1017,14 +1234,112 @@ export default function MetaIntegrationPanel() {
         >
           <SourceCard
             title="Website"
-            status={null}
-            description="Existing website lead integration"
-          />
+            status={
+              websiteConnected
+                ? "Connected"
+                : "Not connected"
+            }
+            description={
+              websiteConnected
+                ? "Website leads are connected to SaleVitals."
+                : "Generate an API key to receive website leads in SaleVitals."
+            }
+            actions={
+              websiteConnected ? (
+                <OutlineButton
+                  onClick={disconnectWebsite}
+                  disabled={websiteDisconnecting}
+                  danger
+                >
+                  {websiteDisconnecting
+                    ? "Disconnecting..."
+                    : "Disconnect"}
+                </OutlineButton>
+              ) : !newWebsiteKey ? (
+                <PrimaryButton
+                  onClick={generateWebsiteApiKey}
+                  disabled={websiteKeyBusy}
+                >
+                  {websiteKeyBusy
+                    ? "Generating..."
+                    : "Generate API Key"}
+                </PrimaryButton>
+              ) : null
+            }
+          >
+            {newWebsiteKey && !websiteConnected && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 10,
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: 7,
+                  }}
+                >
+                  New API Key
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={newWebsiteKey}
+                    readOnly
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      height: 36,
+                      padding: "0 10px",
+                      border:
+                        "1px solid #dbe3ec",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: "#334155",
+                      background: "#fff",
+                    }}
+                  />
+
+                  <OutlineButton
+                    onClick={copyWebsiteApiKey}
+                  >
+                    Copy
+                  </OutlineButton>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 7,
+                    fontSize: 11,
+                    color: "#dc2626",
+                  }}
+                >
+                  Save this key now. The full key is
+                  only shown when it is created.
+                </div>
+              </div>
+            )}
+          </SourceCard>
 
           <SourceCard
             title="Facebook"
             status={
-              metaConnected ? "Connected" : "Not connected"
+              metaConnected
+                ? "Connected"
+                : "Not connected"
             }
             description={
               metaConnected && metaPage
@@ -1062,7 +1377,9 @@ export default function MetaIntegrationPanel() {
           <SourceCard
             title="Instagram"
             status={
-              metaConnected ? "Connected" : "Not connected"
+              metaConnected
+                ? "Connected"
+                : "Not connected"
             }
             description={
               metaConnected
@@ -1077,10 +1394,13 @@ export default function MetaIntegrationPanel() {
           <SourceCard
             title="Google Ads"
             status={
-              googleConnected ? "Connected" : "Not connected"
+              googleConnected
+                ? "Connected"
+                : "Not connected"
             }
             description={
-              googleConnected && googleAccount
+              googleConnected &&
+              googleAccount
                 ? googleAccount.customerName ||
                   `Customer ID: ${googleAccount.customerId}`
                 : "Connect your Google Ads account to receive leads in SaleVitals."
@@ -1089,15 +1409,21 @@ export default function MetaIntegrationPanel() {
               googleConnected ? (
                 <>
                   <OutlineButton
-                    onClick={openGoogleAccountSelector}
+                    onClick={
+                      openGoogleAccountSelector
+                    }
                     disabled={googleBusy}
                   >
                     Change
                   </OutlineButton>
 
                   <OutlineButton
-                    onClick={disconnectGoogleAds}
-                    disabled={googleDisconnecting}
+                    onClick={
+                      disconnectGoogleAds
+                    }
+                    disabled={
+                      googleDisconnecting
+                    }
                     danger
                   >
                     {googleDisconnecting
@@ -1117,17 +1443,19 @@ export default function MetaIntegrationPanel() {
               )
             }
           >
-            {googleConnected && googleAccount && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  color: "#64748b",
-                }}
-              >
-                Customer ID: {googleAccount.customerId}
-              </div>
-            )}
+            {googleConnected &&
+              googleAccount && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color: "#64748b",
+                  }}
+                >
+                  Customer ID:{" "}
+                  {googleAccount.customerId}
+                </div>
+              )}
           </SourceCard>
 
           <SourceCard
@@ -1144,7 +1472,9 @@ export default function MetaIntegrationPanel() {
           pages={metaPages}
           selectedId={selectedMetaPage}
           setSelectedId={setSelectedMetaPage}
-          onClose={() => setShowMetaPageModal(false)}
+          onClose={() =>
+            setShowMetaPageModal(false)
+          }
           onSelect={selectMetaPage}
           busy={connectingMeta}
         />
@@ -1154,8 +1484,12 @@ export default function MetaIntegrationPanel() {
         <GoogleAccountModal
           accounts={googleAccounts}
           selectedId={selectedGoogleAccount}
-          setSelectedId={setSelectedGoogleAccount}
-          onClose={() => setShowGoogleModal(false)}
+          setSelectedId={
+            setSelectedGoogleAccount
+          }
+          onClose={() =>
+            setShowGoogleModal(false)
+          }
           onSelect={selectGoogleAccount}
           busy={googleBusy}
         />

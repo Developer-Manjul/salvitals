@@ -112,16 +112,34 @@ function normalizeSource(value = "", configuredSources = []) {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
-  const source = raw.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  const names = Array.isArray(configuredSources)
-    ? configuredSources.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
+ const source = raw
+  .toLowerCase()
+  .replace(/[_-]+/g, " ")
+  .replace(/\s+/g, " ");
 
-  const exactMatch = names.find(
-    (item) => item.toLowerCase() === raw.toLowerCase()
-  );
+const names = Array.isArray(configuredSources)
+  ? configuredSources
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+  : [];
 
-  if (exactMatch) return exactMatch;
+/**
+ * Google Ads landing-page leads
+ * should always display as "Google Ad".
+ */
+if (
+  source === "google ad" ||
+  source === "google ads" ||
+  source === "google"
+) {
+  return "Google Ad";
+}
+
+const exactMatch = names.find(
+  (item) => item.toLowerCase() === raw.toLowerCase()
+);
+
+if (exactMatch) return exactMatch;
 
   const aliases = [
     { match: ["google", "google ads", "google lead", "google leads"], includes: "google", name: ["google ads", "google"] },
@@ -611,13 +629,13 @@ export default function Leads({
     loadServices();
   }, []);
 
-  const configuredSourceOptions = useMemo(() => {
-    return [...new Set(
-      leadSources
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    )];
-  }, [leadSources]);
+ const configuredSourceOptions = useMemo(() => {
+  return [...new Set(
+    leadSources
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+  )];
+}, [leadSources]);
 
   const configuredStageOptions = useMemo(() => {
     const values = ["New", ...leadStages];

@@ -1599,6 +1599,10 @@ export default function LeadDetails({
                 lead.source,
               ],
               [
+                "Source URL",
+                lead.pageUrl,
+              ],
+              [
                 "Service",
                 serviceName,
               ],
