@@ -2538,22 +2538,14 @@ export default function Invoice() {
                       {item.serviceName || item.items?.[0]?.serviceName || "Multiple services"}
 
                     </td>
-
                     <td>
-<strong>
-  {formatCurrency(
-    item.total || item.grandTotal || 0,
-    String(
-      item.taxLabel ||
-      item.billedBy?.taxLabel ||
-      ""
-    ).toUpperCase() === "GST"
-      ? "INR"
-      : item.currencyCode
-  )}
-</strong>
+                      <strong>
+                        {formatCurrency(
+                          item.total || item.grandTotal || 0,
+                          "INR"
+                        )}
+                      </strong>
                     </td>
-
                     <td>
 
                       <span className="invoice-payment-mode">{item.paymentMode || "-"}</span>
