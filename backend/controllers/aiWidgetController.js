@@ -117,6 +117,7 @@ exports.getConfig = async (req, res) => {
   }
 };
 
+exports.script = (req, res) => {
 const apiOrigin =
   process.env.NODE_ENV === "production"
     ? "https://salevitals.com"
