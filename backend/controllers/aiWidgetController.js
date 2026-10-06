@@ -118,10 +118,7 @@ exports.getConfig = async (req, res) => {
 };
 
 exports.script = (req, res) => {
-const apiOrigin =
-  process.env.NODE_ENV === "production"
-    ? "https://salevitals.com"
-    : `${req.protocol}://${req.get("host")}`;
+const apiOrigin = "https://salevitals.com";
 
   const widgetHtml = `
 <style>
