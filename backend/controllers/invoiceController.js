@@ -120,13 +120,20 @@ const normalizeCurrencyCode = (value) => {
 const resolveCurrency = (owner) => {
     const isIndia = isIndiaAccount(owner);
 
-    /*
-     * INDIA ACCOUNT
-     *
-     * India workspace must ALWAYS use INR.
-     * Even if old invoice/user data contains USD,
-     * CAD, GBP etc.
-     */
+    // =========================================================
+    // INDIA WORKSPACE
+    // =========================================================
+    // India workspace MUST ALWAYS use INR.
+    //
+    // Even if old invoice has:
+    // USD
+    // $
+    // CAD
+    // GBP
+    //
+    // We completely ignore old invoice currency here.
+    // =========================================================
+
     if (isIndia) {
         return {
             isIndia: true,
@@ -138,11 +145,10 @@ const resolveCurrency = (owner) => {
         };
     }
 
-    /*
-     * NON-INDIA ACCOUNT
-     *
-     * Use owner's saved currency.
-     */
+    // =========================================================
+    // NON-INDIA WORKSPACE
+    // =========================================================
+
     let currencyCode = String(
         owner?.currencyCode ||
         owner?.billingCurrencyCode ||
@@ -152,11 +158,13 @@ const resolveCurrency = (owner) => {
         .trim()
         .toUpperCase();
 
+    // If currency code is missing, try currency name
     if (!currencyCode) {
         const currencyName = String(
             owner?.currency ||
             owner?.currencyName ||
             owner?.billingCurrency ||
+            owner?.billing_currency ||
             ""
         )
             .trim()
@@ -165,6 +173,8 @@ const resolveCurrency = (owner) => {
         const currencyMap = {
             RUPEE: "INR",
             RUPEES: "INR",
+            "INDIAN RUPEE": "INR",
+            "INDIAN RUPEES": "INR",
             INR: "INR",
 
             DOLLAR: "USD",
@@ -205,6 +215,7 @@ const resolveCurrency = (owner) => {
             currencyMap[currencyName] || "";
     }
 
+    // Non-India default
     if (!currencyCode) {
         currencyCode = "USD";
     }
@@ -249,10 +260,14 @@ const isIndiaAccount = (owner) => {
         return false;
     }
 
+    // ---------------------------------------------------------
+    // COUNTRY
+    // ---------------------------------------------------------
     const countryCode = String(
         owner.countryCode ||
         owner.billingCountryCode ||
         owner.country_code ||
+        owner.billing_country_code ||
         ""
     )
         .trim()
@@ -262,30 +277,91 @@ const isIndiaAccount = (owner) => {
         owner.country ||
         owner.countryName ||
         owner.billingCountry ||
+        owner.billing_country ||
         ""
     )
         .trim()
         .toLowerCase();
 
-    // India country codes / names
-    if (
+    // ---------------------------------------------------------
+    // CURRENCY
+    // ---------------------------------------------------------
+    const currencyCode = String(
+        owner.currencyCode ||
+        owner.billingCurrencyCode ||
+        owner.currency_code ||
+        owner.billing_currency_code ||
+        ""
+    )
+        .trim()
+        .toUpperCase();
+
+    const currency = String(
+        owner.currency ||
+        owner.currencyName ||
+        owner.billingCurrency ||
+        owner.billing_currency ||
+        ""
+    )
+        .trim()
+        .toUpperCase();
+
+    // ---------------------------------------------------------
+    // GST
+    // Indian GSTIN is a very strong indication that the
+    // workspace belongs to India.
+    // ---------------------------------------------------------
+    const gstin = String(
+        owner.gstin ||
+        owner.gstNumber ||
+        owner.gstNo ||
+        owner.gst_number ||
+        owner.gst_number ||
+        ""
+    )
+        .trim()
+        .toUpperCase();
+
+    // ---------------------------------------------------------
+    // INDIA COUNTRY CHECK
+    // ---------------------------------------------------------
+    const indiaByCountry =
         countryCode === "IN" ||
         countryCode === "IND" ||
-        countryCode === "INDIA"
-    ) {
-        return true;
-    }
-
-    if (
+        countryCode === "INDIA" ||
         country === "india" ||
         country === "indian" ||
+        country === "bharat" ||
         country === "in" ||
-        country === "ind"
-    ) {
-        return true;
-    }
+        country === "ind";
 
-    return false;
+    // ---------------------------------------------------------
+    // INDIA CURRENCY CHECK
+    // ---------------------------------------------------------
+    const indiaByCurrency =
+        currencyCode === "INR" ||
+        currency === "INR" ||
+        currency === "RUPEE" ||
+        currency === "RUPEES" ||
+        currency === "INDIAN RUPEE" ||
+        currency === "INDIAN RUPEES";
+
+    // ---------------------------------------------------------
+    // INDIA GSTIN CHECK
+    //
+    // Example:
+    // 06AHJPY756E1ZY
+    // ---------------------------------------------------------
+    const indiaByGST =
+        /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(
+            gstin
+        );
+
+    return (
+        indiaByCountry ||
+        indiaByCurrency ||
+        indiaByGST
+    );
 };
 
 const CURRENCY_DEFAULTS = {
@@ -1487,9 +1563,13 @@ function generateInvoicePDF(
                     billingProfile.profileImage ||
                     "";
 
-                const taxLabel =
-                    invoice.taxLabel ||
-                    invoiceSettings.taxLabel;
+              const taxLabel =
+    invoiceSettings.isIndia
+        ? "GST"
+        : (
+            invoice.taxLabel ||
+            invoiceSettings.taxLabel
+        );
 
                 const gstin =
                     invoiceSettings.isIndia
@@ -1530,39 +1610,42 @@ function generateInvoicePDF(
                  * Use pdfInvoice here so old USD invoice
                  * will still print using owner's current INR.
                  */
-             const money = (value) => {
+   const money = (value) => {
     const amount = Number(value) || 0;
 
     // =========================================================
-    // INDIA WORKSPACE
-    // ALWAYS INR / ₹
-    // NEVER use old invoice currency from database
+    // INDIA
+    // ALWAYS INR
     // =========================================================
+
     if (invoiceSettings.isIndia) {
-        return new Intl.NumberFormat("en-IN", {
-            style: "currency",
-            currency: "INR",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
+        return new Intl.NumberFormat(
+            "en-IN",
+            {
+                style: "currency",
+                currency: "INR",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }
+        ).format(amount);
     }
 
     // =========================================================
-    // NON-INDIA WORKSPACE
-    // Use CURRENT workspace owner's currency
+    // OTHER COUNTRIES
     // =========================================================
+
     return new Intl.NumberFormat(
         invoiceSettings.locale || "en-US",
         {
             style: "currency",
             currency:
-                invoiceSettings.currencyCode || "USD",
+                invoiceSettings.currencyCode ||
+                "USD",
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }
     ).format(amount);
 };
-
                 const logoBuffer =
                     await getInvoiceLogoBuffer(
                         businessLogo
@@ -2390,6 +2473,11 @@ exports.downloadInvoicePDF = async (
             return;
         }
 
+        // =====================================================
+        // IMPORTANT
+        // ALWAYS USE WORKSPACE OWNER
+        // =====================================================
+
         const workspaceOwnerId =
             context.workspaceOwnerId;
 
@@ -2407,6 +2495,10 @@ exports.downloadInvoicePDF = async (
             });
         }
 
+        // =====================================================
+        // GET WORKSPACE OWNER
+        // =====================================================
+
         const owner =
             await getWorkspaceOwner(
                 workspaceOwnerId
@@ -2420,96 +2512,124 @@ exports.downloadInvoicePDF = async (
             });
         }
 
-        /*
-         * ---------------------------------------------------------
-         * PDF CURRENCY FIX
-         * ---------------------------------------------------------
-         * Old invoices may contain USD in the database.
-         * For an India workspace, PDF must use INR + GST.
-         */
+        // =====================================================
+        // RESOLVE CURRENCY ONLY FROM OWNER
+        //
+        // DO NOT TRUST OLD INVOICE CURRENCY
+        // =====================================================
 
-        const ownerCountryCode = String(
-            owner?.countryCode ||
-                owner?.billingCountryCode ||
-                owner?.country_code ||
-                ""
-        )
-            .trim()
-            .toUpperCase();
+        const invoiceSettings =
+            resolveCurrency({
+                ...owner,
 
-        const ownerCountry = String(
-            owner?.country ||
-                owner?.countryName ||
-                owner?.billingCountry ||
-                ""
-        )
-            .trim()
-            .toLowerCase();
+                countryCode:
+                    owner?.countryCode ||
+                    owner?.billingCountryCode ||
+                    owner?.country_code ||
+                    owner?.billing_country_code ||
+                    owner?.country ||
+                    owner?.billingCountry,
 
-        const ownerCurrency = String(
-            owner?.currencyCode ||
-                owner?.currency ||
-                ""
-        )
-            .trim()
-            .toUpperCase();
+                country:
+                    owner?.country ||
+                    owner?.countryName ||
+                    owner?.billingCountry ||
+                    owner?.billing_country,
 
-        const isIndiaWorkspace =
-            ownerCountryCode === "IN" ||
-            ownerCountryCode === "IND" ||
-            ownerCountryCode === "INDIA" ||
-            ownerCountry === "india" ||
-            ownerCountry === "indian" ||
-            ownerCountry === "bharat" ||
-            ownerCountry === "भारत" ||
-            ownerCountry === "in" ||
-            ownerCountry === "ind" ||
-            ownerCurrency === "INR";
+                currencyCode:
+                    owner?.currencyCode ||
+                    owner?.billingCurrencyCode ||
+                    owner?.currency_code ||
+                    owner?.billing_currency_code,
 
-        /*
-         * Create a PDF-only invoice object.
-         * Database invoice is NOT modified.
-         */
-        const pdfInvoice = isIndiaWorkspace
-            ? {
-                  ...invoice,
+                currency:
+                    owner?.currency ||
+                    owner?.currencyName ||
+                    owner?.billingCurrency ||
+                    owner?.billing_currency,
 
-                  currencyCode: "INR",
-                  currencySymbol: "₹",
-                  currencyLocale: "en-IN",
+                currencySymbol:
+                    owner?.currencySymbol ||
+                    owner?.billingCurrencySymbol,
 
-                  countryCode: "IN",
-                  country: "India",
+                currencyLocale:
+                    owner?.currencyLocale ||
+                    owner?.billingCurrencyLocale,
 
-                  taxLabel: "GST",
-              }
-            : {
-                  ...invoice,
-              };
+                gstin:
+                    owner?.gstin ||
+                    owner?.gstNumber ||
+                    owner?.gstNo ||
+                    owner?.gst_number,
+            });
 
-        /*
-         * PDF-only owner profile.
-         * This makes sure generateInvoicePDF()
-         * also sees India/INR when it resolves currency.
-         */
-        const pdfOwner = isIndiaWorkspace
-            ? {
-                  ...owner,
+        // =====================================================
+        // PDF ONLY INVOICE
+        //
+        // Database invoice will NOT be changed.
+        // =====================================================
 
-                  countryCode: "IN",
-                  country: "India",
+        const pdfInvoice = {
+            ...invoice,
 
-                  currencyCode: "INR",
-                  currencySymbol: "₹",
-                  currencyLocale: "en-IN",
-              }
-            : owner;
+            countryCode:
+                invoiceSettings.countryCode,
+
+            currencyCode:
+                invoiceSettings.currencyCode,
+
+            currencySymbol:
+                invoiceSettings.currencySymbol,
+
+            currencyLocale:
+                invoiceSettings.locale,
+
+            taxLabel:
+                invoiceSettings.isIndia
+                    ? "GST"
+                    : "Tax",
+        };
+
+        // =====================================================
+        // PDF OWNER
+        //
+        // Force INR for India workspace.
+        // =====================================================
+
+        const pdfOwner =
+            invoiceSettings.isIndia
+                ? {
+                      ...owner,
+
+                      countryCode: "IN",
+                      country: "India",
+
+                      currencyCode: "INR",
+                      currencySymbol: "₹",
+                      currencyLocale: "en-IN",
+
+                      gstin:
+                          owner?.gstin ||
+                          owner?.gstNumber ||
+                          owner?.gstNo ||
+                          owner?.gst_number ||
+                          "",
+                  }
+                : owner;
+
+        // =====================================================
+        // GENERATE PDF
+        // =====================================================
 
         const pdf =
             await generateInvoicePDF(
                 pdfInvoice,
                 pdfOwner
             );
+
+        // =====================================================
+        // FILE NAME
+        // =====================================================
 
         const filename =
             `${String(
@@ -2519,6 +2639,10 @@ exports.downloadInvoicePDF = async (
                 /[^a-zA-Z0-9_-]/g,
                 "_"
             )}.pdf`;
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
 
         res.status(200);
 
@@ -2543,6 +2667,7 @@ exports.downloadInvoicePDF = async (
         );
 
         return res.end(pdf);
+
     } catch (error) {
         console.error(
             "DOWNLOAD INVOICE PDF ERROR:",
