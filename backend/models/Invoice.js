@@ -24,6 +24,9 @@ const invoiceItemSchema = new mongoose.Schema(
             default: 0,
         },
 
+        // Backward compatibility.
+        // India = GST rate
+        // Outside India = Tax rate
         gst: {
             type: Number,
             default: 0,
@@ -34,9 +37,24 @@ const invoiceItemSchema = new mongoose.Schema(
             default: 0,
         },
 
+        // Backward compatibility.
+        // Tax/GST amount for this item.
         gstAmount: {
             type: Number,
             default: 0,
+        },
+
+        // Generic tax fields
+        taxRate: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        taxAmount: {
+            type: Number,
+            default: 0,
+            min: 0,
         },
 
         total: {
@@ -99,6 +117,38 @@ const billedBySchema = new mongoose.Schema(
         logo: {
             type: String,
             default: "",
+        },
+
+        // Workspace owner's country
+        countryCode: {
+            type: String,
+            default: "",
+            uppercase: true,
+            trim: true,
+        },
+
+        // Workspace owner's currency
+        currencyCode: {
+            type: String,
+            default: "INR",
+            uppercase: true,
+            trim: true,
+        },
+
+        currencySymbol: {
+            type: String,
+            default: "₹",
+        },
+
+        currencyLocale: {
+            type: String,
+            default: "en-IN",
+        },
+
+        // GST for India, Tax for other countries
+        taxLabel: {
+            type: String,
+            default: "GST",
         },
     },
     {
@@ -174,6 +224,7 @@ const invoiceSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // Always workspace owner's billing identity
         billedBy: {
             type: billedBySchema,
             default: {},
@@ -189,9 +240,50 @@ const invoiceSchema = new mongoose.Schema(
             default: 0,
         },
 
+        // Old field - keep for existing invoices
         gstAmount: {
             type: Number,
             default: 0,
+        },
+
+        // Generic tax amount
+        taxAmount: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        // GST for India / Tax outside India
+        taxLabel: {
+            type: String,
+            default: "GST",
+            trim: true,
+        },
+
+        // Workspace owner's country at invoice creation
+        countryCode: {
+            type: String,
+            default: "IN",
+            uppercase: true,
+            trim: true,
+        },
+
+        // Workspace owner's currency at invoice creation
+        currencyCode: {
+            type: String,
+            default: "INR",
+            uppercase: true,
+            trim: true,
+        },
+
+        currencySymbol: {
+            type: String,
+            default: "₹",
+        },
+
+        currencyLocale: {
+            type: String,
+            default: "en-IN",
         },
 
         total: {

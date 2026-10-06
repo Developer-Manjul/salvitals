@@ -20,7 +20,7 @@ router.put(
 );
 
 router.get(
-    "/:invoiceId/pdf",
+    "/:invoiceId/download",
     invoiceController.downloadInvoicePDF
 );
 

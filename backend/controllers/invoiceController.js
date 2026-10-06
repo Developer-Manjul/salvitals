@@ -1,11 +1,9 @@
 const axios = require("axios");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
-
 const Invoice = require("../models/Invoice");
 const InvoiceCounter = require("../models/InvoiceCounter");
 const User = require("../models/User");
-
 const {
     getWorkspaceContext,
     hasPermission,
@@ -21,7 +19,6 @@ const requirePermission = (context, permission, res) => {
             success: false,
             message: "Authentication required",
         });
-
         return false;
     }
 
@@ -31,7 +28,6 @@ const requirePermission = (context, permission, res) => {
             message: "You do not have permission to perform this action.",
             permission,
         });
-
         return false;
     }
 
@@ -68,7 +64,386 @@ const buildOwnerBillingProfile = (user) => {
         logo: user.logo || "",
         businessLogo: user.businessLogo || "",
         profileImage: user.profileImage || "",
+        country:
+            user.country ||
+            user.countryName ||
+            user.billingCountry ||
+            "",
+        countryCode:
+            user.countryCode ||
+            user.billingCountryCode ||
+            user.country_code ||
+            "",
+        currency:
+            user.currency ||
+            user.currencyName ||
+            user.billingCurrency ||
+            "",
+        currencyCode:
+            user.currencyCode ||
+            user.billingCurrencyCode ||
+            user.currency_code ||
+            "",
+        currencySymbol:
+            user.currencySymbol ||
+            user.billingCurrencySymbol ||
+            "",
+        currencyLocale:
+            user.currencyLocale ||
+            user.billingCurrencyLocale ||
+            "",
     };
+};
+
+const normalizeCountryCode = (value) => {
+    const raw = String(value || "")
+        .trim()
+        .toUpperCase();
+
+    if (!raw) return "";
+
+    const aliases = {
+        INDIA: "IN",
+        INDIAN: "IN",
+        "INDIA (IN)": "IN",
+    };
+
+    return aliases[raw] || raw;
+};
+
+const normalizeCurrencyCode = (value) => {
+    return String(value || "")
+        .trim()
+        .toUpperCase();
+};
+
+const resolveCurrency = (owner) => {
+    const isIndia = isIndiaAccount(owner);
+
+    let currencyCode = String(
+        owner?.currencyCode ||
+        owner?.billingCurrencyCode ||
+        owner?.currency_code ||
+        ""
+    )
+        .trim()
+        .toUpperCase();
+
+    if (isIndia) {
+        currencyCode = "INR";
+    }
+
+    if (!currencyCode) {
+        const name = String(
+            owner?.currency ||
+            owner?.currencyName ||
+            owner?.billingCurrency ||
+            ""
+        )
+            .trim()
+            .toUpperCase();
+
+        const map = {
+            RUPEE: "INR",
+            RUPEES: "INR",
+            INR: "INR",
+
+            DOLLAR: "USD",
+            DOLLARS: "USD",
+            USD: "USD",
+
+            EURO: "EUR",
+            EUROS: "EUR",
+            EUR: "EUR",
+
+            POUND: "GBP",
+            POUNDS: "GBP",
+            GBP: "GBP",
+
+            DIRHAM: "AED",
+            DIRHAMS: "AED",
+            AED: "AED",
+
+            CAD: "CAD",
+            AUD: "AUD",
+            NZD: "NZD",
+            SGD: "SGD",
+            SAR: "SAR",
+            QAR: "QAR",
+            KWD: "KWD",
+            BHD: "BHD",
+            OMR: "OMR",
+            JPY: "JPY",
+            CNY: "CNY",
+            HKD: "HKD",
+            MYR: "MYR",
+            THB: "THB",
+            ZAR: "ZAR",
+            CHF: "CHF",
+        };
+
+        currencyCode = map[name] || "";
+    }
+
+    if (!currencyCode) {
+        currencyCode = isIndia ? "INR" : "USD";
+    }
+
+    const defaults =
+        CURRENCY_DEFAULTS[currencyCode] || {
+            symbol: currencyCode,
+            locale: "en-US",
+        };
+
+    return {
+        isIndia,
+
+        countryCode: normalizeCountryCode(
+            owner?.countryCode ||
+            owner?.billingCountryCode ||
+            owner?.country_code ||
+            owner?.country ||
+            owner?.billingCountry ||
+            (isIndia ? "IN" : "")
+        ),
+
+        currencyCode,
+
+        currencySymbol: isIndia
+            ? "₹"
+            : owner?.currencySymbol ||
+              owner?.billingCurrencySymbol ||
+              defaults.symbol,
+
+        locale: isIndia
+            ? "en-IN"
+            : owner?.currencyLocale ||
+              owner?.billingCurrencyLocale ||
+              defaults.locale,
+
+        taxLabel: isIndia
+            ? "GST"
+            : "Tax",
+    };
+};
+
+const isIndiaAccount = (owner) => {
+    const countryCode = normalizeCountryCode(
+        owner?.countryCode ||
+            owner?.billingCountryCode ||
+            owner?.country_code
+    );
+
+    if (countryCode === "IN") {
+        return true;
+    }
+
+    if (countryCode) {
+        return false;
+    }
+
+    const country = String(
+        owner?.country ||
+            owner?.countryName ||
+            owner?.billingCountry ||
+            ""
+    )
+        .trim()
+        .toLowerCase();
+
+    return ["india", "indian", "भारत"].includes(country);
+};
+
+const CURRENCY_DEFAULTS = {
+    INR: {
+        symbol: "₹",
+        locale: "en-IN",
+    },
+    USD: {
+        symbol: "$",
+        locale: "en-US",
+    },
+    EUR: {
+        symbol: "€",
+        locale: "de-DE",
+    },
+    GBP: {
+        symbol: "£",
+        locale: "en-GB",
+    },
+    AED: {
+        symbol: "د.إ",
+        locale: "ar-AE",
+    },
+    CAD: {
+        symbol: "CA$",
+        locale: "en-CA",
+    },
+    AUD: {
+        symbol: "A$",
+        locale: "en-AU",
+    },
+    NZD: {
+        symbol: "NZ$",
+        locale: "en-NZ",
+    },
+    SGD: {
+        symbol: "S$",
+        locale: "en-SG",
+    },
+    SAR: {
+        symbol: "﷼",
+        locale: "ar-SA",
+    },
+    QAR: {
+        symbol: "ر.ق",
+        locale: "ar-QA",
+    },
+    KWD: {
+        symbol: "د.ك",
+        locale: "ar-KW",
+    },
+    BHD: {
+        symbol: "د.ب",
+        locale: "ar-BH",
+    },
+    OMR: {
+        symbol: "ر.ع.",
+        locale: "ar-OM",
+    },
+    JPY: {
+        symbol: "¥",
+        locale: "ja-JP",
+    },
+    CNY: {
+        symbol: "¥",
+        locale: "zh-CN",
+    },
+    HKD: {
+        symbol: "HK$",
+        locale: "en-HK",
+    },
+    MYR: {
+        symbol: "RM",
+        locale: "ms-MY",
+    },
+    THB: {
+        symbol: "฿",
+        locale: "th-TH",
+    },
+    ZAR: {
+        symbol: "R",
+        locale: "en-ZA",
+    },
+    CHF: {
+        symbol: "CHF",
+        locale: "de-CH",
+    },
+};
+
+const normalizeItems = (
+    items,
+    taxLabel = "GST"
+) => {
+    return (
+        Array.isArray(items)
+            ? items
+            : []
+    ).map((item) => {
+        const taxRate = Number(
+            item.taxRate ??
+                item.gst ??
+                0
+        ) || 0;
+
+        const taxAmount = Number(
+            item.taxAmount ??
+                item.gstAmount ??
+                0
+        ) || 0;
+
+        return {
+            serviceId:
+                item.serviceId || "",
+
+            serviceName:
+                item.serviceName ||
+                "Service",
+
+            quantity:
+                Number(item.quantity) || 1,
+
+            cost:
+                Number(item.cost) || 0,
+
+            gst:
+                taxRate,
+
+            baseAmount:
+                Number(
+                    item.baseAmount
+                ) || 0,
+
+            gstAmount:
+                taxAmount,
+
+            total:
+                Number(item.total) || 0,
+
+            taxLabel,
+
+            taxRate,
+
+            taxAmount,
+        };
+    });
+};
+
+const formatInvoiceMoney = (
+    value,
+    invoice = {},
+    settings = null
+) => {
+    const resolved = settings || {
+        currencyCode: invoice.currencyCode || "INR",
+        currencySymbol:
+            invoice.currencySymbol ||
+            CURRENCY_DEFAULTS[invoice.currencyCode]?.symbol ||
+            "₹",
+        locale:
+            invoice.currencyLocale ||
+            (invoice.currencyCode === "INR"
+                ? "en-IN"
+                : "en-US"),
+    };
+
+    const code = String(
+        resolved.currencyCode || "USD"
+    ).toUpperCase();
+
+    const locale = resolved.locale || "en-US";
+
+    const symbol =
+        resolved.currencySymbol ||
+        CURRENCY_DEFAULTS[code]?.symbol ||
+        code;
+
+    try {
+        return new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency: code,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number(value || 0));
+    } catch (error) {
+        return `${symbol}${Number(value || 0).toLocaleString(
+            locale,
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }
+        )}`;
+    }
 };
 
 const getWorkspaceOwner = async (workspaceOwnerId) => {
@@ -134,21 +509,24 @@ const resolvePatientId = async ({
         : customerPhone
         ? {
               customerId: "",
-              customerName: String(customerName || "").trim(),
+              customerName: String(
+                  customerName || ""
+              ).trim(),
               customerPhone,
           }
         : null;
 
     if (patientFilter) {
-        const existingPatient = await Invoice.findOne({
-            userId: workspaceOwnerId,
-            ...patientFilter,
-            patientId: {
-                $ne: "",
-            },
-        })
-            .select("patientId")
-            .lean();
+        const existingPatient =
+            await Invoice.findOne({
+                userId: workspaceOwnerId,
+                ...patientFilter,
+                patientId: {
+                    $ne: "",
+                },
+            })
+                .select("patientId")
+                .lean();
 
         if (existingPatient?.patientId) {
             return existingPatient.patientId;
@@ -169,68 +547,98 @@ const normalizePaymentMode = (value) => {
 
     const paymentMode = String(value || "").trim();
 
-    return allowed.includes(paymentMode) ? paymentMode : "";
+    return allowed.includes(paymentMode)
+        ? paymentMode
+        : "";
 };
-
-const normalizeItems = (items) => {
-    return items.map((item) => ({
-        serviceId: item.serviceId || "",
-        serviceName: item.serviceName || "Service",
-        quantity: Number(item.quantity) || 1,
-        cost: Number(item.cost) || 0,
-        gst: Number(item.gst) || 0,
-        baseAmount: Number(item.baseAmount) || 0,
-        gstAmount: Number(item.gstAmount) || 0,
-        total: Number(item.total) || 0,
-    }));
-};
-
 exports.getInvoices = async (req, res) => {
     try {
         const context = await getContext(req);
 
-        if (!requirePermission(context, "invoices.view", res)) {
+        if (
+            !requirePermission(
+                context,
+                "invoices.view",
+                res
+            )
+        ) {
             return;
         }
 
-        const workspaceOwnerId = context.workspaceOwnerId;
+        const workspaceOwnerId =
+            context.workspaceOwnerId;
 
-        const owner = await getWorkspaceOwner(workspaceOwnerId);
+        const owner =
+            await getWorkspaceOwner(
+                workspaceOwnerId
+            );
 
         if (!owner) {
             return res.status(404).json({
                 success: false,
-                message: "Workspace owner account not found.",
+                message:
+                    "Workspace owner account not found.",
             });
         }
 
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
 
-        const invoices = await Invoice.find({
-            userId: workspaceOwnerId,
-        })
-            .sort({
-                createdAt: -1,
+        const invoices =
+            await Invoice.find({
+                userId: workspaceOwnerId,
             })
-            .lean();
+                .sort({
+                    createdAt: -1,
+                })
+                .lean();
 
-        const normalizedInvoices = invoices.map((invoice) => ({
-            ...invoice,
-            billedBy: ownerBillingProfile,
-            paymentMode: invoice.paymentMode || "",
-        }));
+        const invoiceSettings =
+            resolveCurrency(owner);
+
+        const normalizedInvoices =
+            invoices.map((invoice) => ({
+                ...invoice,
+                billedBy:
+                    ownerBillingProfile,
+                paymentMode:
+                    invoice.paymentMode || "",
+                countryCode:
+                    invoice.countryCode ||
+                    invoiceSettings.countryCode,
+                currencyCode:
+                    invoice.currencyCode ||
+                    invoiceSettings.currencyCode,
+                currencySymbol:
+                    invoice.currencySymbol ||
+                    invoiceSettings.currencySymbol,
+                currencyLocale:
+                    invoice.currencyLocale ||
+                    invoiceSettings.locale,
+                taxLabel:
+                    invoice.taxLabel ||
+                    invoiceSettings.taxLabel,
+                taxAmount:
+                    Number(
+                        invoice.taxAmount ??
+                            invoice.gstAmount
+                    ) || 0,
+            }));
 
         return res.json({
             success: true,
             invoices: normalizedInvoices,
         });
     } catch (error) {
-        console.error("GET INVOICES ERROR:", error);
+        console.error(
+            "GET INVOICES ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Unable to load invoices.",
+            message:
+                "Unable to load invoices.",
         });
     }
 };
@@ -239,18 +647,29 @@ exports.createInvoice = async (req, res) => {
     try {
         const context = await getContext(req);
 
-        if (!requirePermission(context, "invoices.create", res)) {
+        if (
+            !requirePermission(
+                context,
+                "invoices.create",
+                res
+            )
+        ) {
             return;
         }
 
-        const workspaceOwnerId = context.workspaceOwnerId;
+        const workspaceOwnerId =
+            context.workspaceOwnerId;
 
-        const owner = await getWorkspaceOwner(workspaceOwnerId);
+        const owner =
+            await getWorkspaceOwner(
+                workspaceOwnerId
+            );
 
         if (!owner) {
             return res.status(404).json({
                 success: false,
-                message: "Workspace owner account not found.",
+                message:
+                    "Workspace owner account not found.",
             });
         }
 
@@ -270,77 +689,212 @@ exports.createInvoice = async (req, res) => {
             items,
             subtotal,
             gstAmount,
+            taxAmount,
             total,
             status,
+            taxLabel,
+            taxRate,
+            currencyCode,
+            currencySymbol,
+            currencyLocale,
+            countryCode,
         } = req.body;
 
-        if (!customerName || !String(customerName).trim()) {
+        if (
+            !customerName ||
+            !String(customerName).trim()
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Customer name is required.",
+                message:
+                    "Customer name is required.",
             });
         }
 
-        if (!Array.isArray(items) || items.length === 0) {
+        if (
+            !Array.isArray(items) ||
+            items.length === 0
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "At least one invoice item is required.",
+                message:
+                    "At least one invoice item is required.",
             });
         }
 
-        const patientId = await resolvePatientId({
-            workspaceOwnerId,
-            customerId,
-            customerName,
-            customerPhone,
-        });
+        const patientId =
+            await resolvePatientId({
+                workspaceOwnerId,
+                customerId,
+                customerName,
+                customerPhone,
+            });
 
-        const invoice = await Invoice.create({
-            userId: workspaceOwnerId,
+        const invoiceSettings =
+            resolveCurrency(owner);
 
-            invoiceNumber:
-                invoiceNumber || `INV-${Date.now()}`,
+        /*
+         * Currency / Country
+         * -----------------
+         * India:
+         * IN + INR + ₹ + GST
+         *
+         * Outside India:
+         * Workspace owner's configured
+         * country/currency will be used.
+         */
 
-            invoiceDate: invoiceDate
-                ? new Date(invoiceDate)
-                : new Date(),
+        const requestedCountryCode =
+            normalizeCountryCode(
+                countryCode
+            );
 
-            customerId: customerId || "",
+        const requestedCurrencyCode =
+            normalizeCurrencyCode(
+                currencyCode
+            );
 
-            patientId,
+        const isIndiaInvoice =
+            invoiceSettings.isIndia ||
+            requestedCountryCode === "IN" ||
+            requestedCurrencyCode === "INR" ||
+            String(taxLabel || "").toUpperCase() ===
+                "GST";
 
-            customerName: String(customerName).trim(),
+        const finalCountryCode =
+            isIndiaInvoice
+                ? "IN"
+                : invoiceSettings.countryCode ||
+                  requestedCountryCode ||
+                  "";
 
-            customerEmail: customerEmail || "",
+        const finalCurrencyCode =
+            isIndiaInvoice
+                ? "INR"
+                : invoiceSettings.currencyCode ||
+                  requestedCurrencyCode ||
+                  "USD";
 
-            customerPhone: customerPhone || "",
+        const finalCurrencySymbol =
+            isIndiaInvoice
+                ? "₹"
+                : invoiceSettings.currencySymbol ||
+                  currencySymbol ||
+                  "";
 
-            customerAddress: customerAddress || "",
+        const finalCurrencyLocale =
+            isIndiaInvoice
+                ? "en-IN"
+                : invoiceSettings.locale ||
+                  currencyLocale ||
+                  "en-US";
 
-            paymentMode: normalizePaymentMode(paymentMode),
+        const finalTaxLabel =
+            isIndiaInvoice
+                ? "GST"
+                : invoiceSettings.taxLabel ||
+                  "Tax";
 
-            notes: notes || "",
+        const invoice =
+            await Invoice.create({
+                userId:
+                    workspaceOwnerId,
 
-            billedBy: ownerBillingProfile,
+                invoiceNumber:
+                    invoiceNumber ||
+                    `INV-${Date.now()}`,
 
-            items: normalizeItems(items),
+                invoiceDate:
+                    invoiceDate
+                        ? new Date(invoiceDate)
+                        : new Date(),
 
-            subtotal: Number(subtotal) || 0,
+                customerId:
+                    customerId || "",
 
-            gstAmount: Number(gstAmount) || 0,
+                patientId,
 
-            total: Number(total) || 0,
+                customerName:
+                    String(
+                        customerName
+                    ).trim(),
 
-            status: status || "Draft",
-        });
+                customerEmail:
+                    customerEmail || "",
+
+                customerPhone:
+                    customerPhone || "",
+
+                customerAddress:
+                    customerAddress || "",
+
+                paymentMode:
+                    normalizePaymentMode(
+                        paymentMode
+                    ),
+
+                notes:
+                    notes || "",
+
+                /*
+                 * Always save workspace owner's
+                 * billing profile.
+                 */
+                billedBy:
+                    ownerBillingProfile,
+
+                items:
+                    normalizeItems(
+                        items,
+                        finalTaxLabel
+                    ),
+
+                subtotal:
+                    Number(subtotal) || 0,
+
+                gstAmount:
+                    Number(
+                        taxAmount ?? gstAmount
+                    ) || 0,
+
+                taxAmount:
+                    Number(
+                        taxAmount ?? gstAmount
+                    ) || 0,
+
+                taxLabel:
+                    finalTaxLabel,
+
+                countryCode:
+                    finalCountryCode,
+
+                currencyCode:
+                    finalCurrencyCode,
+
+                currencySymbol:
+                    finalCurrencySymbol,
+
+                currencyLocale:
+                    finalCurrencyLocale,
+
+                total:
+                    Number(total) || 0,
+
+                status:
+                    status || "Draft",
+            });
 
         return res.status(201).json({
             success: true,
-            message: "Invoice created successfully.",
+            message:
+                "Invoice created successfully.",
             invoice,
         });
     } catch (error) {
-        console.error("CREATE INVOICE ERROR:", error);
+        console.error(
+            "CREATE INVOICE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
@@ -355,28 +909,40 @@ exports.updateInvoice = async (req, res) => {
     try {
         const context = await getContext(req);
 
-        if (!requirePermission(context, "invoices.edit", res)) {
+        if (
+            !requirePermission(
+                context,
+                "invoices.edit",
+                res
+            )
+        ) {
             return;
         }
 
-        const workspaceOwnerId = context.workspaceOwnerId;
+        const workspaceOwnerId =
+            context.workspaceOwnerId;
 
-        const owner = await getWorkspaceOwner(workspaceOwnerId);
+        const owner =
+            await getWorkspaceOwner(
+                workspaceOwnerId
+            );
 
         if (!owner) {
             return res.status(404).json({
                 success: false,
-                message: "Workspace owner account not found.",
+                message:
+                    "Workspace owner account not found.",
             });
         }
 
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
 
-        const invoice = await Invoice.findOne({
-            _id: req.params.invoiceId,
-            userId: workspaceOwnerId,
-        });
+        const invoice =
+            await Invoice.findOne({
+                _id: req.params.invoiceId,
+                userId: workspaceOwnerId,
+            });
 
         if (!invoice) {
             return res.status(404).json({
@@ -398,8 +964,15 @@ exports.updateInvoice = async (req, res) => {
             items,
             subtotal,
             gstAmount,
+            taxAmount,
             total,
             status,
+            taxLabel,
+            taxRate,
+            currencyCode,
+            currencySymbol,
+            currencyLocale,
+            countryCode,
         } = req.body;
 
         if (
@@ -415,7 +988,8 @@ exports.updateInvoice = async (req, res) => {
             });
         }
 
-        const nextCustomerId = customerId || "";
+        const nextCustomerId =
+            customerId || "";
 
         const nextCustomerName =
             String(customerName).trim();
@@ -424,7 +998,9 @@ exports.updateInvoice = async (req, res) => {
             customerPhone || "";
 
         const samePatient =
-            String(invoice.customerId || "") ===
+            String(
+                invoice.customerId || ""
+            ) ===
                 String(nextCustomerId) &&
             invoice.customerName ===
                 nextCustomerName &&
@@ -432,52 +1008,163 @@ exports.updateInvoice = async (req, res) => {
                 nextCustomerPhone;
 
         const patientId =
-            samePatient && invoice.patientId
+            samePatient &&
+            invoice.patientId
                 ? invoice.patientId
                 : await resolvePatientId({
                       workspaceOwnerId,
-                      customerId: nextCustomerId,
-                      customerName: nextCustomerName,
-                      customerPhone: nextCustomerPhone,
+                      customerId:
+                          nextCustomerId,
+                      customerName:
+                          nextCustomerName,
+                      customerPhone:
+                          nextCustomerPhone,
                   });
+
+        const invoiceSettings =
+            resolveCurrency(owner);
+
+        /*
+         * Currency / Country
+         * -----------------
+         * India:
+         * IN + INR + ₹ + GST
+         *
+         * Outside India:
+         * Workspace owner's configured
+         * country/currency will be used.
+         */
+
+        const requestedCountryCode =
+            normalizeCountryCode(
+                countryCode
+            );
+
+        const requestedCurrencyCode =
+            normalizeCurrencyCode(
+                currencyCode
+            );
+
+        const isIndiaInvoice =
+            invoiceSettings.isIndia ||
+            requestedCountryCode === "IN" ||
+            requestedCurrencyCode === "INR" ||
+            String(
+                taxLabel || ""
+            ).toUpperCase() === "GST";
+
+        const finalCountryCode =
+            isIndiaInvoice
+                ? "IN"
+                : invoiceSettings.countryCode ||
+                  requestedCountryCode ||
+                  "";
+
+        const finalCurrencyCode =
+            isIndiaInvoice
+                ? "INR"
+                : invoiceSettings.currencyCode ||
+                  requestedCurrencyCode ||
+                  "USD";
+
+        const finalCurrencySymbol =
+            isIndiaInvoice
+                ? "₹"
+                : invoiceSettings.currencySymbol ||
+                  currencySymbol ||
+                  "";
+
+        const finalCurrencyLocale =
+            isIndiaInvoice
+                ? "en-IN"
+                : invoiceSettings.locale ||
+                  currencyLocale ||
+                  "en-US";
+
+        const finalTaxLabel =
+            isIndiaInvoice
+                ? "GST"
+                : invoiceSettings.taxLabel ||
+                  "Tax";
 
         Object.assign(invoice, {
             invoiceNumber:
                 invoiceNumber ||
                 invoice.invoiceNumber,
 
-            invoiceDate: invoiceDate
-                ? new Date(invoiceDate)
-                : invoice.invoiceDate,
+            invoiceDate:
+                invoiceDate
+                    ? new Date(invoiceDate)
+                    : invoice.invoiceDate,
 
-            customerId: nextCustomerId,
+            customerId:
+                nextCustomerId,
 
             patientId,
 
-            customerName: nextCustomerName,
+            customerName:
+                nextCustomerName,
 
-            customerEmail: customerEmail || "",
+            customerEmail:
+                customerEmail || "",
 
-            customerPhone: nextCustomerPhone,
+            customerPhone:
+                nextCustomerPhone,
 
             customerAddress:
                 customerAddress || "",
 
-            paymentMode: normalizePaymentMode(
-                paymentMode
-            ),
+            paymentMode:
+                normalizePaymentMode(
+                    paymentMode
+                ),
 
-            notes: notes || "",
+            notes:
+                notes || "",
 
-            billedBy: ownerBillingProfile,
+            /*
+             * Always keep workspace owner's
+             * billing profile.
+             */
+            billedBy:
+                ownerBillingProfile,
 
-            items: normalizeItems(items),
+            items:
+                normalizeItems(
+                    items,
+                    finalTaxLabel
+                ),
 
-            subtotal: Number(subtotal) || 0,
+            subtotal:
+                Number(subtotal) || 0,
 
-            gstAmount: Number(gstAmount) || 0,
+            gstAmount:
+                Number(
+                    taxAmount ?? gstAmount
+                ) || 0,
 
-            total: Number(total) || 0,
+            taxAmount:
+                Number(
+                    taxAmount ?? gstAmount
+                ) || 0,
+
+            taxLabel:
+                finalTaxLabel,
+
+            countryCode:
+                finalCountryCode,
+
+            currencyCode:
+                finalCurrencyCode,
+
+            currencySymbol:
+                finalCurrencySymbol,
+
+            currencyLocale:
+                finalCurrencyLocale,
+
+            total:
+                Number(total) || 0,
 
             status:
                 status ||
@@ -491,7 +1178,10 @@ exports.updateInvoice = async (req, res) => {
             invoice,
         });
     } catch (error) {
-        console.error("UPDATE INVOICE ERROR:", error);
+        console.error(
+            "UPDATE INVOICE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
@@ -504,9 +1194,16 @@ exports.updateInvoice = async (req, res) => {
 
 exports.deleteInvoice = async (req, res) => {
     try {
-        const context = await getContext(req);
+        const context =
+            await getContext(req);
 
-        if (!requirePermission(context, "invoices.delete", res)) {
+        if (
+            !requirePermission(
+                context,
+                "invoices.delete",
+                res
+            )
+        ) {
             return;
         }
 
@@ -516,15 +1213,17 @@ exports.deleteInvoice = async (req, res) => {
         const invoiceId =
             req.params.invoiceId;
 
-        const invoice = await Invoice.findOne({
-            _id: invoiceId,
-            userId: workspaceOwnerId,
-        });
+        const invoice =
+            await Invoice.findOne({
+                _id: invoiceId,
+                userId: workspaceOwnerId,
+            });
 
         if (!invoice) {
             return res.status(404).json({
                 success: false,
-                message: "Invoice not found.",
+                message:
+                    "Invoice not found.",
             });
         }
 
@@ -535,385 +1234,951 @@ exports.deleteInvoice = async (req, res) => {
 
         return res.json({
             success: true,
-            message: "Invoice deleted successfully.",
+            message:
+                "Invoice deleted successfully.",
         });
     } catch (error) {
-        console.error("DELETE INVOICE ERROR:", error);
+        console.error(
+            "DELETE INVOICE ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Unable to delete invoice.",
+            message:
+                "Unable to delete invoice.",
         });
     }
 };
 
-function generateInvoicePDF(invoice, owner) {
-    return new Promise((resolve, reject) => {
-        try {
-            const doc = new PDFDocument({
-                size: "A4",
-                margin: 45,
-                autoFirstPage: true,
-            });
+async function getInvoiceLogoBuffer(logo) {
+    const value =
+        String(logo || "").trim();
 
-            const chunks = [];
+    if (!value) {
+        return null;
+    }
 
-            doc.on("data", (chunk) => {
-                chunks.push(chunk);
-            });
+    try {
+        if (
+            value.startsWith(
+                "data:image/"
+            )
+        ) {
+            const base64 =
+                value.split(",")[1];
 
-            doc.on("end", () => {
-                resolve(Buffer.concat(chunks));
-            });
+            return base64
+                ? Buffer.from(
+                      base64,
+                      "base64"
+                  )
+                : null;
+        }
 
-            doc.on("error", reject);
+        if (
+            /^https?:\/\//i.test(value)
+        ) {
+            const response =
+                await axios.get(value, {
+                    responseType:
+                        "arraybuffer",
+                    timeout: 10000,
+                });
 
-            const billingProfile =
-                buildOwnerBillingProfile(owner);
-
-            const businessName =
-                billingProfile.displayName ||
-                billingProfile.clinicName ||
-                billingProfile.businessName ||
-                billingProfile.name ||
-                "SaleVitals";
-
-            const businessPhone =
-                billingProfile.phone ||
-                billingProfile.mobile ||
-                billingProfile.contactNumber ||
-                "";
-
-            const businessEmail =
-                billingProfile.email ||
-                billingProfile.businessEmail ||
-                "";
-
-            const businessAddress =
-                billingProfile.address ||
-                billingProfile.clinicAddress ||
-                billingProfile.businessAddress ||
-                "";
-
-            const gstin =
-                billingProfile.gstin ||
-                billingProfile.gstNumber ||
-                billingProfile.gstNo ||
-                "";
-
-            const paymentMode =
-                invoice.paymentMode ||
-                "";
-
-            const money = (value) => {
-                return `₹${Number(
-                    value || 0
-                ).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                })}`;
-            };
-
-            const customerName =
-                invoice.customerName ||
-                "Customer";
-
-            const invoiceNumber =
-                invoice.invoiceNumber ||
-                "";
-
-            const invoiceDate =
-                invoice.invoiceDate
-                    ? new Date(
-                          invoice.invoiceDate
-                      ).toLocaleDateString(
-                          "en-IN",
-                          {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                          }
-                      )
-                    : "-";
-
-            doc
-                .fontSize(20)
-                .font("Helvetica-Bold")
-                .fillColor("#173766")
-                .text(businessName);
-
-            doc
-                .fontSize(8)
-                .font("Helvetica")
-                .fillColor("#666666")
-                .text("TAX INVOICE");
-
-            if (businessPhone) {
-                doc.text(
-                    `Phone: ${businessPhone}`
-                );
-            }
-
-            if (businessEmail) {
-                doc.text(
-                    `Email: ${businessEmail}`
-                );
-            }
-
-            if (businessAddress) {
-                doc.text(businessAddress);
-            }
-
-            if (gstin) {
-                doc.text(`GSTIN: ${gstin}`);
-            }
-
-            doc.moveDown();
-
-            doc
-                .fillColor("#000000")
-                .fontSize(10)
-                .font("Helvetica-Bold")
-                .text(
-                    `Invoice Number: ${invoiceNumber}`
-                );
-
-            doc
-                .font("Helvetica")
-                .text(
-                    `Invoice Date: ${invoiceDate}`
-                );
-
-            if (invoice.patientId) {
-                doc.text(
-                    `Patient ID: ${invoice.patientId}`
-                );
-            }
-
-            doc.moveDown();
-
-            doc
-                .fontSize(11)
-                .font("Helvetica-Bold")
-                .text("Bill To");
-
-            doc
-                .fontSize(10)
-                .font("Helvetica")
-                .text(customerName);
-
-            if (paymentMode) {
-                doc.text(
-                    `Payment Mode: ${paymentMode}`
-                );
-            }
-
-            if (invoice.customerPhone) {
-                doc.text(
-                    `Phone: ${invoice.customerPhone}`
-                );
-            }
-
-            if (invoice.customerEmail) {
-                doc.text(
-                    `Email: ${invoice.customerEmail}`
-                );
-            }
-
-            if (invoice.customerAddress) {
-                doc.text(
-                    invoice.customerAddress
-                );
-            }
-
-            doc.moveDown();
-
-            let y = doc.y;
-
-            doc
-                .rect(45, y, 502, 28)
-                .fill("#173766");
-
-            doc
-                .fillColor("#ffffff")
-                .fontSize(9)
-                .font("Helvetica-Bold");
-
-            doc.text(
-                "Service",
-                55,
-                y + 9
+            return Buffer.from(
+                response.data
             );
+        }
 
-            doc.text(
-                "Qty",
-                330,
-                y + 9
-            );
+        const fs = require("fs");
+        const path = require("path");
 
-            doc.text(
-                "GST",
-                385,
-                y + 9
-            );
+        const candidates = [
+            value,
+            path.join(
+                process.cwd(),
+                value.replace(
+                    /^\/+/,
+                    ""
+                )
+            ),
+        ];
 
-            doc.text(
-                "Amount",
-                455,
-                y + 9
-            );
+        for (
+            const candidate of candidates
+        ) {
+            if (
+                fs.existsSync(candidate)
+            ) {
+                return fs.readFileSync(
+                    candidate
+                );
+            }
+        }
+    } catch (error) {
+        console.error(
+            "INVOICE LOGO ERROR:",
+            error.message
+        );
+    }
 
-            y += 38;
+    return null;
+}
+function generateInvoicePDF(
+    invoice,
+    owner
+) {
+    return new Promise(
+        async (
+            resolve,
+            reject
+        ) => {
+            try {
+                const doc =
+                    new PDFDocument({
+                        size: "A4",
+                        margin: 45,
+                        autoFirstPage: true,
+                    });
 
-            const items =
-                Array.isArray(invoice.items)
-                    ? invoice.items
-                    : [];
+                const chunks = [];
 
-            items.forEach((item) => {
-                const serviceName =
-                    item.serviceName ||
-                    "Service";
+                doc.on(
+                    "data",
+                    (chunk) =>
+                        chunks.push(chunk)
+                );
 
-                const quantity =
-                    Number(item.quantity) ||
-                    1;
+                doc.on(
+                    "end",
+                    () =>
+                        resolve(
+                            Buffer.concat(
+                                chunks
+                            )
+                        )
+                );
 
-                const gst =
-                    Number(item.gst) || 0;
+                doc.on(
+                    "error",
+                    reject
+                );
 
-                const amount =
-                    Number(item.total) || 0;
+                const billingProfile =
+                    buildOwnerBillingProfile(
+                        owner
+                    );
+
+                const invoiceSettings =
+                    
+                    
+                    resolveCurrency({
+                        ...owner,
+                        countryCode:
+                            invoice.countryCode ||
+                            owner?.countryCode,
+                        country:
+                            invoice.country ||
+                            owner?.country,
+                        currencyCode:
+                            invoice.currencyCode ||
+                            owner?.currencyCode,
+                        currencySymbol:
+                            invoice.currencySymbol ||
+                            owner?.currencySymbol,
+                        currencyLocale:
+                            invoice.currencyLocale ||
+                            owner?.currencyLocale,
+                    });
+
+                const businessName =
+                    billingProfile.displayName ||
+                    billingProfile.clinicName ||
+                    billingProfile.businessName ||
+                    billingProfile.name ||
+                    "SaleVitals";
+
+                const businessPhone =
+                    billingProfile.phone ||
+                    billingProfile.mobile ||
+                    billingProfile.contactNumber ||
+                    "";
+
+                const businessEmail =
+                    billingProfile.email ||
+                    billingProfile.businessEmail ||
+                    "";
+
+                const businessAddress =
+                    billingProfile.address ||
+                    billingProfile.clinicAddress ||
+                    billingProfile.businessAddress ||
+                    "";
+
+                const businessLogo =
+                    billingProfile.clinicLogo ||
+                    billingProfile.logo ||
+                    billingProfile.businessLogo ||
+                    billingProfile.profileImage ||
+                    "";
+
+                const taxLabel =
+                    invoice.taxLabel ||
+                    invoiceSettings.taxLabel;
+
+                const gstin =
+                    invoiceSettings.isIndia
+                        ? billingProfile.gstin ||
+                          billingProfile.gstNumber ||
+                          billingProfile.gstNo ||
+                          ""
+                        : "";
+
+                const customerName =
+                    invoice.customerName ||
+                    "Customer";
+
+                const invoiceNumber =
+                    invoice.invoiceNumber ||
+                    "";
+
+                const paymentMode =
+                    invoice.paymentMode ||
+                    "";
+
+                const invoiceDate =
+                    invoice.invoiceDate
+                        ? new Date(
+                              invoice.invoiceDate
+                          ).toLocaleDateString(
+                              "en-IN",
+                              {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                              }
+                          )
+                        : "-";
+
+                const money = (value) =>
+                    formatInvoiceMoney(
+                        value,
+                        invoice,
+                        invoiceSettings
+                    );
+
+                const logoBuffer =
+                    await getInvoiceLogoBuffer(
+                        businessLogo
+                    );
+
+                const pageLeft = 45;
+                const pageRight = 547;
+                const contentWidth =
+                    pageRight -
+                    pageLeft;
+
+                if (logoBuffer) {
+                    try {
+                        doc.image(
+                            logoBuffer,
+                            pageLeft,
+                            45,
+                            {
+                                fit: [
+                                    55,
+                                    55,
+                                ],
+                                align:
+                                    "left",
+                                valign:
+                                    "center",
+                            }
+                        );
+                    } catch (
+                        error
+                    ) {
+                        console.error(
+                            "INVOICE LOGO RENDER ERROR:",
+                            error.message
+                        );
+                    }
+                }
+
+                const headerX =
+                    logoBuffer
+                        ? 115
+                        : pageLeft;
 
                 doc
-                    .fillColor("#000000")
-                    .fontSize(9)
-                    .font("Helvetica")
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(20)
+                    .fillColor(
+                        "#173766"
+                    )
                     .text(
-                        serviceName,
-                        55,
-                        y,
+                        businessName,
+                        headerX,
+                        48,
                         {
-                            width: 250,
+                            width:
+                                contentWidth -
+                                (headerX -
+                                    pageLeft),
                         }
                     );
 
-                doc.text(
-                    String(quantity),
-                    330,
-                    y
-                );
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(8)
+                    .fillColor(
+                        "#666666"
+                    )
+                    .text(
+                        "TAX INVOICE",
+                        headerX,
+                        73
+                    );
 
-                doc.text(
-                    `${gst}%`,
-                    385,
-                    y
-                );
+                let headerY = 88;
 
-                doc.text(
-                    money(amount),
-                    455,
-                    y
-                );
+                if (businessPhone) {
+                    doc
+                        .font(
+                            "Helvetica"
+                        )
+                        .fontSize(8)
+                        .fillColor(
+                            "#666666"
+                        )
+                        .text(
+                            `Phone: ${businessPhone}`,
+                            headerX,
+                            headerY
+                        );
 
-                y += 28;
+                    headerY += 12;
+                }
+
+                if (businessEmail) {
+                    doc.text(
+                        `Email: ${businessEmail}`,
+                        headerX,
+                        headerY
+                    );
+
+                    headerY += 12;
+                }
+
+                if (businessAddress) {
+                    doc.text(
+                        businessAddress,
+                        headerX,
+                        headerY,
+                        {
+                            width:
+                                contentWidth -
+                                (headerX -
+                                    pageLeft),
+                        }
+                    );
+
+                    headerY += 12;
+                }
+
+                if (gstin) {
+                    doc.text(
+                        `GSTIN: ${gstin}`,
+                        headerX,
+                        headerY
+                    );
+
+                    headerY += 12;
+                }
+
+                const lineY =
+                    Math.max(
+                        headerY + 10,
+                        125
+                    );
 
                 doc
-                    .moveTo(45, y - 8)
-                    .lineTo(547, y - 8)
-                    .strokeColor("#dddddd")
+                    .moveTo(
+                        pageLeft,
+                        lineY
+                    )
+                    .lineTo(
+                        pageRight,
+                        lineY
+                    )
+                    .lineWidth(1.2)
+                    .strokeColor(
+                        "#173766"
+                    )
                     .stroke();
-            });
 
-            y += 15;
-
-            doc
-                .fontSize(10)
-                .font("Helvetica")
-                .fillColor("#000000")
-                .text(
-                    `Subtotal: ${money(
-                        invoice.subtotal
-                    )}`,
-                    350,
-                    y
-                );
-
-            y += 20;
-
-            doc.text(
-                `GST: ${money(
-                    invoice.gstAmount
-                )}`,
-                350,
-                y
-            );
-
-            y += 28;
-
-            doc
-                .fontSize(13)
-                .font("Helvetica-Bold")
-                .text(
-                    `Grand Total: ${money(
-                        invoice.total
-                    )}`,
-                    330,
-                    y
-                );
-
-            if (invoice.notes) {
-                y += 45;
+                const infoY =
+                    lineY + 20;
 
                 doc
-                    .fontSize(10)
-                    .font("Helvetica-Bold")
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(8)
+                    .fillColor(
+                        "#173766"
+                    )
                     .text(
-                        "Notes",
-                        45,
-                        y
+                        "BILLED TO",
+                        pageLeft,
+                        infoY
                     );
 
-                y += 18;
-
                 doc
-                    .fontSize(9)
-                    .font("Helvetica")
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(10)
+                    .fillColor(
+                        "#111827"
+                    )
                     .text(
-                        invoice.notes,
-                        45,
-                        y,
+                        customerName,
+                        pageLeft,
+                        infoY + 18
+                    );
+
+                let customerY =
+                    infoY + 34;
+
+                if (paymentMode) {
+                    doc
+                        .font(
+                            "Helvetica"
+                        )
+                        .fontSize(8)
+                        .fillColor(
+                            "#555555"
+                        )
+                        .text(
+                            `Payment Mode: ${paymentMode}`,
+                            pageLeft,
+                            customerY
+                        );
+
+                    customerY += 12;
+                }
+
+                if (
+                    invoice.customerPhone
+                ) {
+                    doc.text(
+                        `Phone: ${invoice.customerPhone}`,
+                        pageLeft,
+                        customerY
+                    );
+
+                    customerY += 12;
+                }
+
+                if (
+                    invoice.customerEmail
+                ) {
+                    doc.text(
+                        `Email: ${invoice.customerEmail}`,
+                        pageLeft,
+                        customerY
+                    );
+
+                    customerY += 12;
+                }
+
+                if (
+                    invoice.customerAddress
+                ) {
+                    doc.text(
+                        invoice.customerAddress,
+                        pageLeft,
+                        customerY,
                         {
-                            width: 500,
+                            width: 220,
                         }
                     );
-            }
 
-            doc
-                .fontSize(8)
-                .fillColor("#777777")
-                .text(
-                    "Powered by SaleVitals",
-                    45,
-                    760,
+                    customerY += 12;
+                }
+
+                const detailsX = 330;
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(8)
+                    .fillColor(
+                        "#173766"
+                    )
+                    .text(
+                        "INVOICE DETAILS",
+                        detailsX,
+                        infoY
+                    );
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(10)
+                    .fillColor(
+                        "#111827"
+                    )
+                    .text(
+                        invoiceNumber,
+                        detailsX,
+                        infoY + 18
+                    );
+
+                doc
+                    .font(
+                        "Helvetica"
+                    )
+                    .fontSize(8)
+                    .fillColor(
+                        "#64748b"
+                    )
+                    .text(
+                        `Invoice date: ${invoiceDate}`,
+                        detailsX,
+                        infoY + 34
+                    );
+
+                if (
+                    invoice.patientId
+                ) {
+                    doc.text(
+                        `Patient ID: ${invoice.patientId}`,
+                        detailsX,
+                        infoY + 46
+                    );
+                }
+
+                let y =
+                    Math.max(
+                        customerY,
+                        infoY + 70
+                    ) + 18;
+
+                const headerHeight = 28;
+
+                doc
+                    .roundedRect(
+                        pageLeft,
+                        y,
+                        contentWidth,
+                        headerHeight,
+                        5
+                    )
+                    .fill("#173766");
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(8)
+                    .fillColor(
+                        "#ffffff"
+                    )
+                    .text(
+                        "#",
+                        pageLeft + 10,
+                        y + 9
+                    );
+
+                doc.text(
+                    "DESCRIPTION OF SERVICE",
+                    pageLeft + 35,
+                    y + 9,
                     {
-                        align: "center",
-                        width: 502,
+                        width: 250,
                     }
                 );
 
-            doc.end();
-        } catch (error) {
-            reject(error);
+                doc.text(
+                    "QTY",
+                    330,
+                    y + 9
+                );
+
+                doc.text(
+                    taxLabel.toUpperCase(),
+                    385,
+                    y + 9
+                );
+
+                doc.text(
+                    "AMOUNT",
+                    455,
+                    y + 9
+                );
+
+                y += 38;
+
+                const items =
+                    Array.isArray(
+                        invoice.items
+                    )
+                        ? invoice.items
+                        : [];
+
+                items.forEach(
+                    (
+                        item,
+                        index
+                    ) => {
+                        const serviceName =
+                            item.serviceName ||
+                            "Service";
+
+                        const quantity =
+                            Number(
+                                item.quantity
+                            ) || 1;
+
+                        const taxRate =
+                            Number(
+                                item.taxRate ??
+                                    item.gst
+                            ) || 0;
+
+                        const amount =
+                            Number(
+                                item.total
+                            ) || 0;
+
+                        doc
+                            .font(
+                                "Helvetica"
+                            )
+                            .fontSize(8.5)
+                            .fillColor(
+                                "#111827"
+                            )
+                            .text(
+                                String(
+                                    index + 1
+                                ),
+                                pageLeft +
+                                    10,
+                                y
+                            );
+
+                        doc.text(
+                            serviceName,
+                            pageLeft +
+                                35,
+                            y,
+                            {
+                                width: 250,
+                                ellipsis:
+                                    true,
+                            }
+                        );
+
+                        doc.text(
+                            String(
+                                quantity
+                            ),
+                            330,
+                            y
+                        );
+
+                        doc.text(
+                            `${taxRate}%`,
+                            385,
+                            y
+                        );
+
+                        doc.text(
+                            money(amount),
+                            455,
+                            y
+                        );
+
+                        y += 28;
+
+                        doc
+                            .moveTo(
+                                pageLeft,
+                                y - 8
+                            )
+                            .lineTo(
+                                pageRight,
+                                y - 8
+                            )
+                            .lineWidth(
+                                0.5
+                            )
+                            .strokeColor(
+                                "#dddddd"
+                            )
+                            .stroke();
+                    }
+                );
+
+                y += 8;
+
+                const summaryX = 350;
+                const summaryWidth = 197;
+
+                doc
+                    .font(
+                        "Helvetica"
+                    )
+                    .fontSize(9)
+                    .fillColor(
+                        "#64748b"
+                    )
+                    .text(
+                        "Subtotal",
+                        summaryX,
+                        y
+                    );
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fillColor(
+                        "#111827"
+                    )
+                    .text(
+                        money(
+                            invoice.subtotal
+                        ),
+                        455,
+                        y
+                    );
+
+                y += 22;
+
+                doc
+                    .moveTo(
+                        summaryX,
+                        y - 5
+                    )
+                    .lineTo(
+                        pageRight,
+                        y - 5
+                    )
+                    .lineWidth(
+                        0.5
+                    )
+                    .strokeColor(
+                        "#e2e8f0"
+                    )
+                    .stroke();
+
+                doc
+                    .font(
+                        "Helvetica"
+                    )
+                    .fontSize(9)
+                    .fillColor(
+                        "#64748b"
+                    )
+                    .text(
+                        taxLabel,
+                        summaryX,
+                        y + 5
+                    );
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fillColor(
+                        "#111827"
+                    )
+                    .text(
+                        money(
+                            invoice.taxAmount ??
+                                invoice.gstAmount
+                        ),
+                        455,
+                        y + 5
+                    );
+
+                y += 35;
+
+                doc
+                    .roundedRect(
+                        summaryX,
+                        y,
+                        summaryWidth,
+                        38,
+                        5
+                    )
+                    .fill("#172033");
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(11)
+                    .fillColor(
+                        "#ffffff"
+                    )
+                    .text(
+                        "Grand Total",
+                        summaryX + 10,
+                        y + 12
+                    );
+
+                doc
+                    .font(
+                        "Helvetica-Bold"
+                    )
+                    .fontSize(13)
+                    .fillColor(
+                        "#ffffff"
+                    )
+                    .text(
+                        money(
+                            invoice.total
+                        ),
+                        425,
+                        y + 10,
+                        {
+                            width: 112,
+                            align:
+                                "right",
+                        }
+                    );
+
+                y += 58;
+
+                if (invoice.notes) {
+                    doc
+                        .font(
+                            "Helvetica-Bold"
+                        )
+                        .fontSize(9)
+                        .fillColor(
+                            "#173766"
+                        )
+                        .text(
+                            "Notes",
+                            pageLeft,
+                            y
+                        );
+
+                    doc
+                        .font(
+                            "Helvetica"
+                        )
+                        .fontSize(8.5)
+                        .fillColor(
+                            "#555555"
+                        )
+                        .text(
+                            invoice.notes,
+                            pageLeft,
+                            y + 16,
+                            {
+                                width:
+                                    contentWidth,
+                            }
+                        );
+
+                    y += 48;
+                }
+
+                const footerY =
+                    Math.min(
+                        Math.max(
+                            y + 10,
+                            735
+                        ),
+                        785
+                    );
+
+                doc
+                    .moveTo(
+                        pageLeft,
+                        footerY
+                    )
+                    .lineTo(
+                        pageRight,
+                        footerY
+                    )
+                    .lineWidth(
+                        0.6
+                    )
+                    .strokeColor(
+                        "#d9e0e8"
+                    )
+                    .stroke();
+
+                doc
+                    .font(
+                        "Helvetica"
+                    )
+                    .fontSize(7.5)
+                    .fillColor(
+                        "#777777"
+                    )
+                    .text(
+                        "Thank you for your business.",
+                        pageLeft,
+                        footerY + 15
+                    );                doc
+                    .font(
+                        "Helvetica"
+                    )
+                    .fontSize(7.5)
+                    .fillColor(
+                        "#777777"
+                    )
+                    .text(
+                        "Powered by SaleVitals",
+                        pageLeft,
+                        footerY + 15,
+                        {
+                            width:
+                                contentWidth,
+                            align:
+                                "right",
+                        }
+                    );
+
+                doc.end();
+            } catch (error) {
+                reject(error);
+            }
         }
-    });
+    );
 }
 
-exports.downloadInvoicePDF = async (req, res) => {
+exports.downloadInvoicePDF = async (
+    req,
+    res
+) => {
     try {
-        const context = await getContext(req);
+        const context =
+            await getContext(req);
 
-        if (!requirePermission(context, "invoices.view", res)) {
+        if (
+            !requirePermission(
+                context,
+                "invoices.view",
+                res
+            )
+        ) {
             return;
         }
 
@@ -929,7 +2194,8 @@ exports.downloadInvoicePDF = async (req, res) => {
         if (!invoice) {
             return res.status(404).json({
                 success: false,
-                message: "Invoice not found.",
+                message:
+                    "Invoice not found.",
             });
         }
 
@@ -999,289 +2265,339 @@ exports.downloadInvoicePDF = async (req, res) => {
     }
 };
 
-exports.sendInvoiceToWhatsApp = async (
-    req,
-    res
-) => {
-    try {
-        const context = await getContext(req);
+exports.sendInvoiceToWhatsApp =
+    async (req, res) => {
+        try {
+            const context =
+                await getContext(req);
 
-        if (!requirePermission(context, "invoices.send", res)) {
-            return;
-        }
+            if (
+                !requirePermission(
+                    context,
+                    "invoices.send",
+                    res
+                )
+            ) {
+                return;
+            }
 
-        const workspaceOwnerId =
-            context.workspaceOwnerId;
+            const workspaceOwnerId =
+                context.workspaceOwnerId;
 
-        const invoiceId =
-            req.params.invoiceId;
+            const invoiceId =
+                req.params.invoiceId;
 
-        const invoice =
-            await Invoice.findOne({
-                _id: invoiceId,
-                userId: workspaceOwnerId,
-            });
+            const invoice =
+                await Invoice.findOne({
+                    _id: invoiceId,
+                    userId:
+                        workspaceOwnerId,
+                });
 
-        if (!invoice) {
-            return res.status(404).json({
-                success: false,
-                message: "Invoice not found.",
-            });
-        }
+            if (!invoice) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "Invoice not found.",
+                });
+            }
 
-        let phone = String(
-            invoice.customerPhone || ""
-        ).replace(/\D/g, "");
+            let phone = String(
+                invoice.customerPhone ||
+                    ""
+            ).replace(/\D/g, "");
 
-        if (!phone) {
-            return res.status(400).json({
-                success: false,
-                message:
-                    "Customer WhatsApp number is missing.",
-            });
-        }
+            if (!phone) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Customer WhatsApp number is missing.",
+                });
+            }
 
-        if (
-            phone.length === 10 &&
-            /^[6-9]/.test(phone)
-        ) {
-            phone = `91${phone}`;
-        }
+            if (
+                phone.length === 10 &&
+                /^[6-9]/.test(phone)
+            ) {
+                phone = `91${phone}`;
+            }
 
-        const accessToken =
-            process.env.WHATSAPP_ACCESS_TOKEN ||
-            process.env.META_WHATSAPP_ACCESS_TOKEN ||
-            process.env.META_ACCESS_TOKEN ||
-            "";
+            const accessToken =
+                process.env
+                    .WHATSAPP_ACCESS_TOKEN ||
+                process.env
+                    .META_WHATSAPP_ACCESS_TOKEN ||
+                process.env
+                    .META_ACCESS_TOKEN ||
+                "";
 
-        const phoneNumberId =
-            process.env.WHATSAPP_PHONE_NUMBER_ID ||
-            process.env.META_WHATSAPP_PHONE_NUMBER_ID ||
-            "";
+            const phoneNumberId =
+                process.env
+                    .WHATSAPP_PHONE_NUMBER_ID ||
+                process.env
+                    .META_WHATSAPP_PHONE_NUMBER_ID ||
+                "";
 
-        const graphVersion =
-            process.env.META_GRAPH_VERSION ||
-            "v25.0";
+            const graphVersion =
+                process.env
+                    .META_GRAPH_VERSION ||
+                "v25.0";
 
-        if (!accessToken || !phoneNumberId) {
-            return res.status(503).json({
-                success: false,
-                message:
-                    "WhatsApp Business API is not configured in backend .env.",
-            });
-        }
+            if (
+                !accessToken ||
+                !phoneNumberId
+            ) {
+                return res.status(503).json({
+                    success: false,
+                    message:
+                        "WhatsApp Business API is not configured in backend .env.",
+                });
+            }
 
-        const owner =
-            await getWorkspaceOwner(
-                workspaceOwnerId
+            const owner =
+                await getWorkspaceOwner(
+                    workspaceOwnerId
+                );
+
+            if (!owner) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "Workspace owner account not found.",
+                });
+            }
+
+            const pdfBuffer =
+                await generateInvoicePDF(
+                    invoice,
+                    owner
+                );
+
+            const form =
+                new FormData();
+
+            form.append(
+                "messaging_product",
+                "whatsapp"
             );
 
-        if (!owner) {
-            return res.status(404).json({
-                success: false,
-                message:
-                    "Workspace owner account not found.",
-            });
-        }
-
-        const pdfBuffer =
-            await generateInvoicePDF(
-                invoice,
-                owner
-            );
-
-        const form =
-            new FormData();
-
-        form.append(
-            "messaging_product",
-            "whatsapp"
-        );
-
-        form.append(
-            "file",
-            pdfBuffer,
-            {
-                filename:
-                    `${
+            form.append(
+                "file",
+                pdfBuffer,
+                {
+                    filename: `${
                         invoice.invoiceNumber ||
                         "invoice"
                     }.pdf`,
-                contentType:
-                    "application/pdf",
-            }
-        );
-
-        const mediaUrl =
-            `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/media`;
-
-        const uploadResponse =
-            await axios.post(
-                mediaUrl,
-                form,
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`,
-                        ...form.getHeaders(),
-                    },
-                    maxContentLength:
-                        Infinity,
-                    maxBodyLength:
-                        Infinity,
+                    contentType:
+                        "application/pdf",
                 }
             );
 
-        const mediaId =
-            uploadResponse?.data?.id;
+            const mediaUrl =
+                `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/media`;
 
-        if (!mediaId) {
-            throw new Error(
-                "WhatsApp PDF upload failed."
-            );
-        }
+            const uploadResponse =
+                await axios.post(
+                    mediaUrl,
+                    form,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${accessToken}`,
+                            ...form.getHeaders(),
+                        },
+                        maxContentLength:
+                            Infinity,
+                        maxBodyLength:
+                            Infinity,
+                    }
+                );
 
-        const ownerBillingProfile =
-            buildOwnerBillingProfile(owner);
+            const mediaId =
+                uploadResponse?.data?.id;
 
-        const businessName =
-            ownerBillingProfile.displayName ||
-            ownerBillingProfile.clinicName ||
-            ownerBillingProfile.businessName ||
-            ownerBillingProfile.name ||
-            "SaleVitals";
+            if (!mediaId) {
+                throw new Error(
+                    "WhatsApp PDF upload failed."
+                );
+            }
 
-        const paymentMode =
-            invoice.paymentMode ||
-            "Not specified";
+            const ownerBillingProfile =
+                buildOwnerBillingProfile(
+                    owner
+                );
 
-        const message =
-            req.body?.message ||
-            `Hello ${
-                invoice.customerName ||
-                "Customer"
-            }, 👋
+            const businessName =
+                ownerBillingProfile.displayName ||
+                ownerBillingProfile.clinicName ||
+                ownerBillingProfile.businessName ||
+                ownerBillingProfile.name ||
+                "SaleVitals";
 
+            const invoiceSettings =
+                resolveCurrency({
+                    ...owner,
+                    countryCode:
+                        invoice.countryCode ||
+                        owner?.countryCode,
+                    country:
+                        invoice.country ||
+                        owner?.country,
+                    currencyCode:
+                        invoice.currencyCode ||
+                        owner?.currencyCode,
+                    currencySymbol:
+                        invoice.currencySymbol ||
+                        owner?.currencySymbol,
+                    currencyLocale:
+                        invoice.currencyLocale ||
+                        owner?.currencyLocale,
+                });
+
+            const invoiceForMessage = {
+                ...(typeof invoice.toObject ===
+                "function"
+                    ? invoice.toObject()
+                    : invoice),
+
+                currencyCode:
+                    invoice.currencyCode ||
+                    invoiceSettings.currencyCode,
+
+                currencySymbol:
+                    invoice.currencySymbol ||
+                    invoiceSettings.currencySymbol,
+
+                currencyLocale:
+                    invoice.currencyLocale ||
+                    invoiceSettings.locale,
+            };
+
+            const paymentMode =
+                invoice.paymentMode ||
+                "Not specified";
+
+            const message =
+                req.body?.message ||
+                `Hello ${
+                    invoice.customerName ||
+                    "Customer"
+                }, 👋
 Thank you for choosing ${businessName}.
-
 Your invoice ${
-                invoice.invoiceNumber ||
-                ""
-            } is ready. Please find the invoice PDF attached with this message.
-
+                    invoice.invoiceNumber ||
+                    ""
+                } is ready. Please find the invoice PDF attached with this message.
 Invoice Date: ${
-                invoice.invoiceDate
-                    ? new Date(
-                          invoice.invoiceDate
-                      ).toLocaleDateString(
-                          "en-IN",
-                          {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                          }
-                      )
-                    : "-"
-            }
-
-Payment Mode: ${paymentMode}
-
-Invoice Amount: ₹${Number(
-                invoice.total || 0
-            ).toLocaleString(
-                "en-IN",
-                {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
+                    invoice.invoiceDate
+                        ? new Date(
+                              invoice.invoiceDate
+                          ).toLocaleDateString(
+                              "en-IN",
+                              {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                              }
+                          )
+                        : "-"
                 }
-            )}
-
+Payment Mode: ${paymentMode}
+${
+    invoice.taxLabel ||
+    invoiceSettings.taxLabel
+}: ${formatInvoiceMoney(
+                    invoice.taxAmount ??
+                        invoice.gstAmount,
+                    invoiceForMessage
+                )}
+Invoice Amount: ${formatInvoiceMoney(
+                    invoice.total,
+                    invoiceForMessage
+                )}
 If you have any questions regarding the invoice, please reply to this WhatsApp message.
-
 Regards,
 ${businessName}`;
 
-        const messagesUrl =
-            `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
+            const messagesUrl =
+                `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 
-        const whatsappResponse =
-            await axios.post(
-                messagesUrl,
-                {
-                    messaging_product:
-                        "whatsapp",
+            const whatsappResponse =
+                await axios.post(
+                    messagesUrl,
+                    {
+                        messaging_product:
+                            "whatsapp",
 
-                    recipient_type:
-                        "individual",
+                        recipient_type:
+                            "individual",
 
-                    to: phone,
+                        to: phone,
 
-                    type: "document",
+                        type: "document",
 
-                    document: {
-                        id: mediaId,
-
-                        caption: message,
-
-                        filename:
-                            `${
+                        document: {
+                            id: mediaId,
+                            caption: message,
+                            filename: `${
                                 invoice.invoiceNumber ||
                                 "invoice"
                             }.pdf`,
+                        },
                     },
-                },
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${accessToken}`,
+                            "Content-Type":
+                                "application/json",
+                        },
+                    }
+                );
 
-                        "Content-Type":
-                            "application/json",
-                    },
-                }
+            const whatsappMessageId =
+                whatsappResponse?.data
+                    ?.messages?.[0]?.id ||
+                "";
+
+            invoice.status = "Sent";
+
+            invoice.whatsappSentAt =
+                new Date();
+
+            invoice.whatsappMessageId =
+                whatsappMessageId;
+
+            invoice.billedBy =
+                ownerBillingProfile;
+
+            await invoice.save();
+
+            return res.json({
+                success: true,
+                message:
+                    "Invoice PDF sent successfully on WhatsApp.",
+                whatsappNumber:
+                    phone,
+                whatsappMessageId,
+            });
+        } catch (error) {
+            console.error(
+                "SEND INVOICE WHATSAPP ERROR:",
+                error
             );
 
-        const whatsappMessageId =
-            whatsappResponse
-                ?.data
-                ?.messages?.[0]
-                ?.id || "";
-
-        invoice.status = "Sent";
-
-        invoice.whatsappSentAt =
-            new Date();
-
-        invoice.whatsappMessageId =
-            whatsappMessageId;
-
-        invoice.billedBy =
-            ownerBillingProfile;
-
-        await invoice.save();
-
-        return res.json({
-            success: true,
-            message:
-                "Invoice PDF sent successfully on WhatsApp.",
-            whatsappNumber: phone,
-            whatsappMessageId,
-        });
-    } catch (error) {
-        console.error(
-            "SEND INVOICE WHATSAPP ERROR:",
-            error
-        );
-
-        return res.status(
-            error.response?.status || 500
-        ).json({
-            success: false,
-            message:
-                error.response?.data?.error
-                    ?.message ||
-                error.message ||
-                "Unable to send invoice on WhatsApp.",
-        });
-    }
-};
+            return res.status(
+                error.response?.status ||
+                    500
+            ).json({
+                success: false,
+                message:
+                    error.response?.data
+                        ?.error?.message ||
+                    error.message ||
+                    "Unable to send invoice on WhatsApp.",
+            });
+        }
+    };

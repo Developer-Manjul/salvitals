@@ -51,7 +51,71 @@ function contactPayloadFromInput(input, userId) {
   };
 }
 
-async function getContactUsage(userId, plan = null) {
+/*
+|--------------------------------------------------------------------------
+| Junk Lead Helpers
+|--------------------------------------------------------------------------
+*/
+
+function normalizeStage(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isJunkLead(lead) {
+  const stage = normalizeStage(
+    lead?.stage ||
+    lead?.leadStage ||
+    lead?.status ||
+    ""
+  );
+
+  return (
+    stage === "junk" ||
+    stage === "junk lead"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Count only NON-JUNK leads
+|--------------------------------------------------------------------------
+*/
+
+async function getNonJunkLeadCount(
+  userId,
+  session = null
+) {
+  let query = Lead.find({
+    userId,
+  }).select(
+    "stage leadStage status"
+  );
+
+  if (session) {
+    query = query.session(session);
+  }
+
+  const leads = await query.lean();
+
+  return leads.filter(
+    (lead) => !isJunkLead(lead)
+  ).length;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Contact Usage
+|--------------------------------------------------------------------------
+*/
+
+async function getContactUsage(
+  userId,
+  plan = null
+) {
   const activePlan =
     plan || await getActivePlan(userId);
 
@@ -63,9 +127,8 @@ async function getContactUsage(userId, plan = null) {
       userId,
       deletedAt: null,
     }),
-    Lead.countDocuments({
-      userId,
-    }),
+
+    getNonJunkLeadCount(userId),
   ]);
 
   const used =
@@ -93,6 +156,12 @@ async function getContactUsage(userId, plan = null) {
       used >= activePlan.limit,
   };
 }
+
+/*
+|--------------------------------------------------------------------------
+| Create Contact With Quota
+|--------------------------------------------------------------------------
+*/
 
 async function createContactWithQuota(
   payload,
@@ -163,9 +232,10 @@ async function createContactWithQuota(
             deletedAt: null,
           }).session(session),
 
-          Lead.countDocuments({
+          getNonJunkLeadCount(
             userId,
-          }).session(session),
+            session
+          ),
         ]);
 
         const used =
@@ -235,6 +305,12 @@ async function createContactWithQuota(
     await session.endSession();
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Create Contact From Lead
+|--------------------------------------------------------------------------
+*/
 
 async function createContactFromLead(
   lead

@@ -139,12 +139,7 @@ const DEFAULT_STAGES = [
         icon: "fa-solid fa-phone-slash",
         color: "red",
     },
-    {
-        name: "OPD",
-        slug: "opd",
-        icon: "fa-solid fa-hospital",
-        color: "green",
-    },
+    
     {
         name: "Distance Issues",
         slug: "distance-issues",

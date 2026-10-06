@@ -2502,3 +2502,72 @@
         box-shadow: none !important
     }
 }
+
+.invoice-tax-control {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.invoice-tax-control .invoice-gst-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.invoice-custom-tax-input {
+    position: relative;
+    width: 100%;
+    height: 40px;
+    box-sizing: border-box;
+}
+
+.invoice-custom-tax-input .invoice-gst-input {
+    width: 100%;
+    height: 40px;
+    box-sizing: border-box;
+
+    padding: 0 65px 0 12px;
+
+    /* number arrows remove */
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.invoice-custom-tax-input .invoice-gst-input::-webkit-outer-spin-button,
+.invoice-custom-tax-input .invoice-gst-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.invoice-custom-tax-label {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    font-size: 12px;
+    color: #64748b;
+
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.invoice-custom-tax-back {
+    position: absolute;
+    right: 0;
+    top: 0;
+
+    width: 30px;
+    height: 40px;
+
+    border: 0;
+    background: transparent;
+
+    cursor: pointer;
+
+    color: #334155;
+    font-size: 12px;
+
+    padding: 0;
+}

@@ -1,12 +1,12 @@
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+
 const Order = require("../models/Order");
 const User = require("../models/User");
 const sendInvoiceEmail = require("../utils/sendInvoiceEmail");
-
 const {
     getWorkspaceContext,
-    hasPermission,
 } = require("../utils/workspace");
 
 const razorpay = new Razorpay({
@@ -55,6 +55,34 @@ const ADDONS = {
         unitLabel: "AI conversations",
     },
 };
+
+function getUserId(req) {
+    const authorization = req.headers.authorization || "";
+
+    const token = authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
+
+    if (!token) {
+        return null;
+    }
+
+    try {
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
+
+        return (
+            decoded.id ||
+            decoded._id ||
+            decoded.userId ||
+            null
+        );
+    } catch (error) {
+        return null;
+    }
+}
 
 function normalizePlanId(value) {
     const normalized = String(value || "")
@@ -300,8 +328,7 @@ function getAddonDates() {
 }
 
 async function sendInvoiceIfNeeded(
-    order,
-    existingUser = null
+    order
 ) {
     if (
         order.invoiceEmailSentAt
@@ -310,10 +337,9 @@ async function sendInvoiceIfNeeded(
     }
 
     const user =
-    existingUser ||
-    await User.findById(
-        order.userId
-    );
+        await User.findById(
+            order.userId
+        );
 
     if (
         !user ||
@@ -574,10 +600,13 @@ async function activateAddon(
     };
 
     order.addonMonths = 1;
+
     order.addonStartsAt =
         startsAt;
+
     order.addonExpiresAt =
         expiresAt;
+
     order.addonQuotaUsed =
         used;
 
@@ -609,27 +638,33 @@ async function activatePaidOrder(
 }
 
 async function ensureSubscriptionForPaidOrder(
-    user,
+    userId,
     paidOrder
 ) {
-    if (!paidOrder) {
-        return null;
-    }
-
     if (
+        !paidOrder ||
         paidOrder.orderType !==
-        "subscription"
+            "subscription"
     ) {
         return null;
     }
 
-   
+    const user =
+        await User.findById(
+            userId
+        );
+
+    if (!user) {
+        return null;
+    }
+
     const subscription =
         user.subscription || {};
 
     const orderMatches =
         String(
-            subscription.orderId || ""
+            subscription.orderId ||
+                ""
         ) ===
         String(
             paidOrder._id
@@ -728,304 +763,97 @@ async function recoverPaidSubscriptionOrder(
         pendingOrder
     );
 
-   await sendInvoiceIfNeeded(
-    paidOrder,
-    user
-);
+    await sendInvoiceIfNeeded(
+        pendingOrder
+    );
 
     return pendingOrder;
 }
 
-exports.getPaymentStatus =
-    async (
-        req,
-        res
-    ) => {
-        try {
-            const context =
-                await getWorkspaceContext(req);
+exports.getPaymentStatus = async (req, res) => {
+    try {
+        const context = await getWorkspaceContext(req);
+        const userId = context.workspaceOwnerId;
 
-            if (!context) {
-                return res.status(401).json({
-                    success: false,
-                    message:
-                        "Authentication required",
-                    payment_completed:
-                        false,
-                    payment_status:
-                        "unauthorized",
-                    status:
-                        "unauthorized",
-                });
-            }
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+                payment_completed: false,
+                payment_status: "unauthorized",
+                status: "unauthorized",
+            });
+        }
 
-            if (
-                !hasPermission(
-                    context,
-                    "billing.view"
-                )
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "You do not have permission to view billing",
-                });
-            }
+        let user = await User.findById(userId);
 
-            const userId =
-                context.workspaceOwnerId;
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+                payment_completed: false,
+                payment_status: "not_found",
+                status: "not_found",
+            });
+        }
 
-           let user = context.user;
+        let paidOrder = await Order.findOne({
+            userId,
+            orderType: "subscription",
+            paymentStatus: "paid",
+        }).sort({
+            createdAt: -1,
+        });
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message:
-                        "User not found",
-                    payment_completed:
-                        false,
-                    payment_status:
-                        "not_found",
-                    status:
-                        "not_found",
-                });
-            }
-
-            let paidOrder =
-                await Order.findOne({
-                    userId,
-                    orderType:
-                        "subscription",
-                    paymentStatus:
-                        "paid",
-                }).sort({
-                    createdAt: -1,
-                });
-
-            if (!paidOrder) {
-                try {
-                    paidOrder =
-                        await recoverPaidSubscriptionOrder(
-                            userId
-                        );
-                } catch (
+        if (!paidOrder) {
+            try {
+                paidOrder = await recoverPaidSubscriptionOrder(userId);
+            } catch (recoveryError) {
+                console.error(
+                    "PAYMENT RECOVERY ERROR:",
                     recoveryError
-                ) {
-                    console.error(
-                        "PAYMENT RECOVERY ERROR:",
-                        recoveryError
-                    );
-                }
+                );
             }
+        }
 
-            if (paidOrder) {
-                try {
-                    user =
-    await ensureSubscriptionForPaidOrder(
-        user,
-        paidOrder
-    );
-                } catch (
-                    subscriptionError
-                ) {
-                    console.error(
-                        "SUBSCRIPTION SYNC ERROR:",
-                        subscriptionError
-                    );
-                }
-
-                await sendInvoiceIfNeeded(
+        if (paidOrder) {
+            try {
+                user = await ensureSubscriptionForPaidOrder(
+                    userId,
                     paidOrder
                 );
-
-                const subscription =
-                    user?.subscription ||
-                    {};
-
-                return res.status(200).json({
-                    success: true,
-                    payment_completed:
-                        true,
-                    payment_status:
-                        "paid",
-                    status:
-                        "paid",
-                    orderId:
-                        paidOrder._id,
-                    planId:
-                        paidOrder.planId,
-                    planName:
-                        paidOrder.planName,
-                    invoiceNumber:
-                        paidOrder.invoiceNumber ||
-                        "",
-                    subscription: {
-                        planId:
-                            subscription.planId ||
-                            paidOrder.planId ||
-                            "",
-                        planName:
-                            subscription.planName ||
-                            paidOrder.planName ||
-                            "",
-                        status:
-                            subscription.status ||
-                            "active",
-                        billingCycle:
-                            subscription.billingCycle ||
-                            "",
-                        startedAt:
-                            subscription.startedAt ||
-                            null,
-                        expiresAt:
-                            subscription.expiresAt ||
-                            null,
-                        nextBillingAt:
-                            subscription.nextBillingAt ||
-                            null,
-                        amount:
-                            Number(
-                                subscription.amount ||
-                                paidOrder.planAmount ||
-                                0
-                            ),
-                        currency:
-                            subscription.currency ||
-                            paidOrder.currency ||
-                            "INR",
-                        setupFeePaid:
-                            Boolean(
-                                subscription.setupFeePaid
-                            ),
-                        orderId:
-                            subscription.orderId ||
-                            paidOrder._id,
-                        razorpayOrderId:
-                            subscription.razorpayOrderId ||
-                            paidOrder.razorpayOrderId ||
-                            "",
-                        paymentId:
-                            subscription.paymentId ||
-                            paidOrder.razorpayPaymentId ||
-                            "",
-                    },
-                    order: {
-                        _id:
-                            paidOrder._id,
-                        orderType:
-                            paidOrder.orderType,
-                        paymentStatus:
-                            paidOrder.paymentStatus,
-                        planId:
-                            paidOrder.planId,
-                        planName:
-                            paidOrder.planName,
-                        amount:
-                            paidOrder.amount,
-                        planAmount:
-                            paidOrder.planAmount,
-                        setupFee:
-                            paidOrder.setupFee,
-                        tax:
-                            paidOrder.tax,
-                        currency:
-                            paidOrder.currency,
-                        period:
-                            paidOrder.period,
-                        periodLabel:
-                            paidOrder.periodLabel,
-                    },
-                });
+            } catch (subscriptionError) {
+                console.error(
+                    "SUBSCRIPTION SYNC ERROR:",
+                    subscriptionError
+                );
             }
 
-            const subscription =
-                user.subscription || {};
+            await sendInvoiceIfNeeded(paidOrder);
 
-            const subscriptionIsActive =
-                subscription.status ===
-                    "active" &&
-                subscription.expiresAt &&
-                new Date(
-                    subscription.expiresAt
-                ).getTime() >
-                    Date.now();
-
-            if (
-                subscriptionIsActive
-            ) {
-                return res.status(200).json({
-                    success: true,
-                    payment_completed:
-                        true,
-                    payment_status:
-                        "paid",
-                    status:
-                        "paid",
-                    subscription: {
-                        planId:
-                            subscription.planId ||
-                            "",
-                        planName:
-                            subscription.planName ||
-                            "",
-                        status:
-                            subscription.status ||
-                            "active",
-                        billingCycle:
-                            subscription.billingCycle ||
-                            "",
-                        startedAt:
-                            subscription.startedAt ||
-                            null,
-                        expiresAt:
-                            subscription.expiresAt ||
-                            null,
-                        nextBillingAt:
-                            subscription.nextBillingAt ||
-                            null,
-                        amount:
-                            Number(
-                                subscription.amount ||
-                                0
-                            ),
-                        currency:
-                            subscription.currency ||
-                            "INR",
-                        setupFeePaid:
-                            Boolean(
-                                subscription.setupFeePaid
-                            ),
-                        orderId:
-                            subscription.orderId ||
-                            null,
-                        razorpayOrderId:
-                            subscription.razorpayOrderId ||
-                            "",
-                        paymentId:
-                            subscription.paymentId ||
-                            "",
-                    },
-                });
-            }
+            const subscription = user?.subscription || {};
 
             return res.status(200).json({
                 success: true,
-                payment_completed:
-                    false,
-                payment_status:
-                    "pending",
-                status:
-                    "pending",
+                payment_completed: true,
+                payment_status: "paid",
+                status: "paid",
+                orderId: paidOrder._id,
+                planId: paidOrder.planId,
+                planName: paidOrder.planName,
+                invoiceNumber: paidOrder.invoiceNumber || "",
                 subscription: {
                     planId:
                         subscription.planId ||
+                        paidOrder.planId ||
                         "",
                     planName:
                         subscription.planName ||
+                        paidOrder.planName ||
                         "",
                     status:
                         subscription.status ||
-                        "none",
+                        "active",
                     billingCycle:
                         subscription.billingCycle ||
                         "",
@@ -1038,39 +866,164 @@ exports.getPaymentStatus =
                     nextBillingAt:
                         subscription.nextBillingAt ||
                         null,
-                    amount:
-                        Number(
-                            subscription.amount ||
+                    amount: Number(
+                        subscription.amount ||
+                            paidOrder.planAmount ||
                             0
-                        ),
+                    ),
+                    currency:
+                        subscription.currency ||
+                        paidOrder.currency ||
+                        "INR",
+                    setupFeePaid: Boolean(
+                        subscription.setupFeePaid
+                    ),
+                    orderId:
+                        subscription.orderId ||
+                        paidOrder._id,
+                    razorpayOrderId:
+                        subscription.razorpayOrderId ||
+                        paidOrder.razorpayOrderId ||
+                        "",
+                    paymentId:
+                        subscription.paymentId ||
+                        paidOrder.razorpayPaymentId ||
+                        "",
+                },
+                order: {
+                    _id: paidOrder._id,
+                    orderType: paidOrder.orderType,
+                    paymentStatus:
+                        paidOrder.paymentStatus,
+                    planId: paidOrder.planId,
+                    planName: paidOrder.planName,
+                    amount: paidOrder.amount,
+                    planAmount: paidOrder.planAmount,
+                    setupFee: paidOrder.setupFee,
+                    tax: paidOrder.tax,
+                    currency: paidOrder.currency,
+                    period: paidOrder.period,
+                    periodLabel:
+                        paidOrder.periodLabel,
+                },
+            });
+        }
+
+        const subscription = user.subscription || {};
+
+        const subscriptionIsActive =
+            subscription.status === "active" &&
+            subscription.expiresAt &&
+            new Date(
+                subscription.expiresAt
+            ).getTime() > Date.now();
+
+        if (subscriptionIsActive) {
+            return res.status(200).json({
+                success: true,
+                payment_completed: true,
+                payment_status: "paid",
+                status: "paid",
+                subscription: {
+                    planId:
+                        subscription.planId ||
+                        "",
+                    planName:
+                        subscription.planName ||
+                        "",
+                    status:
+                        subscription.status ||
+                        "active",
+                    billingCycle:
+                        subscription.billingCycle ||
+                        "",
+                    startedAt:
+                        subscription.startedAt ||
+                        null,
+                    expiresAt:
+                        subscription.expiresAt ||
+                        null,
+                    nextBillingAt:
+                        subscription.nextBillingAt ||
+                        null,
+                    amount: Number(
+                        subscription.amount ||
+                            0
+                    ),
                     currency:
                         subscription.currency ||
                         "INR",
-                    setupFeePaid:
-                        Boolean(
-                            subscription.setupFeePaid
-                        ),
+                    setupFeePaid: Boolean(
+                        subscription.setupFeePaid
+                    ),
+                    orderId:
+                        subscription.orderId ||
+                        null,
+                    razorpayOrderId:
+                        subscription.razorpayOrderId ||
+                        "",
+                    paymentId:
+                        subscription.paymentId ||
+                        "",
                 },
             });
-        } catch (error) {
-            console.error(
-                "GET PAYMENT STATUS ERROR:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                message:
-                    "Unable to check payment status",
-                payment_completed:
-                    false,
-                payment_status:
-                    "error",
-                status:
-                    "error",
-            });
         }
-    };
+
+        return res.status(200).json({
+            success: true,
+            payment_completed: false,
+            payment_status: "pending",
+            status: "pending",
+            subscription: {
+                planId:
+                    subscription.planId ||
+                    "",
+                planName:
+                    subscription.planName ||
+                    "",
+                status:
+                    subscription.status ||
+                    "none",
+                billingCycle:
+                    subscription.billingCycle ||
+                    "",
+                startedAt:
+                    subscription.startedAt ||
+                    null,
+                expiresAt:
+                    subscription.expiresAt ||
+                    null,
+                nextBillingAt:
+                    subscription.nextBillingAt ||
+                    null,
+                amount: Number(
+                    subscription.amount ||
+                        0
+                ),
+                currency:
+                    subscription.currency ||
+                    "INR",
+                setupFeePaid: Boolean(
+                    subscription.setupFeePaid
+                ),
+            },
+        });
+    } catch (error) {
+        console.error(
+            "GET PAYMENT STATUS ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to check payment status",
+            payment_completed: false,
+            payment_status: "error",
+            status: "error",
+        });
+    }
+};
 
 exports.createOrder =
     async (
@@ -1078,27 +1031,16 @@ exports.createOrder =
         res
     ) => {
         try {
-            const context =
-                await getWorkspaceContext(req);
+            const userId =
+                getUserId(req);
 
-            if (!context) {
+            if (!userId) {
                 return res.status(401).json({
                     success: false,
                     message:
                         "Please sign in before payment",
                 });
             }
-
-            if (!context.isOwner) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Only the workspace owner can purchase or change the CRM plan",
-                });
-            }
-
-            const userId =
-                context.workspaceOwnerId;
 
             const user =
                 await User.findById(
@@ -1153,7 +1095,8 @@ exports.createOrder =
                 "addon"
             ) {
                 if (
-                    curr !== "INR"
+                    curr !==
+                    "INR"
                 ) {
                     return res.status(400).json({
                         success: false,
@@ -1163,8 +1106,7 @@ exports.createOrder =
                 }
 
                 if (
-                    user.subscription
-                        ?.status !==
+                    user.subscription?.status !==
                     "active"
                 ) {
                     return res.status(400).json({
@@ -1276,8 +1218,7 @@ exports.createOrder =
                         planId:
                             addonCalculation.addonType,
                         planName:
-                            user.subscription
-                                ?.planName ||
+                            user.subscription?.planName ||
                             "",
                         addonType:
                             addonCalculation.addonType,
@@ -1604,25 +1545,6 @@ exports.verifyPayment =
                 });
             }
 
-            const context =
-                await getWorkspaceContext(req);
-
-            if (!context) {
-                return res.status(401).json({
-                    success: false,
-                    message:
-                        "Authentication required",
-                });
-            }
-
-            if (!context.isOwner) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Only the workspace owner can verify a payment",
-                });
-            }
-
             const generatedSignature =
                 crypto
                     .createHmac(
@@ -1659,17 +1581,6 @@ exports.verifyPayment =
                     success: false,
                     message:
                         "Order not found",
-                });
-            }
-
-            if (
-                String(order.userId) !==
-                String(context.workspaceOwnerId)
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Payment order does not belong to this workspace",
                 });
             }
 
