@@ -1443,6 +1443,40 @@ function generateInvoicePDF(
                         margin: 45,
                         autoFirstPage: true,
                     });
+                
+                // =========================================================
+// UNICODE FONT - ₹ £ € $ SUPPORT
+// =========================================================
+const fs = require("fs");
+const path = require("path");
+
+const regularFontPath = path.join(
+    process.cwd(),
+    "fonts",
+    "DejaVuSans.ttf"
+);
+
+const boldFontPath = path.join(
+    process.cwd(),
+    "fonts",
+    "DejaVuSans-Bold.ttf"
+);
+
+const hasUnicodeFont =
+    fs.existsSync(regularFontPath) &&
+    fs.existsSync(boldFontPath);
+
+if (hasUnicodeFont) {
+    doc.registerFont(
+        "InvoiceRegular",
+        regularFontPath
+    );
+
+    doc.registerFont(
+        "InvoiceBold",
+        boldFontPath
+    );
+}
 
                 const chunks = [];
 
@@ -2163,6 +2197,12 @@ function generateInvoicePDF(
                          *
                          * This now uses owner's currency.
                          */
+                        if (hasUnicodeFont) {
+                            doc.font("InvoiceRegular");
+                        } else {
+                            doc.font("Helvetica");
+                        }
+
                         doc.text(
                             money(amount),
                             455,
@@ -2220,19 +2260,21 @@ function generateInvoicePDF(
                     );
 
                 doc
-                    .font(
-                        "Helvetica-Bold"
-                    )
-                    .fillColor(
-                        "#111827"
-                    )
-                    .text(
-                        money(
-                            invoice.subtotal
-                        ),
-                        455,
-                        y
-                    );
+                    if (hasUnicodeFont) {
+                doc.font("InvoiceBold");
+            } else {
+                doc.font("Helvetica-Bold");
+            }
+
+            doc
+                .fillColor("#111827")
+                .text(
+                    money(
+                        invoice.subtotal
+                    ),
+                    455,
+                    y
+                );
 
                 y += 22;
 
@@ -2273,21 +2315,22 @@ function generateInvoicePDF(
                         y + 5
                     );
 
-                doc
-                    .font(
-                        "Helvetica-Bold"
-                    )
-                    .fillColor(
-                        "#111827"
-                    )
-                    .text(
-                        money(
-                            invoice.taxAmount ??
-                                invoice.gstAmount
-                        ),
-                        455,
-                        y + 5
-                    );
+                if (hasUnicodeFont) {
+                doc.font("InvoiceBold");
+            } else {
+                doc.font("Helvetica-Bold");
+            }
+
+            doc
+                .fillColor("#111827")
+                .text(
+                    money(
+                        invoice.taxAmount ??
+                            invoice.gstAmount
+                    ),
+                    455,
+                    y + 5
+                );
 
                 y += 35;
 
@@ -2318,14 +2361,15 @@ function generateInvoicePDF(
                         y + 12
                     );
 
+                if (hasUnicodeFont) {
+                    doc.font("InvoiceBold");
+                } else {
+                    doc.font("Helvetica-Bold");
+                }
+
                 doc
-                    .font(
-                        "Helvetica-Bold"
-                    )
                     .fontSize(13)
-                    .fillColor(
-                        "#ffffff"
-                    )
+                    .fillColor("#ffffff")
                     .text(
                         money(
                             invoice.total
@@ -2334,8 +2378,7 @@ function generateInvoicePDF(
                         y + 10,
                         {
                             width: 112,
-                            align:
-                                "right",
+                            align: "right",
                         }
                     );
 
