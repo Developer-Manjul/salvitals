@@ -23,6 +23,7 @@ const {
     hasPermission,
 } = require("../utils/workspace");
 
+
 const PLANS = {
     starter: {
         id: "starter",
@@ -30,18 +31,21 @@ const PLANS = {
         contactLimit: 500,
         aiChatbotLimit: 500,
     },
+
     growth: {
         id: "growth",
         name: "Growth",
         contactLimit: 1500,
         aiChatbotLimit: 1500,
     },
+
     scale: {
         id: "scale",
         name: "Scale",
         contactLimit: 2500,
         aiChatbotLimit: 3000,
     },
+
     enterprise: {
         id: "enterprise",
         name: "Enterprise",
@@ -49,6 +53,7 @@ const PLANS = {
         aiChatbotLimit: null,
     },
 };
+
 
 async function requireBillingPermission(req, res) {
     const context = await getWorkspaceContext(req);
@@ -58,6 +63,7 @@ async function requireBillingPermission(req, res) {
             success: false,
             message: "Authentication required",
         });
+
         return null;
     }
 
@@ -66,11 +72,13 @@ async function requireBillingPermission(req, res) {
             success: false,
             message: "You do not have permission to access billing",
         });
+
         return null;
     }
 
     return context;
 }
+
 
 function getDaysRemaining(expiresAt) {
     if (!expiresAt) {
@@ -90,6 +98,7 @@ function getDaysRemaining(expiresAt) {
     );
 }
 
+
 function getPlanDetails(planId) {
     const normalized = String(planId || "")
         .trim()
@@ -102,6 +111,7 @@ function getPlanDetails(planId) {
     return PLANS[normalized] || null;
 }
 
+
 function getPlanOrder(planId) {
     const order = [
         "starter",
@@ -113,6 +123,7 @@ function getPlanOrder(planId) {
     return order.indexOf(planId);
 }
 
+
 function getAvailablePlans(currentPlanId) {
     const currentIndex = getPlanOrder(currentPlanId);
 
@@ -122,12 +133,17 @@ function getAvailablePlans(currentPlanId) {
         return {
             id: plan.id,
             name: plan.name,
+
             contactLimit: getContactLimit(plan.id),
+
             aiChatbotLimit: getAIChatbotLimit(plan.id),
+
             current: plan.id === currentPlanId,
+
             upgrade:
                 currentIndex >= 0 &&
                 planIndex > currentIndex,
+
             available:
                 plan.id === "enterprise" ||
                 currentIndex < 0 ||
@@ -135,6 +151,7 @@ function getAvailablePlans(currentPlanId) {
         };
     });
 }
+
 
 function getMonthKey(date = new Date()) {
     const year = date.getUTCFullYear();
@@ -145,6 +162,7 @@ function getMonthKey(date = new Date()) {
 
     return `${year}-${month}`;
 }
+
 
 function calculatePercentage(used, limit) {
     if (
@@ -162,6 +180,7 @@ function calculatePercentage(used, limit) {
         100
     );
 }
+
 
 function normalizeAddon(addon) {
     if (!addon || !addon.enabled) {
@@ -195,30 +214,41 @@ function normalizeAddon(addon) {
 
     return {
         enabled: true,
+
         quota,
+
         used,
+
         remaining: Math.max(
             quota - used,
             0
         ),
+
         months: Number(
             addon.months || 0
         ),
+
         unitPrice: Number(
             addon.unitPrice || 0
         ),
+
         startsAt:
             addon.startsAt || null,
+
         expiresAt:
             addon.expiresAt || null,
+
         orderId:
             addon.orderId || null,
+
         razorpayOrderId:
             addon.razorpayOrderId || "",
+
         paymentId:
             addon.paymentId || "",
     };
 }
+
 
 function getAddonStatus(addon) {
     if (!addon?.enabled) {
@@ -236,6 +266,7 @@ function getAddonStatus(addon) {
 
     return "active";
 }
+
 
 function buildSubscriptionFromOrder(order) {
     if (
@@ -337,6 +368,7 @@ function buildSubscriptionFromOrder(order) {
     };
 }
 
+
 exports.getCurrentBilling =
     async (req, res) => {
         try {
@@ -367,6 +399,7 @@ exports.getCurrentBilling =
                 });
             }
 
+
             let subscription =
                 user.subscription || {};
 
@@ -381,10 +414,14 @@ exports.getCurrentBilling =
                 String(
                     subscription.status || ""
                 ).toLowerCase() === "active" &&
+
                 subscriptionExpiresAt &&
+
                 subscriptionExpiresAt > Date.now();
 
+
             if (!subscriptionIsActive) {
+
                 const latestPaidOrder =
                     await Order.findOne({
                         userId: ownerId,
@@ -396,12 +433,15 @@ exports.getCurrentBilling =
                         })
                         .lean();
 
+
                 const recoveredSubscription =
                     buildSubscriptionFromOrder(
                         latestPaidOrder
                     );
 
+
                 if (recoveredSubscription) {
+
                     await User.findByIdAndUpdate(
                         ownerId,
                         {
@@ -411,6 +451,7 @@ exports.getCurrentBilling =
                             },
                         }
                     );
+
 
                     subscription =
                         recoveredSubscription;
@@ -428,12 +469,14 @@ exports.getCurrentBilling =
                 }
             }
 
+
             const normalizedPlanId =
                 String(
                     subscription.planId || ""
                 )
                     .trim()
                     .toLowerCase();
+
 
             const resolvedPlanId =
                 subscriptionIsActive
@@ -444,12 +487,15 @@ exports.getCurrentBilling =
                     )
                     : "";
 
+
             const resolvedPlanDetails =
                 getPlanDetails(
                     resolvedPlanId
                 );
 
+
             const activePlan = {
+
                 planId:
                     subscriptionIsActive
                         ? resolvedPlanId
@@ -497,25 +543,50 @@ exports.getCurrentBilling =
                         : 0,
             };
 
+
             const [
                 contactCount,
                 leadCount,
             ] = await Promise.all([
+
                 Contact.countDocuments({
                     userId: ownerId,
                     deletedAt: null,
                 }),
 
-              Lead.countDocuments({
-  userId: ownerId,
-  stage: {
-    $nin: ["Junk", "Junk Lead", "junk", "junk lead"],
-  },
-}),
+                Lead.countDocuments({
+                    userId: ownerId,
+                    stage: {
+                        $nin: [
+                            "Junk",
+                            "Junk Lead",
+                            "junk",
+                            "junk lead",
+                        ],
+                    },
+                }),
+
             ]);
 
+
+            /*
+             * IMPORTANT:
+             *
+             * Leads are already converted/created as contacts
+             * in the current website lead flow.
+             *
+             * Therefore DO NOT add leadCount again.
+             *
+             * Old:
+             * contactCount + leadCount
+             *
+             * New:
+             * contactCount
+             */
+
             const contactUsed =
-                contactCount + leadCount;
+                contactCount;
+
 
             const contactPlanLimit =
                 activePlan.planLimit ??
@@ -523,10 +594,12 @@ exports.getCurrentBilling =
                     activePlan.planId
                 );
 
+
             const contactAddonLimit =
                 Number(
                     activePlan.addonLimit || 0
                 );
+
 
             const contactTotalLimit =
                 contactPlanLimit === null
@@ -535,6 +608,7 @@ exports.getCurrentBilling =
                         contactPlanLimit || 0
                     ) +
                     contactAddonLimit;
+
 
             const contactRemaining =
                 contactTotalLimit === null
@@ -545,10 +619,12 @@ exports.getCurrentBilling =
                         0
                     );
 
+
             const contactAddon =
                 normalizeAddon(
                     user.addons?.contacts
                 );
+
 
             const teamMemberLimit =
                 activePlan.planId
@@ -557,11 +633,13 @@ exports.getCurrentBilling =
                     )
                     : 0;
 
+
             const teamMemberUsed =
                 await TeamMember.countDocuments({
                     owner: ownerId,
                     memberType: "team",
                 });
+
 
             const teamMemberRemaining =
                 Math.max(
@@ -570,16 +648,20 @@ exports.getCurrentBilling =
                     0
                 );
 
+
             const totalSeats =
                 teamMemberLimit + 1;
 
+
             const usedSeats =
                 teamMemberUsed + 1;
+
 
             const aiPlanId =
                 normalizeAIPlanId(
                     activePlan.planId
                 );
+
 
             const aiPlanLimit =
                 activePlan.planId
@@ -588,15 +670,18 @@ exports.getCurrentBilling =
                     )
                     : 0;
 
+
             const aiAddon =
                 normalizeAddon(
                     user.addons?.ai_chat
                 );
 
+
             const aiAddonLimit =
                 aiAddon.enabled
                     ? aiAddon.quota
                     : 0;
+
 
             const aiTotalLimit =
                 aiPlanLimit === null
@@ -606,8 +691,10 @@ exports.getCurrentBilling =
                     ) +
                     aiAddonLimit;
 
+
             const monthKey =
                 getMonthKey();
+
 
             const aiUsage =
                 await AIUsage.findOne({
@@ -615,10 +702,12 @@ exports.getCurrentBilling =
                     monthKey,
                 }).lean();
 
+
             const aiUsed =
                 Number(
                     aiUsage?.count || 0
                 );
+
 
             const aiRemaining =
                 aiTotalLimit === null
@@ -629,15 +718,18 @@ exports.getCurrentBilling =
                         0
                     );
 
+
             const daysRemaining =
                 getDaysRemaining(
                     activePlan.expiresAt
                 );
 
+
             const planDetails =
                 getPlanDetails(
                     activePlan.planId
                 );
+
 
             const billingHistory =
                 await Order.find({
@@ -650,12 +742,15 @@ exports.getCurrentBilling =
                     .limit(100)
                     .lean();
 
+
             const formattedHistory =
                 billingHistory.map(
                     (order) => {
+
                         const isAddon =
                             order.orderType ===
                             "addon";
+
 
                         const itemName =
                             isAddon
@@ -680,17 +775,21 @@ exports.getCurrentBilling =
                                     "Plan"
                                 );
 
+
                         const amount =
                             Number(
                                 order.amount || 0
                             );
+
 
                         const tax =
                             Number(
                                 order.tax || 0
                             );
 
+
                         return {
+
                             id:
                                 String(
                                     order._id
@@ -772,10 +871,14 @@ exports.getCurrentBilling =
                     }
                 );
 
+
             return res.json({
+
                 success: true,
 
+
                 subscription: {
+
                     planId:
                         activePlan.planId,
 
@@ -827,8 +930,11 @@ exports.getCurrentBilling =
                         "",
                 },
 
+
                 usage: {
+
                     contacts: {
+
                         planLimit:
                             contactPlanLimit,
 
@@ -851,7 +957,9 @@ exports.getCurrentBilling =
                             ),
                     },
 
+
                     aiChatbot: {
+
                         planLimit:
                             aiPlanLimit,
 
@@ -874,7 +982,9 @@ exports.getCurrentBilling =
                             ),
                     },
 
+
                     teamMembers: {
+
                         limit:
                             teamMemberLimit,
 
@@ -893,8 +1003,11 @@ exports.getCurrentBilling =
                     },
                 },
 
+
                 addons: {
+
                     contacts: {
+
                         ...contactAddon,
 
                         status:
@@ -903,7 +1016,9 @@ exports.getCurrentBilling =
                             ),
                     },
 
+
                     ai_chat: {
+
                         ...aiAddon,
 
                         status:
@@ -913,7 +1028,9 @@ exports.getCurrentBilling =
                     },
                 },
 
+
                 plan: {
+
                     id:
                         planDetails?.id ||
                         activePlan.planId ||
@@ -940,15 +1057,20 @@ exports.getCurrentBilling =
                         teamMemberLimit,
                 },
 
+
                 plans:
                     getAvailablePlans(
                         activePlan.planId
                     ),
 
+
                 billingHistory:
                     formattedHistory,
+
             });
+
         } catch (error) {
+
             console.error(
                 "GET CURRENT BILLING ERROR:",
                 error
@@ -962,27 +1084,35 @@ exports.getCurrentBilling =
         }
     };
 
+
 exports.getPlans =
     async (req, res) => {
+
         try {
+
             const context =
                 await getWorkspaceContext(req);
 
+
             let currentPlanId = "";
 
+
             if (context) {
+
                 if (
                     !hasPermission(
                         context,
                         "billing.view"
                     )
                 ) {
+
                     return res.status(403).json({
                         success: false,
                         message:
                             "You do not have permission to access billing",
                     });
                 }
+
 
                 const user =
                     await User.findById(
@@ -993,10 +1123,12 @@ exports.getPlans =
                         )
                         .lean();
 
+
                 currentPlanId =
                     user?.subscription?.planId ||
                     "";
             }
+
 
             const normalizedCurrentPlan =
                 String(
@@ -1004,18 +1136,22 @@ exports.getPlans =
                 )
                     .trim()
                     .toLowerCase() === "custom"
+
                     ? "enterprise"
+
                     : String(
                         currentPlanId || ""
                     )
                         .trim()
                         .toLowerCase();
 
+
             const plans =
                 Object.values(
                     PLANS
                 ).map(
                     (plan) => ({
+
                         id:
                             plan.id,
 
@@ -1047,7 +1183,9 @@ exports.getPlans =
                         available:
                             plan.id ===
                                 "enterprise" ||
+
                             !normalizedCurrentPlan ||
+
                             getPlanOrder(
                                 plan.id
                             ) >
@@ -1057,13 +1195,20 @@ exports.getPlans =
                     })
                 );
 
+
             return res.json({
+
                 success: true,
+
                 currentPlanId:
                     normalizedCurrentPlan,
+
                 plans,
+
             });
+
         } catch (error) {
+
             console.error(
                 "GET BILLING PLANS ERROR:",
                 error
