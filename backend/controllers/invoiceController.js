@@ -2877,6 +2877,12 @@ exports.sendInvoiceToWhatsApp =
 
             const mediaId =
                 uploadResponse?.data?.id;
+            
+            console.log("WHATSAPP MEDIA UPLOAD:", {
+                status: uploadResponse?.status,
+                mediaId,
+                data: uploadResponse?.data,
+            });
 
             if (!mediaId) {
                 throw new Error(
@@ -3021,6 +3027,13 @@ ${businessName}`;
                 whatsappResponse?.data
                     ?.messages?.[0]?.id ||
                 "";
+            
+            console.log("WHATSAPP SEND RESPONSE:", {
+                status: whatsappResponse?.status,
+                data: whatsappResponse?.data,
+                messageId: whatsappMessageId,
+                phone,
+            });
 
             invoice.status = "Sent";
 
@@ -3043,10 +3056,10 @@ ${businessName}`;
                     phone,
                 whatsappMessageId,
             });
-        } catch (error) {
+       } catch (error) {
             console.error(
                 "SEND INVOICE WHATSAPP ERROR:",
-                error
+                error.response?.data || error.message
             );
 
             return res.status(
