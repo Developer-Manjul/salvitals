@@ -440,7 +440,7 @@ function shouldAskContactAfterGap(messages) {
     return false;
   }
 
-  const lastContactRequestIndex = [...messages]
+  const lastTriggerIndex = [...messages]
     .map((message, index) => ({
       message,
       index,
@@ -454,26 +454,27 @@ function shouldAskContactAfterGap(messages) {
       const text = String(message?.message || "").toLowerCase();
 
       return (
+        text.includes("would you like me to book") ||
+        text.includes("book an appointment") ||
         text.includes("share your name") ||
         text.includes("share your mobile") ||
         text.includes("share your number") ||
-        text.includes("share your phone") ||
         text.includes("mobile number") ||
         text.includes("phone number")
       );
     });
 
-  if (!lastContactRequestIndex) {
+  if (!lastTriggerIndex) {
     return false;
   }
 
-  const visitorMessagesAfterRequest = messages
-    .slice(lastContactRequestIndex.index + 1)
+  const visitorMessagesAfterTrigger = messages
+    .slice(lastTriggerIndex.index + 1)
     .filter(
       (message) => message?.sender === "visitor"
     );
 
-  return visitorMessagesAfterRequest.length >= 2;
+  return visitorMessagesAfterTrigger.length >= 2;
 }
 
 function looksLikeName(text) {
@@ -1614,36 +1615,39 @@ exports.publicMessage =
           aiResult.text
         ).trim();
       
-      let finalReplyText = replyText;
+     if (!replyText) {
+  return res.json({
+    success: true,
+    message: null,
+    conversation,
+    visitorMessage,
+    silent: false,
+    aiError:
+      "EMPTY_AI_RESPONSE",
+  });
+}
 
-      if (
-        hasAppointmentOffer(previousMessages) &&
-        !conversation.visitorName &&
-        !conversation.visitorPhone &&
-        shouldAskContactAfterGap(previousMessages)
-      ) {
-        finalReplyText =
-          `${replyText} Please share your name and mobile number so our team can connect with you and provide more information.`;
-      }
-      
-      if (!replyText) {
-        return res.json({
-          success: true,
-          message: null,
-          conversation,
-          visitorMessage,
-          silent: false,
-          aiError:
-            "EMPTY_AI_RESPONSE",
-        });
-      }
+const shouldRequestContact =
+  hasAppointmentOffer(previousMessages) &&
+  !conversation.visitorName &&
+  !conversation.visitorPhone &&
+  shouldAskContactAfterGap(previousMessages);
 
-      const reply =
-        await saveAIReply({
-          assistant,
-          conversation,
-         text: finalReplyText,
-        });
+const reply =
+  await saveAIReply({
+    assistant,
+    conversation,
+    text: replyText,
+  });
+
+if (shouldRequestContact) {
+  await saveAIReply({
+    assistant,
+    conversation,
+    text:
+      "Please share your name and mobile number. Our team will connect with you shortly and provide more information.",
+  });
+}
 
       const updatedConversation =
         await AIConversation.findById(
