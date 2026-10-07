@@ -1627,27 +1627,29 @@ exports.publicMessage =
   });
 }
 
-const shouldRequestContact =
-  hasAppointmentOffer(previousMessages) &&
-  !conversation.visitorName &&
-  !conversation.visitorPhone &&
-  shouldAskContactAfterGap(previousMessages);
+        const shouldRequestContact =
+          hasAppointmentOffer(previousMessages) &&
+          !conversation.visitorName &&
+          !conversation.visitorPhone &&
+        shouldAskContactAfterGap([
+          ...previousMessages,
+          visitorMessage,
+        ])
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text: replyText,
+          });
 
-const reply =
-  await saveAIReply({
-    assistant,
-    conversation,
-    text: replyText,
-  });
-
-if (shouldRequestContact) {
-  await saveAIReply({
-    assistant,
-    conversation,
-    text:
-      "Please share your name and mobile number. Our team will connect with you shortly and provide more information.",
-  });
-}
+        if (shouldRequestContact) {
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
+              "Please share your name and mobile number. Our team will connect with you shortly and provide more information.",
+          });
+        }
 
       const updatedConversation =
         await AIConversation.findById(
