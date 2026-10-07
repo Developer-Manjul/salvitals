@@ -435,6 +435,47 @@ function hasPhoneRequest(
   );
 }
 
+function shouldAskContactAfterGap(messages) {
+  if (!Array.isArray(messages) || !messages.length) {
+    return false;
+  }
+
+  const lastContactRequestIndex = [...messages]
+    .map((message, index) => ({
+      message,
+      index,
+    }))
+    .reverse()
+    .find(({ message }) => {
+      if (message?.sender !== "ai") {
+        return false;
+      }
+
+      const text = String(message?.message || "").toLowerCase();
+
+      return (
+        text.includes("share your name") ||
+        text.includes("share your mobile") ||
+        text.includes("share your number") ||
+        text.includes("share your phone") ||
+        text.includes("mobile number") ||
+        text.includes("phone number")
+      );
+    });
+
+  if (!lastContactRequestIndex) {
+    return false;
+  }
+
+  const visitorMessagesAfterRequest = messages
+    .slice(lastContactRequestIndex.index + 1)
+    .filter(
+      (message) => message?.sender === "visitor"
+    );
+
+  return visitorMessagesAfterRequest.length >= 2;
+}
+
 function looksLikeName(text) {
   const value =
     String(text || "").trim();
@@ -1575,16 +1616,16 @@ exports.publicMessage =
       
       let finalReplyText = replyText;
 
-        if (
-          hasAppointmentOffer(previousMessages) &&
-          !conversation.visitorName &&
-          !conversation.visitorPhone &&
-          !isAppointmentOfferText(replyText)
-        ) {
-          finalReplyText =
-            `${replyText} Please share your name and mobile number so our team can connect with you and provide more information.`;
-        }
-
+      if (
+        hasAppointmentOffer(previousMessages) &&
+        !conversation.visitorName &&
+        !conversation.visitorPhone &&
+        shouldAskContactAfterGap(previousMessages)
+      ) {
+        finalReplyText =
+          `${replyText} Please share your name and mobile number so our team can connect with you and provide more information.`;
+      }
+      
       if (!replyText) {
         return res.json({
           success: true,
