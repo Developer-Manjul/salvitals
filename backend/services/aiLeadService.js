@@ -40,10 +40,17 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
       changed = true;
     }
 
-    if (!existing.landingPage && sourceUrl) {
-      existing.landingPage = sourceUrl;
-      changed = true;
-    }
+    if (sourceUrl) {
+  if (!existing.landingPage || existing.landingPage === "Website") {
+    existing.landingPage = sourceUrl;
+    changed = true;
+  }
+
+  if (!existing.pageUrl) {
+    existing.pageUrl = sourceUrl;
+    changed = true;
+  }
+}
 
     if (changed) {
       await existing.save();
@@ -52,16 +59,17 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     return existing;
   }
 
-  const lead = await Lead.create({
-    userId: ownerId,
-    name,
-    email,
-    phone,
-    source: "AI Chat",
-    service,
-    stage: "New",
-    landingPage: sourceUrl || "Website",
-  });
+ const lead = await Lead.create({
+  userId: ownerId,
+  name,
+  email,
+  phone,
+  source: "AI Chat",
+  service,
+  stage: "New",
+  landingPage: sourceUrl || "Website",
+  pageUrl: sourceUrl || "",
+});
 
   await processNewLead(lead);
 

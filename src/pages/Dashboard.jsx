@@ -1982,14 +1982,14 @@ export default function Dashboard() {
                           name === "Leads" ||
                           name === "Contacts" ||
                           name === "Follow-ups" ||
-                          (name === "Chat" && aiUnreadCount > 0)) && (
+                          (name === "Ai Chat" && aiUnreadCount > 0)) && (
                             <em
                               className={
                                 name === "Leads" && leadCount > 0
                                   ? "hot"
                                   : name === "Follow-ups"
                                     ? "hot"
-                                    : name === "Chat" && aiUnreadCount > 0
+                                    : name === "Ai Chat" && aiUnreadCount > 0
                                       ? "hot"
                                       : countTone === "hot"
                                         ? "hot"
@@ -2002,7 +2002,7 @@ export default function Dashboard() {
                                   ? contactCount
                                   : name === "Follow-ups"
                                     ? pendingFollowUpCount
-                                    : name === "Chat"
+                                    : name === "Ai Chat"
                                       ? aiUnreadCount
                                       : count}
                             </em>
