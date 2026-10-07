@@ -1146,11 +1146,12 @@ const apiOrigin = "https://salevitals.com";
                 "application/json"
             },
             body: JSON.stringify({
-              assistantId:
-                assistantId,
-              sessionId:
-                sessionId
-            })
+            assistantId: assistantId,
+            sessionId: sessionId,
+            visitor: {
+              pageUrl: window.location.href
+            }
+          })
           }
         );
 
@@ -1241,14 +1242,14 @@ const apiOrigin = "https://salevitals.com";
               "Content-Type":
                 "application/json"
             },
-            body: JSON.stringify({
-              assistantId:
-                assistantId,
-              sessionId:
-                sessionId,
-              message:
-                text
-            })
+           body: JSON.stringify({
+            assistantId: assistantId,
+            sessionId: sessionId,
+            message: text,
+            visitor: {
+              pageUrl: window.location.href
+            }
+          })
           }
         );
 

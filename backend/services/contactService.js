@@ -119,20 +119,13 @@ async function getContactUsage(
   const activePlan =
     plan || await getActivePlan(userId);
 
-  const [
-    contactCount,
-    leadCount,
-  ] = await Promise.all([
-    Contact.countDocuments({
+  const contactCount =
+    await Contact.countDocuments({
       userId,
       deletedAt: null,
-    }),
+    });
 
-    getNonJunkLeadCount(userId),
-  ]);
-
-  const used =
-    contactCount + leadCount;
+  const used = contactCount;
 
   const available =
     activePlan.limit === null
@@ -223,24 +216,13 @@ async function createContactWithQuota(
         const plan =
           await getActivePlan(userId);
 
-        const [
-          contactCount,
-          leadCount,
-        ] = await Promise.all([
-          Contact.countDocuments({
-            userId,
-            deletedAt: null,
-          }).session(session),
+        const contactCount =
+        await Contact.countDocuments({
+          userId,
+          deletedAt: null,
+        }).session(session);
 
-          getNonJunkLeadCount(
-            userId,
-            session
-          ),
-        ]);
-
-        const used =
-          contactCount +
-          leadCount;
+      const used = contactCount;
 
         const available =
           plan.limit === null

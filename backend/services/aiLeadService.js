@@ -8,13 +8,47 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
 
   if (!name || !phone) return null;
 
-  const existing = await Lead.findOne({ userId: ownerId, phone }).sort({ createdAt: -1 });
+  const sourceUrl =
+  String(
+    conversation.sourceUrl ||
+    conversation.pageUrl ||
+    conversation.landingPage ||
+    conversation.source ||
+    ""
+  ).trim();
+
+  const existing = await Lead.findOne({
+    userId: ownerId,
+    phone,
+  }).sort({ createdAt: -1 });
+
   if (existing) {
     let changed = false;
-    if (!existing.email && email) { existing.email = email; changed = true; }
-    if (!existing.service && service) { existing.service = service; changed = true; }
-    if (existing.source !== "AI Assistant") { existing.source = "AI Assistant"; changed = true; }
-    if (changed) await existing.save();
+
+    if (!existing.email && email) {
+      existing.email = email;
+      changed = true;
+    }
+
+    if (!existing.service && service) {
+      existing.service = service;
+      changed = true;
+    }
+
+    if (existing.source !== "AI Chat") {
+      existing.source = "AI Chat";
+      changed = true;
+    }
+
+    if (!existing.landingPage && sourceUrl) {
+      existing.landingPage = sourceUrl;
+      changed = true;
+    }
+
+    if (changed) {
+      await existing.save();
+    }
+
     return existing;
   }
 
@@ -23,14 +57,17 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     name,
     email,
     phone,
-    source: "AI Assistant",
+    source: "AI Chat",
     service,
     stage: "New",
-    landingPage: conversation.source || "Website",
+    landingPage: sourceUrl || "Website",
   });
 
   await processNewLead(lead);
+
   return lead;
 }
 
-module.exports = { syncAILead };
+module.exports = {
+  syncAILead,
+};

@@ -218,7 +218,7 @@ function getGreeting(
 }
 
 function getAskNameMessage() {
-  return "Sure. Please share your name.";
+  return "Sure. Please share your name and mobile number. Our team will connect with you shortly and help you with more information.";
 }
 
 function getAskPhoneMessage() {
@@ -842,11 +842,31 @@ async function getOrCreatePublicConversation({
           ),
         status: "active",
         mode: "ai",
-        source: "Website",
+        source: safeText(
+          visitor?.pageUrl ||
+          visitor?.sourceUrl ||
+          visitor?.landingPage ||
+          "",
+          1000
+        ),
         unreadForTeam: false,
       });
   } else {
     const updates = {};
+
+    if (
+      visitor?.pageUrl ||
+      visitor?.sourceUrl ||
+      visitor?.landingPage
+    ) {
+      updates.source = safeText(
+        visitor?.pageUrl ||
+        visitor?.sourceUrl ||
+        visitor?.landingPage ||
+        "",
+        1000
+      );
+    }
 
     if (visitor?.name) {
       updates.visitorName =
@@ -1552,6 +1572,18 @@ exports.publicMessage =
         String(
           aiResult.text
         ).trim();
+      
+      let finalReplyText = replyText;
+
+        if (
+          hasAppointmentOffer(previousMessages) &&
+          !conversation.visitorName &&
+          !conversation.visitorPhone &&
+          !isAppointmentOfferText(replyText)
+        ) {
+          finalReplyText =
+            `${replyText} Please share your name and mobile number so our team can connect with you and provide more information.`;
+        }
 
       if (!replyText) {
         return res.json({
@@ -1569,7 +1601,7 @@ exports.publicMessage =
         await saveAIReply({
           assistant,
           conversation,
-          text: replyText,
+         text: finalReplyText,
         });
 
       const updatedConversation =
