@@ -1038,7 +1038,7 @@ async function saveAIReply({
     new Date();
 
   conversation.unreadForTeam =
-    false;
+  true;
 
   await conversation.save();
 
