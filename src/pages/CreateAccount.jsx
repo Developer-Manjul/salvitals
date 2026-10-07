@@ -241,196 +241,199 @@ export default function CreateAccount() {
     reader.readAsDataURL(file);
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+ const submit = async (e) => {
+  e.preventDefault();
 
-    setError("");
+  setError("");
 
-    if (!form.clinicName.trim()) {
-      setError("Business Name is required.");
-      return;
-    }
+  if (!form.clinicName.trim()) {
+    setError("Business Name is required.");
+    return;
+  }
 
-    if (!form.name.trim()) {
-      setError("Person Name is required.");
-      return;
-    }
+  if (!form.name.trim()) {
+    setError("Person Name is required.");
+    return;
+  }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError("Please enter a valid work email.");
-      return;
-    }
+  // Email validation
+  const email = form.email.trim().toLowerCase();
 
-    const phoneDigits = form.phone.replace(/\D/g, "");
-    const selectedCountry = COUNTRIES.find((item) => item.code === countryCode) || COUNTRIES[0];
-    if (phoneDigits.length < selectedCountry.min || phoneDigits.length > selectedCountry.max) {
-      setError("Please enter a valid phone number.");
-      return;
-    }
+  if (
+    !email ||
+    !email.includes("@") ||
+    !email.split("@")[1]?.includes(".")
+  ) {
+    setError("Please enter a valid work email.");
+    return;
+  }
 
-    if (!form.speciality) {
-      setError("Please select speciality.");
-      return;
-    }
+  const phoneDigits = form.phone.replace(/\D/g, "");
 
-    if (
-      selectedDoctors === "custom" &&
-      (!customDoctors || Number(customDoctors) < 1)
-    ) {
-      setError("Please enter the number of doctors.");
-      return;
-    }
+  const selectedCountry =
+    COUNTRIES.find((item) => item.code === countryCode) ||
+    COUNTRIES[0];
 
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
+  if (
+    phoneDigits.length < selectedCountry.min ||
+    phoneDigits.length > selectedCountry.max
+  ) {
+    setError("Please enter a valid phone number.");
+    return;
+  }
 
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
+  if (!form.speciality) {
+    setError("Please select speciality.");
+    return;
+  }
 
-    if (!form.terms) {
-      setError("Please accept the Terms and Privacy Policy.");
-      return;
-    }
+  if (
+    selectedDoctors === "custom" &&
+    (!customDoctors || Number(customDoctors) < 1)
+  ) {
+    setError("Please enter the number of doctors.");
+    return;
+  }
 
-    setLoading(true);
+  if (form.password.length < 8) {
+    setError("Password must be at least 8 characters.");
+    return;
+  }
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/auth/register`,
-        {
-          method: "POST",
+  if (form.password !== form.confirmPassword) {
+    setError("Passwords do not match.");
+    return;
+  }
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+  if (!form.terms) {
+    setError("Please accept the Terms and Privacy Policy.");
+    return;
+  }
 
-          body: JSON.stringify({
-            name: form.name,
+  setLoading(true);
 
-            email: form.email
-              .trim()
-              .toLowerCase(),
+  try {
+    const response = await fetch(
+      `${API_URL}/api/auth/register`,
+      {
+        method: "POST",
 
-            password: form.password,
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-            clinicName: form.clinicName,
+        body: JSON.stringify({
+          name: form.name.trim(),
 
-            phone: phoneDigits,
+          email: email,
 
-            phoneCountryCode: countryCode,
+          password: form.password,
 
-            speciality: form.speciality,
+          clinicName: form.clinicName.trim(),
 
-            numberOfDoctors:
-              selectedDoctors === "custom"
-                ? customDoctors
-                : selectedDoctors,
-          }),
-        }
-      );
+          phone: phoneDigits,
 
-      const responseText =
-        await response.text();
+          phoneCountryCode: countryCode,
 
-      let data = {};
+          speciality: form.speciality,
 
-      if (responseText) {
-        try {
-          data = JSON.parse(
-            responseText
-          );
-        } catch (parseError) {
-          throw new Error(
-            "Server returned an invalid response: " +
-            responseText
-          );
-        }
+          numberOfDoctors:
+            selectedDoctors === "custom"
+              ? customDoctors
+              : selectedDoctors,
+        }),
       }
+    );
 
-      if (!response.ok) {
-        setError(
-          data.message ||
-          `Unable to create account. Server returned ${response.status}`
-        );
+    const responseText = await response.text();
 
-        return;
-      }
+    let data = {};
 
-      if (!data.success) {
-        setError(
-          data.message ||
-          "Unable to create account"
-        );
-
-        return;
-      }
-
-      console.log(
-        "Account created:",
-        data
-      );
-
-      if (data.token) {
-        localStorage.setItem(
-          "salevitals_token",
-          data.token
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(
+          "Server returned an invalid response: " +
+          responseText
         );
       }
+    }
 
-      if (data.user) {
-        localStorage.setItem(
-          "salevitals_user",
-          JSON.stringify(
-            data.user
-          )
-        );
-      }
-
-      if (data.emailVerificationRequired) {
-
-        localStorage.setItem(
-          "vitalsSignupData",
-          JSON.stringify({
-            form,
-            selectedDoctors,
-            customDoctors,
-            countryCode,
-          })
-        );
-
-        localStorage.setItem(
-          "vitalsContinueSetup",
-          "true"
-        );
-
-        window.location.href =
-          `/check-email?email=${encodeURIComponent(
-            form.email
-          )}`;
-
-        return;
-      }
-
-    } catch (error) {
-
-      console.error(
-        "Registration error:",
-        error
-      );
-
+    if (!response.ok) {
       setError(
-        error.message ||
-        "Unable to connect to server."
+        data.message ||
+        `Unable to create account. Server returned ${response.status}`
       );
 
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    if (!data.success) {
+      setError(
+        data.message ||
+        "Unable to create account"
+      );
+
+      return;
+    }
+
+    console.log(
+      "Account created:",
+      data
+    );
+
+    if (data.token) {
+      localStorage.setItem(
+        "salevitals_token",
+        data.token
+      );
+    }
+
+    if (data.user) {
+      localStorage.setItem(
+        "salevitals_user",
+        JSON.stringify(data.user)
+      );
+    }
+
+    if (data.emailVerificationRequired) {
+      localStorage.setItem(
+        "vitalsSignupData",
+        JSON.stringify({
+          form,
+          selectedDoctors,
+          customDoctors,
+          countryCode,
+        })
+      );
+
+      localStorage.setItem(
+        "vitalsContinueSetup",
+        "true"
+      );
+
+      window.location.href =
+        `/check-email?email=${encodeURIComponent(email)}`;
+
+      return;
+    }
+
+  } catch (error) {
+    console.error(
+      "Registration error:",
+      error
+    );
+
+    setError(
+      error.message ||
+      "Unable to connect to server."
+    );
+
+  } finally {
+    setLoading(false);
+  }
+};
 
   const continueClinicDetails = async () => {
     if (!clinicDetails.address.trim()) {
