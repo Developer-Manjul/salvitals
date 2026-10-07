@@ -554,6 +554,46 @@ function looksLikeName(text) {
   return true;
 }
 
+function extractVisitorName(text) {
+  const value = String(text || "").trim();
+
+  if (!value || value.length > 120) {
+    return "";
+  }
+
+  const patterns = [
+    /^(?:hi|hello|hey)[,.\s]+(?:yes[,.\s]+)?my name is\s+(.+)$/i,
+    /^(?:yes[,.\s]+)?my name is\s+(.+)$/i,
+    /^my name is\s+(.+)$/i,
+    /^(?:hi|hello|hey)[,.\s]+i am\s+(.+)$/i,
+    /^i am\s+(.+)$/i,
+    /^i'm\s+(.+)$/i,
+    /^this is\s+(.+)$/i,
+    /^name is\s+(.+)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+
+    if (match?.[1]) {
+      const name = match[1]
+        .trim()
+        .replace(/[.!?,]+$/g, "")
+        .trim();
+
+      if (
+        name &&
+        !/\d/.test(name) &&
+        name.split(/\s+/).length <= 5
+      ) {
+        return name;
+      }
+    }
+  }
+
+  return "";
+}
+
 function buildKnowledgeSearchQuery(
   currentMessage,
   previousMessages
@@ -1234,51 +1274,30 @@ exports.publicMessage =
       }
 
       if (
-        conversation.mode ===
-          "human" ||
-        conversation.status ===
-          "waiting_human"
-      ) {
-        const replyText =
-          "Thanks. Your message has been sent to our team. A team member will reply shortly.";
+          conversation.mode === "human" ||
+          conversation.status === "waiting_human"
+        ) {
+          conversation.mode = "human";
+          conversation.status = "waiting_human";
+          conversation.unreadForTeam = true;
+          conversation.lastMessage = messageText;
+          conversation.lastMessageAt = new Date();
 
-        const reply =
-          await AIMessage.create({
-            ownerId:
-              assistant.ownerId,
-            assistantId:
-              assistant._id,
-            conversationId:
-              conversation._id,
-            sender: "system",
-            message:
-              replyText,
+          await conversation.save();
+
+          const updatedConversation =
+            await AIConversation.findById(
+              conversation._id
+            ).lean();
+
+          return res.json({
+            success: true,
+            message: null,
+            conversation: updatedConversation,
+            visitorMessage,
+            silent: true,
           });
-
-        conversation.lastMessage =
-          replyText;
-
-        conversation.lastMessageAt =
-          new Date();
-
-        conversation.unreadForTeam =
-          true;
-
-        await conversation.save();
-
-        const updatedConversation =
-          await AIConversation.findById(
-            conversation._id
-          ).lean();
-
-        return res.json({
-          success: true,
-          message: reply,
-          conversation:
-            updatedConversation,
-          visitorMessage,
-        });
-      }
+        }
 
       const usage =
         await reserveUsage(
@@ -1319,6 +1338,89 @@ exports.publicMessage =
               visitorMessage._id
             )
         );
+      
+      
+            // =============================
+      // INDEPENDENT CONTACT CAPTURE
+      // =============================
+      const extractedName =
+        extractVisitorName(messageText);
+
+      const extractedPhones =
+        extractPhoneNumbers(messageText);
+
+      let contactUpdated = false;
+
+      if (extractedName) {
+        conversation.visitorName =
+          safeText(extractedName, 120);
+
+        contactUpdated = true;
+      }
+
+      if (extractedPhones.length) {
+        conversation.visitorPhone =
+          extractedPhones[0];
+
+        contactUpdated = true;
+      }
+
+      if (contactUpdated) {
+        await conversation.save();
+
+        if (
+          conversation.visitorName &&
+          conversation.visitorPhone
+        ) {
+          await syncAILead({
+            ownerId: assistant.ownerId,
+            conversation:
+              conversation.toObject(),
+            service: safeText(
+              req.body?.service,
+              160
+            ),
+          });
+        }
+
+        let contactReply;
+
+        if (
+          conversation.visitorName &&
+          conversation.visitorPhone
+        ) {
+          contactReply =
+            `Thanks, ${conversation.visitorName}. We already have your contact details. Our team will contact you shortly.`;
+        } else if (
+          conversation.visitorName
+        ) {
+          contactReply =
+            `Thanks, ${conversation.visitorName}. Please share your mobile number so our team can contact you.`;
+        } else {
+          contactReply =
+            "Thanks. Please share your name so our team can contact you.";
+        }
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text: contactReply,
+          });
+
+        const updatedConversation =
+          await AIConversation.findById(
+            conversation._id
+          ).lean();
+
+        return res.json({
+          success: true,
+          message: reply,
+          conversation:
+            updatedConversation,
+          visitorMessage,
+        });
+      }
 
       if (
         isGreeting(
@@ -1381,32 +1483,146 @@ exports.publicMessage =
           previousMessages
         )
       ) {
+
+        // =============================
+// INDEPENDENT CONTACT CAPTURE
+// =============================
+const extractedName =
+  extractVisitorName(messageText);
+
+const extractedPhones =
+  extractPhoneNumbers(messageText);
+
+let contactUpdated = false;
+
+if (extractedName) {
+  conversation.visitorName =
+    safeText(
+      extractedName,
+      120
+    );
+
+  contactUpdated = true;
+}
+
+if (extractedPhones.length) {
+  conversation.visitorPhone =
+    extractedPhones[0];
+
+  contactUpdated = true;
+}
+
+if (contactUpdated) {
+  await conversation.save();
+
+  // Create/update lead immediately
+  // when both name and phone are available.
+  if (
+    conversation.visitorName &&
+    conversation.visitorPhone
+  ) {
+    await syncAILead({
+      ownerId:
+        assistant.ownerId,
+      conversation:
+        conversation.toObject(),
+      service:
+        safeText(
+          req.body?.service,
+          160
+        ),
+    });
+  }
+
+  let contactReply;
+
+  if (
+    conversation.visitorName &&
+    conversation.visitorPhone
+  ) {
+    contactReply =
+      "Thanks, " +
+      conversation.visitorName +
+      ". Our team will contact you shortly.";
+      } else if (
+        conversation.visitorName
+      ) {
+        contactReply =
+          "Thanks, " +
+          conversation.visitorName +
+          ". Please share your mobile number so our team can contact you.";
+      } else {
+        contactReply =
+          "Thanks. Please share your name so our team can contact you.";
+      }
+
+      const reply =
+        await saveAIReply({
+          assistant,
+          conversation,
+          text: contactReply,
+        });
+
+      const updatedConversation =
+        await AIConversation.findById(
+          conversation._id
+        ).lean();
+
+      return res.json({
+        success: true,
+        message: reply,
+        conversation:
+          updatedConversation,
+        visitorMessage,
+      });
+    }
         if (
-          isYes(
-            messageText
-          )
+        isYes(
+          messageText
+        )
+      ) {
+        let contactMessage;
+
+        if (
+          conversation.visitorName &&
+          conversation.visitorPhone
         ) {
-          const reply =
-            await saveAIReply({
-              assistant,
-              conversation,
-              text:
-                getAskNameMessage(),
-            });
-
-          const updatedConversation =
-            await AIConversation.findById(
-              conversation._id
-            ).lean();
-
-          return res.json({
-            success: true,
-            message: reply,
-            conversation:
-              updatedConversation,
-            visitorMessage,
-          });
+          contactMessage =
+            "Thanks, " +
+            conversation.visitorName +
+            ". We already have your contact details. Our team will contact you shortly to confirm the appointment.";
+        } else if (
+          conversation.visitorName
+        ) {
+          contactMessage =
+            "Thanks, " +
+            conversation.visitorName +
+            ". Please share your mobile number so our team can contact you and confirm the appointment.";
+        } else {
+          contactMessage =
+            getAskNameMessage();
         }
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text: contactMessage,
+          });
+
+        const updatedConversation =
+          await AIConversation.findById(
+            conversation._id
+          ).lean();
+
+        return res.json({
+          success: true,
+          message: reply,
+          conversation:
+            updatedConversation,
+          visitorMessage,
+        });
+      }
 
         if (
           isNo(
