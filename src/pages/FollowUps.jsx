@@ -3233,7 +3233,55 @@ export default function FollowUps({
                         </span>
                       </div>
 
+                      
+
                       <div className="followup-actions">
+                         <div className="followup-row-status-control">
+                          <span
+                            className={`followup-row-status-dot ${
+                              isCompleted(item)
+                                ? "completed"
+                                : "pending"
+                            }`}
+                          />
+
+                          <select
+                            className="followup-row-status-select"
+                            value={
+                              FOLLOW_UP_STATUS_OPTIONS.some(
+                                (option) =>
+                                  option.value === item.status
+                              )
+                                ? item.status
+                                : ""
+                            }
+                            onChange={(event) =>
+                              updateFollowUpStatus(
+                                item,
+                                event.target.value
+                              )
+                            }
+                            disabled={
+                              updatingStatusId === item._id
+                            }
+                            aria-label="Update follow-up status"
+                          >
+                            <option value="">
+                              Status
+                            </option>
+
+                            {FOLLOW_UP_STATUS_OPTIONS.map(
+                              (option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </div>
                         <button
                           type="button"
                           title="Call"
@@ -3292,52 +3340,7 @@ export default function FollowUps({
                           </span>
                         </button>
 
-                        <div className="followup-row-status-control">
-                          <span
-                            className={`followup-row-status-dot ${
-                              isCompleted(item)
-                                ? "completed"
-                                : "pending"
-                            }`}
-                          />
-
-                          <select
-                            className="followup-row-status-select"
-                            value={
-                              FOLLOW_UP_STATUS_OPTIONS.some(
-                                (option) =>
-                                  option.value === item.status
-                              )
-                                ? item.status
-                                : ""
-                            }
-                            onChange={(event) =>
-                              updateFollowUpStatus(
-                                item,
-                                event.target.value
-                              )
-                            }
-                            disabled={
-                              updatingStatusId === item._id
-                            }
-                            aria-label="Update follow-up status"
-                          >
-                            <option value="">
-                              Status
-                            </option>
-
-                            {FOLLOW_UP_STATUS_OPTIONS.map(
-                              (option) => (
-                                <option
-                                  key={option.value}
-                                  value={option.value}
-                                >
-                                  {option.label}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </div>
+                       
 
                         <button
                           type="button"
