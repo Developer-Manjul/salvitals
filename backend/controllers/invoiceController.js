@@ -2970,58 +2970,98 @@ Invoice Date: ${
                           )
                         : "-"
                 }
-Payment Mode: ${paymentMode}
-${
-    invoice.taxLabel ||
-    invoiceSettings.taxLabel
-}: ${formatInvoiceMoney(
-                    invoice.taxAmount ??
-                        invoice.gstAmount,
-                    invoiceForMessage
-                )}
-Invoice Amount: ${formatInvoiceMoney(
-                    invoice.total,
-                    invoiceForMessage
-                )}
-If you have any questions regarding the invoice, please reply to this WhatsApp message.
-Regards,
-${businessName}`;
+                Payment Mode: ${paymentMode}
+                ${
+                    invoice.taxLabel ||
+                    invoiceSettings.taxLabel
+                }: ${formatInvoiceMoney(
+                                    invoice.taxAmount ??
+                                        invoice.gstAmount,
+                                    invoiceForMessage
+                                )}
+                Invoice Amount: ${formatInvoiceMoney(
+                                    invoice.total,
+                                    invoiceForMessage
+                                )}
+                If you have any questions regarding the invoice, please reply to this WhatsApp message.
+                Regards,
+                ${businessName}`;
 
-            const messagesUrl =
-                `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
+                            const messagesUrl =
+                                `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 
-            const whatsappResponse =
-                await axios.post(
-                    messagesUrl,
-                    {
-                        messaging_product:
-                            "whatsapp",
+                            const whatsappResponse =
+                    await axios.post(
+                        messagesUrl,
+                        {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: phone,
 
-                        recipient_type:
-                            "individual",
+                            type: "template",
 
-                        to: phone,
+                            template: {
+                                name: "invoice_ready_v2",
 
-                        type: "document",
+                                language: {
+                                    code: "en",
+                                },
 
-                        document: {
-                            id: mediaId,
-                            caption: message,
-                            filename: `${
-                                invoice.invoiceNumber ||
-                                "invoice"
-                            }.pdf`,
+                                components: [
+                                    {
+                                        type: "header",
+                                        parameters: [
+                                            {
+                                                type: "document",
+                                                document: {
+                                                    id: mediaId,
+                                                    filename: `${invoice.invoiceNumber || "invoice"}.pdf`,
+                                                },
+                                            },
+                                        ],
+                                    },
+
+                                    {
+                                        type: "body",
+                                        parameters: [
+                                            {
+                                                type: "text",
+                                                text:
+                                                    invoice.customerName ||
+                                                    "Customer",
+                                            },
+
+                                            {
+                                                type: "text",
+                                                text:
+                                                    invoice.invoiceNumber ||
+                                                    "",
+                                            },
+
+                                            {
+                                                type: "text",
+                                                text: businessName,
+                                            },
+
+                                            {
+                                                type: "text",
+                                                text: formatInvoiceMoney(
+                                                    invoice.total,
+                                                    invoiceForMessage
+                                                ).replace(/^₹\s*/, ""),
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
                         },
-                    },
-                    {
-                        headers: {
-                            Authorization:
-                                `Bearer ${accessToken}`,
-                            "Content-Type":
-                                "application/json",
-                        },
-                    }
-                );
+                        {
+                            headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
 
             const whatsappMessageId =
                 whatsappResponse?.data
