@@ -564,7 +564,16 @@ const getWorkspaceOwner = async (workspaceOwnerId) => {
     return await User.findById(workspaceOwnerId).lean();
 };
 
-const getNextPatientId = async (workspaceOwnerId) => {
+const getNextPatientId = async (
+    workspaceOwnerId,
+    prefix = "SV"
+) => {
+    const normalizedPrefix = String(prefix || "SV")
+        .replace(/[^a-zA-Z]/g, "")
+        .toUpperCase()
+        .slice(0, 2)
+        .padEnd(2, "X");
+
     let counter;
 
     try {
@@ -574,36 +583,30 @@ const getNextPatientId = async (workspaceOwnerId) => {
             },
             {
                 $inc: {
-                    sequence: 1,
+                    [`prefixSequences.${normalizedPrefix}`]: 1,
                 },
             },
             {
                 new: true,
                 upsert: true,
-                setDefaultsOnInsert: false,
             }
         );
     } catch (error) {
-        if (error.code !== 11000) {
-            throw error;
-        }
-
-        counter = await InvoiceCounter.findOneAndUpdate(
-            {
-                userId: workspaceOwnerId,
-            },
-            {
-                $inc: {
-                    sequence: 1,
-                },
-            },
-            {
-                new: true,
-            }
-        );
+        throw error;
     }
 
-    return `K${String(counter.sequence).padStart(3, "0")}`;
+    const sequence =
+        counter.prefixSequences?.get
+            ? counter.prefixSequences.get(
+                  normalizedPrefix
+              )
+            : counter.prefixSequences?.[
+                  normalizedPrefix
+              ];
+
+    return `${normalizedPrefix}${String(
+        sequence || 1
+    ).padStart(3, "0")}`;
 };
 
 const resolvePatientId = async ({
@@ -611,6 +614,7 @@ const resolvePatientId = async ({
     customerId,
     customerName,
     customerPhone,
+    prefix = "SV",
 }) => {
     const patientFilter = customerId
         ? {
@@ -643,7 +647,10 @@ const resolvePatientId = async ({
         }
     }
 
-    return getNextPatientId(workspaceOwnerId);
+    return await getNextPatientId(
+        workspaceOwnerId,
+        prefix
+    );
 };
 
 const normalizePaymentMode = (value) => {
@@ -799,6 +806,16 @@ exports.createInvoice = async (req, res) => {
 
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
+        const patientPrefix = String(
+    ownerBillingProfile.displayName ||
+    ownerBillingProfile.businessName ||
+    ownerBillingProfile.name ||
+    "SV"
+)
+    .replace(/[^a-zA-Z]/g, "")
+    .toUpperCase()
+    .slice(0, 2)
+    .padEnd(2, "X");
 
         const {
             invoiceNumber,
@@ -847,13 +864,13 @@ exports.createInvoice = async (req, res) => {
         }
 
         const patientId =
-            await resolvePatientId({
-                workspaceOwnerId,
-                customerId,
-                customerName,
-                customerPhone,
-            });
-
+    await resolvePatientId({
+        workspaceOwnerId,
+        customerId,
+        customerName,
+        customerPhone,
+        prefix: patientPrefix,
+    });
         const invoiceSettings =
             resolveCurrency(owner);
         const requestedCountryCode =
@@ -1049,6 +1066,7 @@ exports.updateInvoice = async (req, res) => {
 
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
+        
 
         const invoice =
             await Invoice.findOne({
@@ -1120,18 +1138,19 @@ exports.updateInvoice = async (req, res) => {
                 nextCustomerPhone;
 
         const patientId =
-            samePatient &&
-            invoice.patientId
-                ? invoice.patientId
-                : await resolvePatientId({
-                      workspaceOwnerId,
-                      customerId:
-                          nextCustomerId,
-                      customerName:
-                          nextCustomerName,
-                      customerPhone:
-                          nextCustomerPhone,
-                  });
+        samePatient &&
+        invoice.patientId
+            ? invoice.patientId
+            : await resolvePatientId({
+                workspaceOwnerId,
+                customerId:
+                    nextCustomerId,
+                customerName:
+                    nextCustomerName,
+                customerPhone:
+                    nextCustomerPhone,
+                prefix: patientPrefix,
+            });
 
         const invoiceSettings =
             resolveCurrency(owner);
