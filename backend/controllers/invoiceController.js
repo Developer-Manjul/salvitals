@@ -1067,6 +1067,17 @@ exports.updateInvoice = async (req, res) => {
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
         
+         const patientPrefix = String(
+            ownerBillingProfile.displayName ||
+            ownerBillingProfile.businessName ||
+            ownerBillingProfile.name ||
+            "SV"
+        )
+            .replace(/[^a-zA-Z]/g, "")
+            .toUpperCase()
+            .slice(0, 2)
+            .padEnd(2, "X");
+                
 
         const invoice =
             await Invoice.findOne({

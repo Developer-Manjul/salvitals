@@ -827,7 +827,7 @@
 }
 
 .invoice-preview-head span {
-    color: #718096;
+    color: #fff !important;
     font-size: 11px;
 }
 
@@ -2570,4 +2570,659 @@
     font-size: 12px;
 
     padding: 0;
+}
+
+
+/* =========================================
+   INVOICE LIST - READABLE TEXT & ACTIONS
+========================================= */
+
+.invoice-page table th,
+.invoices-page table th {
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.35px;
+}
+
+.invoice-page table td,
+.invoices-page table td {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    vertical-align: middle;
+}
+
+.invoice-page table td strong,
+.invoices-page table td strong {
+    font-weight: 800 !important;
+}
+
+/* Action buttons */
+.invoice-page .invoice-actions button,
+.invoices-page .invoice-actions button,
+.invoice-page td button,
+.invoices-page td button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* SVG icons */
+.invoice-page button svg,
+.invoices-page button svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+/* Edit */
+.invoice-page .action-edit,
+.invoices-page .action-edit {
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+/* Download */
+.invoice-page .action-download,
+.invoices-page .action-download {
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+}
+
+/* View / Preview */
+.invoice-page .action-view,
+.invoices-page .action-view {
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+}
+
+/* WhatsApp */
+.invoice-page .action-whatsapp,
+.invoices-page .action-whatsapp {
+    color: #ffffff !important;
+    background: #16a34a !important;
+    border: 1px solid #16a34a !important;
+    min-width: 155px;
+    box-shadow: 0 2px 5px rgba(22, 163, 74, 0.18);
+}
+
+.invoice-page .action-whatsapp:hover,
+.invoices-page .action-whatsapp:hover {
+    background: #15803d !important;
+    border-color: #15803d !important;
+}
+
+/* Delete */
+.invoice-page .action-delete,
+.invoices-page .action-delete {
+    color: #dc2626;
+    background: #fff7f7;
+    border: 1px solid #fecaca;
+}
+
+/* Hover */
+.invoice-page .action-edit:hover,
+.invoice-page .action-download:hover,
+.invoice-page .action-view:hover,
+.invoice-page .action-delete:hover,
+.invoices-page .action-edit:hover,
+.invoices-page .action-download:hover,
+.invoices-page .action-view:hover,
+.invoices-page .action-delete:hover {
+    filter: brightness(0.97);
+    transform: translateY(-1px);
+}
+
+/* Keep actions in one row */
+.invoice-page td:last-child,
+.invoices-page td:last-child {
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .invoice-page table td,
+    .invoices-page table td {
+        font-size: 13px !important;
+    }
+
+    .invoice-page td button,
+    .invoices-page td button {
+        min-height: 35px;
+        padding: 7px 9px;
+        font-size: 12px;
+    }
+}
+
+
+/* =========================================
+   INVOICE LIST - READABLE TEXT & ACTIONS
+========================================= */
+
+.invoice-page table th,
+.invoices-page table th {
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.35px;
+}
+
+.invoice-page table td,
+.invoices-page table td {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    vertical-align: middle;
+}
+
+.invoice-page table td strong,
+.invoices-page table td strong {
+    font-weight: 800 !important;
+}
+
+/* Action buttons */
+.invoice-page .invoice-actions button,
+.invoices-page .invoice-actions button,
+.invoice-page td button,
+.invoices-page td button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* SVG icons */
+.invoice-page button svg,
+.invoices-page button svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+/* Edit */
+.invoice-page .action-edit,
+.invoices-page .action-edit {
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+/* Download */
+.invoice-page .action-download,
+.invoices-page .action-download {
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+}
+
+/* View / Preview */
+.invoice-page .action-view,
+.invoices-page .action-view {
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+}
+
+/* WhatsApp */
+.invoice-page .action-whatsapp,
+.invoices-page .action-whatsapp {
+    color: #ffffff !important;
+    background: #16a34a !important;
+    border: 1px solid #16a34a !important;
+    min-width: 155px;
+    box-shadow: 0 2px 5px rgba(22, 163, 74, 0.18);
+}
+
+.invoice-page .action-whatsapp:hover,
+.invoices-page .action-whatsapp:hover {
+    background: #15803d !important;
+    border-color: #15803d !important;
+}
+
+/* Delete */
+.invoice-page .action-delete,
+.invoices-page .action-delete {
+    color: #dc2626;
+    background: #fff7f7;
+    border: 1px solid #fecaca;
+}
+
+/* Hover */
+.invoice-page .action-edit:hover,
+.invoice-page .action-download:hover,
+.invoice-page .action-view:hover,
+.invoice-page .action-delete:hover,
+.invoices-page .action-edit:hover,
+.invoices-page .action-download:hover,
+.invoices-page .action-view:hover,
+.invoices-page .action-delete:hover {
+    filter: brightness(0.97);
+    transform: translateY(-1px);
+}
+
+/* Keep actions in one row */
+.invoice-page td:last-child,
+.invoices-page td:last-child {
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .invoice-page table td,
+    .invoices-page table td {
+        font-size: 13px !important;
+    }
+
+    .invoice-page td button,
+    .invoices-page td button {
+        min-height: 35px;
+        padding: 7px 9px;
+        font-size: 12px;
+    }
+}
+
+
+/* Keep invoice actions in one horizontal row */
+.invoice-page td:last-child,
+.invoices-page td:last-child {
+    white-space: nowrap !important;
+    min-width: 370px;
+}
+
+.invoice-page td:last-child button,
+.invoices-page td:last-child button {
+    display: inline-flex !important;
+    vertical-align: middle;
+    margin: 0 3px 0 0 !important;
+}
+
+/* Prevent action buttons from wrapping */
+.invoice-page table,
+.invoices-page table {
+    min-width: 1350px !important;
+}
+
+/* Preview modal WhatsApp button */
+.invoice-preview-head-actions button:first-child {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #16a34a !important;
+    border: 1px solid #16a34a !important;
+    color: #fff !important;
+    font-weight: 700;
+    padding: 10px 16px;
+    border-radius: 9px;
+}
+
+.invoice-preview-head-actions button:first-child:hover {
+    background: #15803d !important;
+    border-color: #15803d !important;
+}
+
+.invoice-preview-head-actions button:first-child svg {
+    width: 18px;
+    height: 18px;
+    color: #fff !important;
+}
+
+.invoice-page table,
+.invoices-page table {
+    min-width: 1250px;
+    width: 100%;
+}
+
+.invoice-page td:last-child,
+.invoices-page td:last-child {
+    min-width: 590px !important;
+    white-space: nowrap !important;
+}
+
+.invoice-page td:last-child button,
+.invoices-page td:last-child button {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    margin: 0 4px 0 0 !important;
+    min-height: 40px;
+    flex-shrink: 0;
+}
+
+/* Keep Delete on the same line */
+.invoice-page td:last-child,
+.invoices-page td:last-child {
+    display: table-cell;
+}
+
+/* Green WhatsApp button */
+.invoice-page .action-whatsapp,
+.invoices-page .action-whatsapp {
+    background: #16a34a !important;
+    color: #fff !important;
+    border-color: #16a34a !important;
+}
+
+/* Preview modal WhatsApp */
+.invoice-preview-head-actions button:first-child {
+    background: #16a34a !important;
+    color: #fff !important;
+    border-color: #16a34a !important;
+}
+
+
+.invoice-page .action-edit,
+.invoices-page .action-edit {
+    color: #2563eb !important;
+    background: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+}
+
+.invoice-page .action-edit:hover,
+.invoices-page .action-edit:hover {
+    background: #dbeafe !important;
+    box-shadow: 0 3px 8px #2563eb20;
+}
+
+/* Download - Teal */
+.invoice-page .action-download,
+.invoices-page .action-download {
+    color: #0f766e !important;
+    background: #f0fdfa !important;
+    border: 1px solid #99f6e4 !important;
+}
+
+.invoice-page .action-download:hover,
+.invoices-page .action-download:hover {
+    background: #ccfbf1 !important;
+}
+
+/* View - Purple */
+.invoice-page .action-view,
+.invoices-page .action-view {
+    color: #7c3aed !important;
+    background: #f5f3ff !important;
+    border: 1px solid #ddd6fe !important;
+}
+
+.invoice-page .action-view:hover,
+.invoices-page .action-view:hover {
+    background: #ede9fe !important;
+}
+
+/* WhatsApp - Green */
+.invoice-page .action-whatsapp,
+.invoices-page .action-whatsapp {
+    color: #ffffff !important;
+    background: #16a34a !important;
+    border: 1px solid #16a34a !important;
+    box-shadow: 0 3px 8px #16a34a25;
+}
+
+.invoice-page .action-whatsapp:hover,
+.invoices-page .action-whatsapp:hover {
+    background: #15803d !important;
+    box-shadow: 0 4px 10px #16a34a35;
+}
+
+/* Delete - Red */
+.invoice-page .action-delete,
+.invoices-page .action-delete {
+    color: #dc2626 !important;
+    background: #fff1f2 !important;
+    border: 1px solid #fecdd3 !important;
+}
+
+.invoice-page .action-delete:hover,
+.invoices-page .action-delete:hover {
+    background: #ffe4e6 !important;
+}
+
+/* Smooth button interaction */
+.invoice-page td:last-child button,
+.invoices-page td:last-child button {
+    transition: background 0.2s ease,
+                box-shadow 0.2s ease,
+                transform 0.2s ease;
+    border-radius: 10px !important;
+}
+
+.invoice-page td:last-child button:hover,
+.invoices-page td:last-child button:hover {
+    transform: translateY(-1px);
+}
+
+/* Status badges */
+.invoice-page .status-draft,
+.invoices-page .status-draft {
+    color: #92400e;
+    background: #fef3c7;
+}
+
+.invoice-page .status-sent,
+.invoices-page .status-sent {
+    color: #047857;
+    background: #d1fae5;
+}
+
+.invoice-page button.action-edit,
+.invoices-page button.action-edit {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+}
+
+.invoice-page button.action-download,
+.invoices-page button.action-download {
+    background: #0f766e !important;
+    color: #ffffff !important;
+    border-color: #0f766e !important;
+}
+
+.invoice-page button.action-view,
+.invoices-page button.action-view {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    border-color: #7c3aed !important;
+}
+
+.invoice-page button.action-whatsapp,
+.invoices-page button.action-whatsapp {
+    background: #16a34a !important;
+    color: #ffffff !important;
+    border-color: #16a34a !important;
+}
+
+.invoice-page button.action-delete,
+.invoices-page button.action-delete {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+}
+
+/* Make icons inherit the button color */
+.invoice-page button svg,
+.invoices-page button svg {
+    color: inherit !important;
+    stroke: currentColor !important;
+}
+
+
+
+/* INVOICE ACTION BUTTON COLORS */
+
+.invoice-table .invoice-actions {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    // gap: 8px !important;
+}
+
+.invoice-table .invoice-actions .invoice-icon-btn,
+.invoice-table .invoice-actions .invoice-whatsapp-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    min-height: 42px !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Edit - Blue */
+.invoice-table .invoice-actions .invoice-edit-btn {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border: 1px solid #2563eb !important;
+}
+
+/* Download - Teal */
+.invoice-table .invoice-actions .invoice-download-btn {
+    background: #0891b2 !important;
+    color: #ffffff !important;
+    border: 1px solid #0891b2 !important;
+}
+
+/* View - Purple */
+.invoice-table .invoice-actions .invoice-view-btn {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    border: 1px solid #7c3aed !important;
+}
+
+/* WhatsApp - Green */
+.invoice-table .invoice-actions .invoice-whatsapp-btn {
+    background: #16a34a !important;
+    color: #ffffff !important;
+    border: 1px solid #16a34a !important;
+    padding: 10px 14px !important;
+    white-space: nowrap !important;
+}
+
+/* Delete - Red */
+.invoice-table .invoice-actions .invoice-delete-btn {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    border: 1px solid #dc2626 !important;
+}
+
+/* Force SVG icons to white */
+.invoice-table .invoice-actions button svg {
+    width: 18px !important;
+    height: 18px !important;
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+}
+
+/* Hover effects */
+.invoice-table .invoice-actions .invoice-edit-btn:hover {
+    background: #1d4ed8 !important;
+}
+
+.invoice-table .invoice-actions .invoice-download-btn:hover {
+    background: #0e7490 !important;
+}
+
+.invoice-table .invoice-actions .invoice-view-btn:hover {
+    background: #6d28d9 !important;
+}
+
+.invoice-table .invoice-actions .invoice-whatsapp-btn:hover {
+    background: #15803d !important;
+}
+
+.invoice-table .invoice-actions .invoice-delete-btn:hover {
+    background: #b91c1c !important;
+}
+
+/* Preview modal WhatsApp button */
+.invoice-preview-head-actions button:first-child {
+    background: #16a34a !important;
+    color: #ffffff !important;
+    border: 1px solid #16a34a !important;
+    font-weight: 700 !important;
+}
+
+.invoice-preview-head-actions button:first-child svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+}
+
+
+.invoice-actions-card .invoice-edit-whatsapp-btn {
+    width: 100%;
+    min-height: 6px;
+    margin-top: 5px;
+    padding: 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    gap: 9px;
+    background: #16a34a !important;
+    color: #ffffff !important;
+    border: 1px solid #16a34a !important;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 3px 7px rgba(22, 163, 74, 0.18);
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.invoice-actions-card .invoice-edit-whatsapp-btn:hover {
+    background: #15803d !important;
+    border-color: #15803d !important;
+    box-shadow: 0 5px 12px rgba(22, 163, 74, 0.24);
+    transform: translateY(-1px);
+}
+
+.invoice-actions-card .invoice-edit-whatsapp-btn:active {
+    transform: translateY(0);
+}
+
+.invoice-actions-card .invoice-edit-whatsapp-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.invoice-actions-card .invoice-edit-whatsapp-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+    flex-shrink: 0;
+}
+
+.invoice-actions-card .invoice-edit-whatsapp-btn span {
+    color: #ffffff !important;
+    display: inline-block;
 }

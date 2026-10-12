@@ -2574,30 +2574,32 @@ export default function Invoice() {
 
                       <div className="invoice-actions">
 
-                        <button type="button" onClick={() => editInvoice(item)}>Edit</button>
-
                         <button
-
                           type="button"
-
-                          onClick={() => {
-
-                            downloadInvoicePDF(item, true).catch(() => undefined)
-
-                          }}
-
+                          className="invoice-icon-btn invoice-edit-btn"
+                          onClick={() => editInvoice(item)}
+                          title="Edit invoice"
+                          aria-label="Edit invoice"
                         >
-
-                          Download
-
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
                         </button>
 
                         <button
-
                           type="button"
+                          className="invoice-icon-btn invoice-download-btn"
+                          onClick={() => downloadInvoicePDF(item, true).catch(() => undefined)}
+                          title="Download PDF"
+                          aria-label="Download PDF"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                        </button>
 
+                        <button
+                          type="button"
+                          className="invoice-icon-btn invoice-view-btn"
+                          title="View invoice"
+                          aria-label="View invoice"
                           onClick={() => {
-
                             setInvoice({
 
                               invoiceNumber: item.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
@@ -2665,37 +2667,28 @@ export default function Invoice() {
                           }}
 
                         >
-
-                          Preview
-
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                         </button>
 
                         <button
-
                           type="button"
-
+                          className="invoice-whatsapp-btn"
                           onClick={() => sendExistingInvoiceToWhatsApp(item)}
-
                           disabled={saving}
-
+                          title="Send invoice on WhatsApp"
                         >
-
-                          WhatsApp
-
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+                          <span>Send on WhatsApp</span>
                         </button>
 
                         <button
-
                           type="button"
-
-                          className="delete"
-
+                          className="invoice-icon-btn invoice-delete-btn"
                           onClick={() => deleteInvoice(item._id || item.id)}
-
+                          title="Delete invoice"
+                          aria-label="Delete invoice"
                         >
-
-                          Delete
-
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
                         </button>
 
                       </div>
@@ -3722,11 +3715,7 @@ export default function Invoice() {
           <div className="invoice-card invoice-actions-card">
 
             <h2>Actions</h2>
-
-
-
             <button
-
               type="button"
 
               className="invoice-send-btn"
@@ -3791,6 +3780,30 @@ export default function Invoice() {
 
             </button>
 
+         {editingInvoiceId && (
+          <button
+            type="button"
+            className="invoice-edit-whatsapp-btn"
+            onClick={() => {
+              const currentInvoice = invoices.find(
+                (item) =>
+                  String(item._id || item.id) ===
+                  String(editingInvoiceId)
+              );
+
+              if (currentInvoice) {
+                sendExistingInvoiceToWhatsApp(currentInvoice);
+              }
+            }}
+            disabled={saving}
+            title="Send invoice on WhatsApp"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+            <span>
+              {saving ? "Sending..." : "Send on WhatsApp"}
+            </span>
+          </button>
+        )}
           </div>
 
 
@@ -3891,6 +3904,8 @@ export default function Invoice() {
 
                   type="button"
 
+                  className="invoice-whatsapp-btn invoice-preview-whatsapp-btn"
+
                   onClick={() =>
 
                     sendInvoiceToWhatsApp(invoice)
@@ -3923,7 +3938,8 @@ export default function Invoice() {
 
                 >
 
-                  WhatsApp
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+                  <span>Send on WhatsApp</span>
 
                 </button>
 

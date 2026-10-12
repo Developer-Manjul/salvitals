@@ -1112,8 +1112,9 @@ export default function Dashboard() {
       }
 
       if (contactsResponse.ok) {
-        const contacts = Array.isArray(contactsData.contacts) ? contactsData.contacts : [];
-        setContactCount(contacts.length);
+        setContactCount(
+          Number(contactsData?.usage?.used ?? 0)
+        );
       }
 
       if (aiResponse.ok) {
