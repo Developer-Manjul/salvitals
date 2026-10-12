@@ -541,6 +541,39 @@ function extractLinks(
   return [...links];
 }
 
+
+function prioritizeLinks(links) {
+    const priorityPatterns = [
+        /contact/,
+        /opening-hours?/,
+        /business-hours?/,
+        /clinic-hours?/,
+        /timings?/,
+        /consultation-fees?/,
+        /fees/,
+        /pricing/,
+        /appointment/,
+        /about/,
+    ];
+
+    return [...links].sort((a, b) => {
+        const getPriority = (url) => {
+            try {
+                const path = new URL(url).pathname.toLowerCase();
+                const index = priorityPatterns.findIndex((pattern) =>
+                    pattern.test(path)
+                );
+
+                return index === -1 ? 999 : index;
+            } catch (_) {
+                return 999;
+            }
+        };
+
+        return getPriority(a) - getPriority(b);
+    });
+}
+
 async function fetchPage(url) {
   const response = await axios.get(
     url,
@@ -664,16 +697,21 @@ async function crawlWebsite({
     );
 
     const root =
-      getMainContainer($);
+    getMainContainer($);
 
-    if (
-      !root ||
-      !root.length
-    ) {
-      continue;
-    }
+  if (
+    !root ||
+    !root.length
+  ) {
+    continue;
+  }
 
-    removeNoise($, root);
+  // Extract links BEFORE removing navigation and menus
+  const links = prioritizeLinks(
+    extractLinks($, current, rootHost)
+  );
+
+removeNoise($, root);
 
     const blocks =
       extractBlocks(
@@ -710,12 +748,7 @@ async function crawlWebsite({
       });
     }
 
-    const links =
-      extractLinks(
-        $,
-        current,
-        rootHost
-      );
+    
 
     for (const link of links) {
       if (visited.has(link)) {
