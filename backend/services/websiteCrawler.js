@@ -182,50 +182,34 @@ function extractBlocks($, root) {
   const blocks = [];
 
   const selectors = [
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "p",
-    "li",
-    "dt",
-    "dd",
-    "blockquote",
-    "figcaption",
-    "td",
-    "th",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "li", "dt", "dd", "blockquote",
+    "figcaption", "td", "th",
+    "[class*='hour']",
+    "[class*='time']",
+    "[class*='contact']",
+    "[class*='address']",
+    "[class*='info']",
+    "[class*='detail']",
   ];
 
+  const seen = new Set();
+
   root.find(selectors.join(",")).each((index, element) => {
-    const tag = String(
-      element.tagName || ""
-    ).toLowerCase();
+    const tag = String(element.tagName || "").toLowerCase();
+    const text = decodeText($(element).text());
 
-    const text = decodeText(
-      $(element).text()
-    );
-
-    if (!isUsefulText(text)) {
+    if (!isUsefulText(text) || text.length < 3) {
       return;
     }
 
-    if (
-      [
-        "li",
-        "p",
-        "dd",
-        "dt",
-        "blockquote",
-        "figcaption",
-        "td",
-        "th",
-      ].includes(tag) &&
-      text.length < 8
-    ) {
+    const normalized = normalizeForDuplicate(text);
+
+    if (seen.has(normalized)) {
       return;
     }
+
+    seen.add(normalized);
 
     blocks.push({
       index,
@@ -235,20 +219,17 @@ function extractBlocks($, root) {
     });
   });
 
+  // Capture useful text from generic elements if needed.
   if (!blocks.length) {
-    const fallback = decodeText(
-      root.text()
-    );
+    const fallback = decodeText(root.text());
 
     if (fallback) {
-      return [
-        {
-          index: 0,
-          tag: "body",
-          text: fallback,
-          isHeading: false,
-        },
-      ];
+      return [{
+        index: 0,
+        tag: "body",
+        text: fallback,
+        isHeading: false,
+      }];
     }
   }
 
