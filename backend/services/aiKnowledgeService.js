@@ -1020,6 +1020,35 @@ function scoreKnowledge(
       score += 35;
     }
 
+    const availabilitySignals = [
+        "working hours",
+        "opening hours",
+        "clinic hours",
+        "business hours",
+        "timings",
+        "timing",
+        "monday",
+        "sunday",
+        "open",
+        "closed",
+      ];
+
+      if (
+        availabilitySignals.some((signal) =>
+          title.includes(normalizeText(signal))
+        )
+      ) {
+        score += 70;
+      }
+
+      if (
+        availabilitySignals.some((signal) =>
+          content.includes(normalizeText(signal))
+        )
+      ) {
+        score += 50;
+      }
+
     const days = [
       "sunday",
       "monday",
