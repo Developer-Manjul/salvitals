@@ -1475,9 +1475,13 @@ async function searchKnowledge({
         /\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i.test(content);
 
       const hasWorkingHours =
-        content.includes("monday") &&
-        content.includes("sunday") &&
-        hasTime;
+      (
+        content.includes("monday") ||
+        content.includes("mon - sat") ||
+        content.includes("mon sat")
+      ) &&
+      content.includes("sunday") &&
+      hasTime;
 
       const isContactPage =
         sourceUrl.includes("contact-us") ||
