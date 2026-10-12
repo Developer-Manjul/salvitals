@@ -197,12 +197,7 @@ export default function Pricing() {
     );
   };
 
-  const isCurrentPlan = (id) => {
-    return (
-      billing?.currentPlanId ===
-      id
-    );
-  };
+ const isCurrentPlan = () => false;
 
   const isUpgradeAvailable = (id) => {
     if (
@@ -228,20 +223,9 @@ export default function Pricing() {
     return false;
   };
 
-  const getButtonLabel = (id) => {
-    if (isCurrentPlan(id)) {
-      return "Active plan";
-    }
-
-    if (
-      billing?.currentPlanId &&
-      isUpgradeAvailable(id)
-    ) {
-      return "Upgrade plan";
-    }
-
-    return "Get started";
-  };
+ const getButtonLabel = (id) => {
+  return "Get started";
+};
 
   return (
     <section
@@ -422,8 +406,8 @@ export default function Pricing() {
                   "Follow-up management",
                   "Website lead capture",
                   "Basic reports",
-                  "5000 chatbot conversations per month",
-                  "1000 contact save",
+                  "5,000 chatbot conversations per month",
+                  "1,000 contact save",
                 ].map(
                   (
                     item,
@@ -614,8 +598,8 @@ export default function Pricing() {
                   "Team collaboration",
                   "Social media & ad lead capture",
                   "Advanced reports",
-                  "15000 chatbot conversations per month",
-                  "2500 contact save",
+                  "15,000 chatbot conversations per month",
+                  "2,500 contact save",
                 ].map(
                   (
                     item,
@@ -802,8 +786,8 @@ export default function Pricing() {
                   "Advanced permissions",
                   "Detailed analytics & reporting",
                   "More powerful integrations",
-                  "40,000 chatbot conversations per month",
-                  "4500 contact save",
+                  "30,000 chatbot conversations per month",
+                  "4,500 contact save",
                 ].map(
                   (
                     item,

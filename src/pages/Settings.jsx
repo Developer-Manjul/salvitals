@@ -60,7 +60,7 @@ const PLAN_FEATURES = {
     "Advanced permissions",
     "Detailed analytics & reporting",
     "More powerful integrations",
-    "40,000 chatbot conversations per month",
+    "30,000 chatbot conversations per month",
     "4,500 contact save",
   ],
   enterprise: [
