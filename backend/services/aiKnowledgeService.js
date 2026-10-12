@@ -179,36 +179,51 @@ const CONCEPTS = {
   ],
 
   availability: [
-    "available",
-    "availability",
-    "timing",
-    "timings",
-    "time",
-    "opening",
-    "open",
-    "opened",
-    "closing",
-    "closed",
-    "hours",
-    "schedule",
-    "working",
-    "today",
-    "tomorrow",
-    "morning",
-    "afternoon",
-    "evening",
-    "night",
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "weekend",
-    "kab",
-    "samay",
-  ],
+  "available",
+  "availability",
+  "timing",
+  "timings",
+  "time",
+  "opening",
+  "opening hours",
+  "opening time",
+  "closing",
+  "closing time",
+  "working",
+  "working hours",
+  "clinic hours",
+  "clinic timings",
+  "business hours",
+  "office hours",
+  "operating hours",
+  "consultation hours",
+  "hours of operation",
+  "open",
+  "opened",
+  "closed",
+  "schedule",
+  "today",
+  "tomorrow",
+  "morning",
+  "afternoon",
+  "evening",
+  "night",
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "weekend",
+  "is the clinic open",
+  "clinic open",
+  "clinic closed",
+  "what time do you open",
+  "what time do you close",
+  "kab",
+  "samay",
+],
 
   appointment: [
     "appointment",
@@ -1440,25 +1455,50 @@ async function searchKnowledge({
     );
 
   const scoredResults =
-    items
-      .map((item) => ({
+  items
+    .map((item) => {
+      let score = scoreKnowledge(
+        cleanQuery,
         item,
-        score:
-          scoreKnowledge(
-            cleanQuery,
-            item,
-            documentFrequency,
-            totalDocuments
-          ),
-      }))
-      .filter(
-        ({ score }) =>
-          score >= 15
-      )
-      .sort(
-        (a, b) =>
-          b.score - a.score
+        documentFrequency,
+        totalDocuments
       );
+
+      const title = normalizeText(item.title || "");
+      const content = normalizeText(item.content || "");
+      const sourceUrl = normalizeText(item.sourceUrl || "");
+
+      const asksAboutHours =
+        /\b(hours?|timings?|open|closed|working)\b/i.test(cleanQuery);
+
+      const hasTime =
+        /\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i.test(content);
+
+      const hasWorkingHours =
+        content.includes("monday") &&
+        content.includes("sunday") &&
+        hasTime;
+
+      const isContactPage =
+        sourceUrl.includes("contact-us") ||
+        title.includes("contact us");
+
+      if (asksAboutHours && hasWorkingHours) {
+        score += 100;
+      }
+
+      if (asksAboutHours && isContactPage && hasTime) {
+        score += 60;
+      }
+
+      return { item, score };
+    })
+    .filter(
+      ({ score }) => score >= 15
+    )
+    .sort(
+      (a, b) => b.score - a.score
+    );
 
   const results =
     diversifyResults(
