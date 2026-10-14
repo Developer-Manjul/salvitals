@@ -2681,6 +2681,55 @@ export default function Invoice() {
                           <span>Send on WhatsApp</span>
                         </button>
 
+                       <style>{`
+                        .invoice-whatsapp-btn {
+                          display: inline-flex;
+                          align-items: center;
+                          justify-content: center;
+                          gap: 8px;
+                          width: 210px;
+                          min-width: 210px;
+                          max-width: 210px;
+                          min-height: 42px;
+                          padding: 8px 12px;
+                          box-sizing: border-box;
+                          border: none;
+                          border-radius: 9px;
+                          background: #16a34a;
+                          color: #fff;
+                          font-size: 12px;
+                          font-weight: 600;
+                          white-space: nowrap;
+                          cursor: pointer;
+                          box-shadow: 0 3px 8px rgba(22, 163, 74, 0.18);
+                          transition: background 0.2s ease;
+                        }
+
+                        .invoice-whatsapp-btn:hover:not(:disabled) {
+                          background: #15803d;
+                        }
+
+                        .invoice-whatsapp-btn:disabled {
+                          opacity: 0.6;
+                          cursor: not-allowed;
+                        }
+
+                        .invoice-whatsapp-svg {
+                          width: 19px;
+                          height: 19px;
+                          flex-shrink: 0;
+                        }
+
+                        @media (max-width: 768px) {
+                          .invoice-whatsapp-btn {
+                            width: 180px;
+                            min-width: 180px;
+                            max-width: 180px;
+                            font-size: 12px;
+                          }
+                        }
+                      `}</style>
+
                         <button
                           type="button"
                           className="invoice-icon-btn invoice-delete-btn"

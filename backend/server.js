@@ -84,6 +84,7 @@ const aiConversationRoutes = require("./routes/aiConversationRoutes");
 const aiWidgetRoutes = require("./routes/aiWidgetRoutes");
 
 const leadSettingRoutes = require("./routes/leadSettingRoutes");
+const leadWhatsAppRoutes = require("./routes/leadWhatsAppRoutes");
 const seedLeadSettings = require("./utils/seedLeadSettings");
 
 app.use(
@@ -130,6 +131,13 @@ app.use(
     "/api/lead-settings",
     leadSettingRoutes
 );
+
+
+app.use(
+    "/api/lead-whatsapp",
+    leadWhatsAppRoutes
+);
+
 
 app.get("/api/location", (req, res) => {
     const forwarded = String(

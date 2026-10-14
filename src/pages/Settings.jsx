@@ -18,13 +18,13 @@ const baseSettingsGroups = [
     items: ["Lead Sources", "Lead Stages", "Services", "Pharmacy"],
   },
   {
-    label: "COMMUNICATION",
-    items: [
-      "WhatsApp",
-      "Integrations",
-      "Notification Settings",
-    ],
-  },
+  label: "COMMUNICATION",
+  items: [
+    "WhatsApp",
+    "Integrations",
+    "Notification Settings",
+  ],
+},
   {
     label: "BILLING",
     items: ["Invoice Settings", "Plan & Billing"],
@@ -85,6 +85,7 @@ const SETTINGS_PERMISSION_MAP = {
   "Lead Stages": ["leads.view"],
   Services: ["services.view"],
   WhatsApp: ["whatsapp.view", "whatsapp.use"],
+
   Integrations: ["integrations.view"],
   "Notification Settings": ["notifications.view"],
   "Invoice Settings": ["invoices.view"],
@@ -2253,45 +2254,49 @@ function PlanBillingContent() {
 
 export default function Settings({
   user,
+  billing,
   initialTab = "Business Profile",
 }) {
   const isHealthcare =
     String(user?.speciality || "")
       .trim()
       .toLowerCase() === "healthcare";
-  
-  const pharmacyAddon = user?.addons?.pharmacy_invoice;
 
-const hasPharmacyAddon =
-  user?.subscription?.status === "active" &&
-  pharmacyAddon?.enabled === true &&
-  pharmacyAddon?.expiresAt &&
-  new Date(pharmacyAddon.expiresAt).getTime() > Date.now();
+  const pharmacyAddon = billing?.addons?.pharmacy_invoice;
 
-  const [activeTab, setActiveTab] =
-    useState("Business Profile");
+  const hasPharmacyAddon =
+    pharmacyAddon?.enabled === true &&
+    pharmacyAddon?.status === "active" &&
+    pharmacyAddon?.expiresAt &&
+    new Date(pharmacyAddon.expiresAt).getTime() > Date.now() &&
+    billing?.subscription?.status === "active" &&
+    billing?.subscription?.expiresAt &&
+    new Date(billing.subscription.expiresAt).getTime() > Date.now();
+
+  const [activeTab, setActiveTab] = useState("Business Profile");
 
   useEffect(() => {
     const groups = getSettingsGroups(isHealthcare, user);
     const visibleTabs = groups.flatMap((group) => group.items);
 
-    const params = new URLSearchParams(
-      window.location.search
-    );
+    const params = new URLSearchParams(window.location.search);
 
     const requestedTab =
       params.get("metaSelectPage") === "true" ||
-        params.get("metaError") ||
-        params.get("google")
+      params.get("metaError") ||
+      params.get("google")
         ? "Integrations"
         : initialTab || "Business Profile";
 
     setActiveTab(
-      visibleTabs.includes(requestedTab)
+      visibleTabs.includes(requestedTab) &&
+        (requestedTab !== "Pharmacy" || hasPharmacyAddon)
         ? requestedTab
-        : visibleTabs[0] || ""
+        : visibleTabs.includes("Business Profile")
+          ? "Business Profile"
+          : visibleTabs[0] || ""
     );
-  }, [isHealthcare, initialTab, user]);
+  }, [isHealthcare, initialTab, user, billing, hasPharmacyAddon]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -2305,14 +2310,10 @@ const hasPharmacyAddon =
         );
 
       case "Doctors":
-        return (
-          <ManagementContent memberType="doctor" />
-        );
+        return <ManagementContent memberType="doctor" />;
 
       case "Team":
-        return (
-          <ManagementContent memberType="team" />
-        );
+        return <ManagementContent memberType="team" />;
 
       case "Roles & Permissions":
         return <RolesContent />;
@@ -2332,6 +2333,7 @@ const hasPharmacyAddon =
             whatsapp
           />
         );
+
 
       case "Notification Settings":
         return (
@@ -2365,9 +2367,9 @@ const hasPharmacyAddon =
 
       case "Services":
         return <Services />;
-      
-     case "Pharmacy":
-  return hasPharmacyAddon ? <Pharmacy /> : null;
+
+      case "Pharmacy":
+        return hasPharmacyAddon ? <Pharmacy /> : null;
 
       case "Integrations":
         return <MetaIntegrationPanel />;
@@ -2386,57 +2388,59 @@ const hasPharmacyAddon =
     <div className="settings-page settings-fixed-layout">
       <div className="settings-page-header">
         <h1>Settings</h1>
-
         <p>
-          Configure your profile, team, pipeline,
-          billing and integrations.
+          Configure your profile, team, pipeline, billing and integrations.
         </p>
       </div>
 
       <div className="settings-layout">
         <aside className="settings-sidebar">
-         {getSettingsGroups(isHealthcare, user).map((group) => {
-          const visibleItems = group.items.filter((item) => {
-            if (item === "Pharmacy") {
-              return hasPharmacyAddon;
-            }
+          {getSettingsGroups(isHealthcare, user).map((group) => {
+            const visibleItems = group.items.filter((item) => {
+              if (item === "Pharmacy") {
+                return Boolean(hasPharmacyAddon);
+              }
 
-            return true;
-          });
+              return true;
+            });
 
-          if (visibleItems.length === 0) return null;
+            if (visibleItems.length === 0) return null;
 
-          return (
-            <div className="settings-group" key={group.label}>
-              <div className="settings-group-label">
-                {group.label}
+            return (
+              <div className="settings-group" key={group.label}>
+                <div className="settings-group-label">
+                  {group.label}
+                </div>
+
+                <div className="settings-group-items">
+                  {visibleItems.map((item) => {
+                    const isActive = activeTab === item;
+
+                    return (
+                      <button
+                        type="button"
+                        key={item}
+                        className={
+                          isActive
+                            ? "settings-tab active"
+                            : "settings-tab"
+                        }
+                        onClick={() => setActiveTab(item)}
+                      >
+                        <span className="settings-tab-text">
+                          {item}
+                        </span>
+
+                        {isActive && (
+                          <span className="settings-tab-arrow">›</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-
-              <div className="settings-group-items">
-                {visibleItems.map((item) => {
-                  const isActive = activeTab === item;
-
-                  return (
-                    <button
-                      type="button"
-                      key={item}
-                      className={
-                        isActive ? "settings-tab active" : "settings-tab"
-                      }
-                      onClick={() => setActiveTab(item)}
-                    >
-                      <span className="settings-tab-text">{item}</span>
-
-                      {isActive && (
-                        <span className="settings-tab-arrow">›</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
         </aside>
 
         <main className="settings-content">
