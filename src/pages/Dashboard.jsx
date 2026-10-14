@@ -753,6 +753,13 @@ export default function Dashboard() {
     useState(true);
 
   useEffect(() => {
+    // This is an SPA: let Leads.jsx restore the selected row after React renders,
+    // rather than allowing the browser's native scroll restoration to jump first.
+    const previousScrollRestoration = window.history.scrollRestoration;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
     const currentState = window.history.state;
 
     if (!currentState?.saleVitalsDashboard) {
@@ -771,8 +778,11 @@ export default function Dashboard() {
       const state = event.state;
 
       if (!state?.saleVitalsDashboard) {
-        return;
-      }
+  setActive("Leads");
+  setSelectedLeadId(null);
+  setSelectedContactId(null);
+  return;
+}
 
       setActive(state.active || "Dashboard");
       setSelectedLeadId(state.selectedLeadId || null);
@@ -788,6 +798,9 @@ export default function Dashboard() {
 
     return () => {
       window.removeEventListener("popstate", handleDashboardPopState);
+      if ("scrollRestoration" in window.history && previousScrollRestoration) {
+        window.history.scrollRestoration = previousScrollRestoration;
+      }
     };
   }, []);
 

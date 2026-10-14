@@ -414,12 +414,17 @@ function FollowUpDetails({
   onSaved,
   onReschedule,
 }) {
-  const [status, setStatus] = useState(
-    item?.status || "Scheduled"
-  );
+  const [status, setStatus] = useState(item?.status || "Scheduled");
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [statusSaved, setStatusSaved] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
+  const [editNoteText, setEditNoteText] = useState("");
+  const [savingNoteEdit, setSavingNoteEdit] = useState(false);
+  const [noteMessage, setNoteMessage] = useState("");
+  const [noteError, setNoteError] = useState("");
+  const [newNoteText, setNewNoteText] = useState("");
+  const [savingNewNote, setSavingNewNote] = useState(false);
 
   useEffect(() => {
     setStatus(item?.status || "Scheduled");
@@ -428,41 +433,30 @@ function FollowUpDetails({
   }, [item?._id, item?.status]);
 
   const lead = item?.lead || {};
-  const notes = Array.isArray(lead?.notes)
-    ? lead.notes
-    : [];
+  const notes = Array.isArray(lead?.notes) ? lead.notes : [];
+  const phone = normalizePhone(item?.phone || lead?.phone);
+  const leadId = item?.leadId || lead?._id;
 
   const saveStatus = async () => {
     if (!item?.leadId || !item?._id) {
       setStatusError("Follow-up ID not found.");
       return;
     }
-
     const token = getToken();
-
     if (!token) {
       setStatusError("Your session has expired.");
       return;
     }
-
-    if (
-      !COMPLETED_FOLLOW_UP_STATUSES.includes(
-        status
-      )
-    ) {
+    if (!COMPLETED_FOLLOW_UP_STATUSES.includes(status)) {
       setStatusError("Please select a status.");
       return;
     }
-
     try {
       setSavingStatus(true);
       setStatusError("");
       setStatusSaved(false);
-
       const response = await fetch(
-        buildApiUrl(
-          `/api/leads/${item.leadId}/follow-ups/${item._id}`
-        ),
+        buildApiUrl(`/api/leads/${item.leadId}/follow-ups/${item._id}`),
         {
           method: "PUT",
           headers: {
@@ -476,940 +470,367 @@ function FollowUpDetails({
             reminder: item.reminder !== false,
             purpose: item.purpose || "Follow-up",
             channel: item.channel || "Call",
-            assignedTo:
-              item.assignedTo ||
-              item.owner ||
-              "",
+            assignedTo: item.assignedTo || item.owner || "",
             priority: item.priority || "Medium",
             status,
           }),
         }
       );
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-          "Unable to update follow-up status."
-        );
-      }
-
-      const updatedFollowUp =
-        data?.followUp ||
-        data?.data ||
-        {
-          ...item,
-          status,
-        };
-
-      setStatus(
-        updatedFollowUp?.status ||
-        status
-      );
+      if (!response.ok) throw new Error(data?.message || "Unable to update follow-up status.");
+      const updatedFollowUp = data?.followUp || data?.data || { ...item, status };
+      const nextStatus = updatedFollowUp?.status || status;
+      setStatus(nextStatus);
       setStatusSaved(true);
-
       if (typeof onSaved === "function") {
-        await onSaved({
-          ...item,
-          ...updatedFollowUp,
-          status:
-            updatedFollowUp?.status ||
-            status,
-        });
+        await onSaved({ ...item, ...updatedFollowUp, status: nextStatus });
       }
     } catch (error) {
-      setStatusError(
-        error.message ||
-        "Unable to update follow-up status."
-      );
+      setStatusError(error.message || "Unable to update follow-up status.");
     } finally {
       setSavingStatus(false);
     }
   };
 
   const callLead = () => {
-    if (item?.phone) {
-      window.location.href = `tel:${item.phone}`;
-    }
+    const value = item?.phone || lead?.phone;
+    if (value) window.location.href = `tel:${value}`;
   };
 
   const whatsappLead = () => {
-    const normalized = normalizePhone(
-      item?.phone
-    );
-
-    if (!normalized) return;
-
-    const number =
-      normalized.length === 10
-        ? `91${normalized}`
-        : normalized;
-
-    window.open(
-      `https://wa.me/${number}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    if (!phone) return;
+    const number = phone.length === 10 ? `91${phone}` : phone;
+    window.open(`https://wa.me/${number}`, "_blank", "noopener,noreferrer");
   };
 
-  const terminal = isCompleted({
-    status,
-  });
+  const saveNewNote = async () => {
+    const text = newNoteText.trim();
+    if (!text || !leadId || savingNewNote) return;
+
+    const token = getToken();
+    if (!token) {
+      setNoteError("Your session has expired.");
+      setNoteMessage("");
+      return;
+    }
+
+    try {
+      setSavingNewNote(true);
+      setNoteError("");
+      setNoteMessage("");
+
+      const currentUser = getUser();
+      const response = await fetch(
+        buildApiUrl(`/api/leads/${leadId}/notes`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text,
+            userName: currentUser?.name || "",
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to save note.");
+      }
+
+      setNewNoteText("");
+      setNoteMessage("Note saved successfully.");
+
+      if (typeof onSaved === "function") {
+        await onSaved({
+          ...item,
+          lead: data?.lead || {
+            ...lead,
+            notes: [
+              ...notes,
+              {
+                text,
+                userName: currentUser?.name || "",
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          },
+        });
+      }
+    } catch (error) {
+      setNoteError(error.message || "Unable to save note.");
+    } finally {
+      setSavingNewNote(false);
+    }
+  };
+
+  const openEditNote = (note, index) => {
+    if (!note || !leadId) return;
+    setEditingNote({ ...note, _index: index });
+    setEditNoteText(note?.text || note?.note || "");
+    setNoteError("");
+    setNoteMessage("");
+  };
+
+  const closeEditNote = () => {
+    if (savingNoteEdit) return;
+    setEditingNote(null);
+    setEditNoteText("");
+  };
+
+  const saveEditedNote = async (event) => {
+    event.preventDefault();
+    const text = editNoteText.trim();
+    if (!text || !editingNote || !leadId) return;
+    const token = getToken();
+    if (!token) {
+      setNoteError("Your session has expired.");
+      return;
+    }
+    const noteId = String(editingNote?._id || editingNote?.id || `note-${editingNote._index}`);
+    if (noteId.startsWith("note-")) {
+      setNoteError("This note has no saved ID and cannot be edited from this screen.");
+      return;
+    }
+    try {
+      setSavingNoteEdit(true);
+      setNoteError("");
+      setNoteMessage("");
+      const response = await fetch(
+        buildApiUrl(`/api/leads/${leadId}/notes/${noteId}`),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ text, userName: editingNote?.userName || "" }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.message || "Unable to edit note.");
+      setEditingNote(null);
+      setEditNoteText("");
+      setNoteMessage("Note edited successfully.");
+      if (typeof onSaved === "function") {
+        await onSaved({ ...item, lead: data?.lead || item?.lead });
+      }
+    } catch (error) {
+      setNoteError(error.message || "Unable to edit note.");
+    } finally {
+      setSavingNoteEdit(false);
+    }
+  };
+
+  const terminal = isCompleted({ status });
+  const scheduledDate = item?.date;
+  const createdAt = item?.createdAt || item?.created_at;
+  const ownerName = item?.owner || item?.assignedTo || "Unassigned";
 
   return (
-    <div className="followup-detail-page">
+    <div className="followup-detail-page lead-details-page">
+      <style>{`
+        .followup-detail-page { padding: 24px 28px 48px; min-height:100%; background:#f6f9fc; color:#172033; box-sizing:border-box; }
+        .followup-detail-topbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 auto 14px; max-width:1240px; }
+        .followup-detail-back { border:0; background:transparent; color:#315ea8; font-size:13px; font-weight:500; cursor:pointer; padding:5px 0; }
+        .followup-detail-top-actions { display:flex; gap:8px; }
+        .followup-detail-top-actions button { min-height:34px; padding:0 12px; border:1px solid #dbe3ef; border-radius:8px; background:#fff; color:#29405f; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:12px; }
+        .followup-detail-top-actions button:disabled { opacity:.5; cursor:not-allowed; }
+        .followup-detail-profile { max-width:1240px; margin:0 auto 14px; background:#fff; border:1px solid #dfe7f2; border-radius:14px; padding:16px 18px; display:flex; align-items:center; gap:12px; box-shadow:0 8px 24px rgba(31,56,88,.04); }
+        .followup-detail-avatar { width:44px; height:44px; border-radius:13px; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; flex-shrink:0; }
+        .followup-detail-profile-main { min-width:0; }
+        .followup-detail-title-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .followup-detail-title-row h1 { margin:0; font-size:19px; line-height:1.25; color:#111827; font-weight:700; }
+        .followup-detail-status,.followup-detail-priority { display:inline-flex; align-items:center; min-height:23px; padding:0 9px; border-radius:999px; font-size:10px; font-weight:700; }
+        .followup-detail-status.active { background:#fff4dc; color:#9b6400; } .followup-detail-status.completed { background:#eaf8ef; color:#168346; }
+        .followup-detail-priority.low { background:#edf7ff; color:#2d6a9f; } .followup-detail-priority.medium { background:#fff4e6; color:#a96713; } .followup-detail-priority.high { background:#fff0f0; color:#c53030; }
+        .followup-detail-profile-meta { margin-top:7px; display:flex; flex-wrap:wrap; gap:6px 14px; color:#64748b; font-size:11px; }
+        .followup-detail-layout { max-width:1240px; margin:0 auto; display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:14px; align-items:start; }
+        .followup-detail-main,.followup-detail-sidebar { display:flex; flex-direction:column; gap:14px; min-width:0; }
+        .followup-detail-card { overflow:hidden; border:1px solid #dfe7f2; border-radius:14px; background:#fff; box-shadow:0 8px 24px rgba(31,56,88,.045); }
+        .followup-detail-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 16px; border-bottom:1px solid #e8edf4; }
+        .followup-detail-card-head h2 { margin:0; color:#111827; font-size:13px; font-weight:700; }
+        .followup-detail-card-head p { margin:5px 0 0; color:#8190a5; font-size:10px; line-height:1.45; }
+        .followup-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .followup-detail-field { padding:13px 16px; min-width:0; border-bottom:1px solid #e8edf4; }
+        .followup-detail-field:nth-child(odd) { border-right:1px solid #e8edf4; }
+        .followup-detail-field:nth-last-child(-n+2) { border-bottom:0; }
+        .followup-detail-field span,.followup-detail-note-primary>span,.followup-detail-note>span { display:block; color:#8190a5; font-size:10px; margin-bottom:6px; }
+        .followup-detail-field strong { display:block; color:#172033; font-size:11px; font-weight:650; overflow-wrap:anywhere; }
+        .followup-detail-note-primary { padding:15px 16px; }
+        .followup-detail-note-primary p,.followup-detail-note p { margin:0; color:#40516a; font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .followup-detail-notes-list { border-top:1px solid #e8edf4; }
+        .followup-detail-notes-title { padding:14px 16px 8px; color:#172033; font-size:12px; font-weight:700; }
+        .followup-detail-note { padding:12px 16px; border-top:1px solid #edf1f6; }
+        .followup-detail-note:first-of-type { border-top:0; }
+        .followup-detail-note-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+        .followup-detail-note small { display:block; margin-top:7px; color:#8190a5; font-size:10px; }
+        .followup-note-edit-btn { flex:0 0 auto; border:1px solid #d8e3f0; border-radius:8px; background:#fff; color:#2563eb; padding:6px 10px; display:inline-flex; align-items:center; gap:6px; font-size:11px; cursor:pointer; }
+        .followup-note-composer { padding:12px; border:1px solid #dfe7f2; border-radius:14px; background:#fff; box-shadow:0 8px 24px rgba(31,56,88,.045); }
+        .followup-note-composer textarea { display:block; width:100%; min-height:74px; resize:vertical; box-sizing:border-box; padding:12px; border:1px solid #d8e3f0; border-radius:9px; outline:none; color:#172033; font:inherit; font-size:12px; line-height:1.5; }
+        .followup-note-composer textarea:focus { border-color:#8ab0ff; box-shadow:0 0 0 3px rgba(37,99,235,.08); }
+        .followup-note-composer-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+        .followup-note-composer-actions button { min-height:34px; padding:0 13px; border:1px solid #d8e3f0; border-radius:8px; background:#fff; color:#40516a; font-size:12px; cursor:pointer; }
+        .followup-note-composer-actions button.primary { border-color:#2563eb; background:#2563eb; color:#fff; }
+        .followup-note-composer-actions button:disabled { opacity:.55; cursor:not-allowed; }
+        .followup-detail-timeline { padding:16px; }
+        .followup-timeline-item { display:flex; gap:12px; position:relative; padding:0 0 18px; }
+        .followup-timeline-item:last-child { padding-bottom:0; }
+        .followup-timeline-dot { width:9px; height:9px; margin-top:4px; border:1px solid #2563eb; background:#edf5ff; border-radius:50%; flex:0 0 9px; }
+        .followup-timeline-item strong { color:#172033; font-size:11px; font-weight:700; }
+        .followup-timeline-item p { margin:6px 0 0; color:#8190a5; font-size:10px; }
+        .followup-status-body { padding:14px 15px 15px; }
+        .followup-status-body label { display:block; margin:0 0 7px; color:#52627a; font-size:10px; }
+        .followup-status-body select { width:100%; height:36px; padding:0 10px; border:1px solid #d8e3f0; border-radius:8px; color:#34445c; background:#fff; font-size:11px; outline:none; }
+        .followup-status-save { width:100%; min-height:36px; margin-top:9px; border:0; border-radius:8px; background:#2563eb; color:#fff; font-size:12px; font-weight:600; cursor:pointer; }
+        .followup-status-save:disabled { opacity:.6; cursor:not-allowed; }
+        .followup-status-error,.followup-status-success { margin-top:8px; font-size:11px; line-height:1.4; } .followup-status-error { color:#c53030; } .followup-status-success { color:#168346; }
+        .followup-quick-actions { display:flex; flex-direction:column; gap:7px; padding:12px 15px 15px; }
+        .followup-quick-actions button { width:100%; min-height:34px; padding:0 10px; border:1px solid #d8e3f0; border-radius:8px; background:#fff; color:#29405f; display:flex; align-items:center; justify-content:flex-start; gap:8px; font-size:11px; cursor:pointer; }
+        .followup-quick-actions button:disabled { opacity:.5; cursor:not-allowed; }
+        .followup-note-modal-backdrop { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(15,23,42,.48); }
+        .followup-note-modal { width:min(520px,100%); background:#fff; border:1px solid #dfe7f2; border-radius:16px; box-shadow:0 24px 70px rgba(15,23,42,.24); overflow:hidden; }
+        .followup-note-modal-head { padding:18px 20px; border-bottom:1px solid #e8edf4; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+        .followup-note-modal-head h2 { margin:0; font-size:16px; color:#172033; } .followup-note-modal-head p { margin:5px 0 0; color:#8190a5; font-size:11px; }
+        .followup-note-modal-close { border:0; background:transparent; color:#64748b; font-size:23px; line-height:1; cursor:pointer; }
+        .followup-note-modal-body { padding:18px 20px; } .followup-note-modal-body label { display:block; margin-bottom:8px; color:#40516a; font-size:12px; font-weight:600; }
+        .followup-note-modal-body textarea { width:100%; min-height:140px; resize:vertical; padding:11px 12px; border:1px solid #d8e3f0; border-radius:9px; font:inherit; font-size:13px; line-height:1.5; box-sizing:border-box; outline:none; }
+        .followup-note-modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid #e8edf4; }
+        .followup-note-modal-footer button { min-height:36px; padding:0 14px; border-radius:8px; border:1px solid #d8e3f0; background:#fff; color:#40516a; cursor:pointer; font-size:12px; }
+        .followup-note-modal-footer button.primary { border-color:#2563eb; background:#2563eb; color:#fff; } .followup-note-modal-footer button:disabled { opacity:.6; cursor:not-allowed; }
+        @media(max-width:900px) { .followup-detail-layout { grid-template-columns:minmax(0,1fr) 290px; } .followup-detail-page { padding:20px 16px 36px; } }
+        @media(max-width:700px) { .followup-detail-layout { grid-template-columns:1fr; } .followup-detail-topbar { align-items:flex-start; } .followup-detail-top-actions { gap:5px; } .followup-detail-top-actions button { padding:0 8px; } .followup-detail-profile { align-items:flex-start; padding:14px; } .followup-detail-title-row h1 { font-size:17px; } .followup-detail-grid { grid-template-columns:1fr 1fr; } }
+        @media(max-width:420px) { .followup-detail-topbar { flex-direction:column; } .followup-detail-grid { grid-template-columns:1fr; } .followup-detail-field:nth-child(odd) { border-right:0; } .followup-detail-field:nth-last-child(2) { border-bottom:1px solid #e8edf4; } }
+      `}</style>
+
       <div className="followup-detail-topbar">
-        <button
-          type="button"
-          className="followup-detail-back"
-          onClick={onBack}
-        >
-          ← Back to follow-ups
-        </button>
-
+        <button type="button" className="followup-detail-back" onClick={onBack}>← Back to follow-ups</button>
         <div className="followup-detail-top-actions">
-          <button
-            type="button"
-            onClick={callLead}
-            disabled={!item?.phone}
-          >
-            <Icon name="phone" size={15} />
-            Call
-          </button>
-
-          <button
-            type="button"
-            onClick={whatsappLead}
-            disabled={!item?.phone}
-          >
-            <Icon name="whatsapp" size={15} />
-            WhatsApp
-          </button>
+          <button type="button" onClick={callLead} disabled={!phone}><Icon name="phone" size={14} /> Call</button>
+          <button type="button" onClick={whatsappLead} disabled={!phone}><Icon name="whatsapp" size={14} /> WhatsApp</button>
         </div>
       </div>
 
       <section className="followup-detail-profile">
-        <div className="followup-detail-avatar">
-          {getInitials(item?.name)}
-        </div>
-
+        <div className="followup-detail-avatar">{getInitials(item?.name || lead?.name)}</div>
         <div className="followup-detail-profile-main">
           <div className="followup-detail-title-row">
-            <h1>
-              {item?.name || "Unnamed lead"}
-            </h1>
-
-            <span
-              className={`followup-detail-status ${terminal
-                ? "completed"
-                : "active"
-                }`}
-            >
-              {followUpStatusLabel(status)}
-            </span>
-
-            <span
-              className={`followup-detail-priority ${String(
-                item?.priority || "Medium"
-              ).toLowerCase()}`}
-            >
-              {item?.priority || "Medium"}
-            </span>
+            <h1>{item?.name || lead?.name || "Unnamed lead"}</h1>
+            <span className={`followup-detail-status ${terminal ? "completed" : "active"}`}>{followUpStatusLabel(status)}</span>
+            <span className={`followup-detail-priority ${String(item?.priority || "Medium").toLowerCase()}`}>{item?.priority || "Medium"}</span>
           </div>
-
           <div className="followup-detail-profile-meta">
-            {item?.phone && (
-              <span>{item.phone}</span>
-            )}
-
-            {item?.email && (
-              <span>{item.email}</span>
-            )}
-
-            {item?.service && (
-              <span>{item.service}</span>
-            )}
-
-            {item?.channel && (
-              <span>{item.channel}</span>
-            )}
+            {(item?.phone || lead?.phone) && <span>{item?.phone || lead?.phone}</span>}
+            {(item?.email || lead?.email) && <span>{item?.email || lead?.email}</span>}
+            <span>{item?.service || item?.treatment || lead?.service || lead?.treatment || "—"}</span>
+            <span>{item?.channel || "Call"}</span>
           </div>
         </div>
       </section>
 
+      {(noteMessage || noteError) && <div style={{maxWidth:1240,margin:"0 auto 12px",fontSize:12,color:noteError ? "#c53030" : "#168346"}}>{noteError || noteMessage}</div>}
+
       <div className="followup-detail-layout">
         <main className="followup-detail-main">
           <section className="followup-detail-card">
-            <div className="followup-detail-card-head">
-              <div>
-                <h2>Follow-up details</h2>
-                <p>
-                  Complete record of this
-                  follow-up.
-                </p>
-              </div>
-            </div>
-
+            <div className="followup-detail-card-head"><div><h2>Follow-up details</h2><p>Complete record of this follow-up.</p></div></div>
             <div className="followup-detail-grid">
-              <div className="followup-detail-field">
-                <span>Scheduled date</span>
-                <strong>
-                  {formatDate(item?.date)}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Scheduled time</span>
-                <strong>
-                  {formatTime(item?.date)}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Created</span>
-                <strong>
-                  {formatDateTime(
-                    item?.createdAt
-                  )}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Assigned to</span>
-                <strong>
-                  {item?.owner || "Unassigned"}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Channel</span>
-                <strong>
-                  {item?.channel || "Call"}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Priority</span>
-                <strong>
-                  {item?.priority || "Medium"}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>
-                  {healthcare
-                    ? "Treatment"
-                    : "Service"}
-                </span>
-                <strong>
-                  {item?.service || "—"}
-                </strong>
-              </div>
-
-              <div className="followup-detail-field">
-                <span>Purpose</span>
-                <strong>
-                  {item?.purpose ||
-                    "Follow-up"}
-                </strong>
-              </div>
+              <div className="followup-detail-field"><span>Scheduled date</span><strong>{formatDate(scheduledDate)}</strong></div>
+              <div className="followup-detail-field"><span>Scheduled time</span><strong>{formatTime(scheduledDate)}</strong></div>
+              <div className="followup-detail-field"><span>Created</span><strong>{formatDateTime(createdAt)}</strong></div>
+              <div className="followup-detail-field"><span>Assigned to</span><strong>{ownerName}</strong></div>
+              <div className="followup-detail-field"><span>Source</span><strong>{lead?.source || lead?.leadSource || lead?.sourceName || "—"}</strong></div>
+              <div className="followup-detail-field"><span>Priority</span><strong>{item?.priority || lead?.priority || "Medium"}</strong></div>
+              <div className="followup-detail-field"><span>{healthcare ? "Treatment" : "Service"}</span><strong>{item?.service || item?.treatment || lead?.service || lead?.treatment || "—"}</strong></div>
+              <div className="followup-detail-field"><span>Purpose</span><strong>{item?.purpose || "Follow-up"}</strong></div>
             </div>
           </section>
 
           <section className="followup-detail-card">
-            <div className="followup-detail-card-head">
-              <div>
-                <h2>Conversation & notes</h2>
-                <p>
-                  What was discussed or
-                  recorded during this
-                  follow-up.
-                </p>
-              </div>
-            </div>
-
-            <div className="followup-detail-note-primary">
-              <span>Follow-up note</span>
-
-              <p>
-                {item?.note ||
-                  "No note was added for this follow-up."}
-              </p>
-            </div>
-
-            {item?.firstNote && (
-              <div className="followup-detail-note">
-                <span>First lead note</span>
-                <p>{item.firstNote}</p>
-              </div>
-            )}
-
-            {notes.length > 0 && (
-              <div className="followup-detail-notes-list">
-                <div className="followup-detail-notes-title">
-                  Previous notes
-                </div>
-
-                {notes.map((note, index) => (
-                  <div
-                    className="followup-detail-note"
-                    key={
-                      note?._id ||
-                      `note-${index}`
-                    }
-                  >
-                    <p>
-                      {note?.text ||
-                        note?.note ||
-                        "—"}
-                    </p>
-
-                    <small>
-                      {note?.userName ||
-                        "User"}
-
-                      {" · "}
-
-                      {formatDateTime(
-                        note?.createdAt
-                      )}
-                    </small>
+            <div className="followup-detail-card-head"><div><h2>Conversation & notes</h2><p>Notes associated with this lead and follow-up.</p></div></div>
+            <div className="followup-detail-note-primary"><span>Follow-up note</span><p>{item?.note || "No note was added for this follow-up."}</p></div>
+            {item?.firstNote && <div className="followup-detail-note"><span>First lead note</span><p>{item.firstNote}</p></div>}
+            <div className="followup-detail-notes-list">
+              <div className="followup-detail-notes-title">Previous notes</div>
+              {notes.length ? notes.map((note, index) => (
+                <div className="followup-detail-note" key={note?._id || note?.id || `note-${index}`}>
+                  <div className="followup-detail-note-head">
+                    <span style={{fontSize:11,color:"#8190a5"}}>{note?.userName || "User"}</span>
+                    <button type="button" className="followup-note-edit-btn" onClick={() => openEditNote(note,index)} disabled={savingNoteEdit || !leadId} title="Edit note"><span aria-hidden="true">✎</span> Edit</button>
                   </div>
-                ))}
-              </div>
-            )}
+                  <p>{note?.text || note?.note || "—"}</p>
+                  <small>{formatDateTime(note?.updatedAt || note?.createdAt)}</small>
+                </div>
+              )) : <div className="followup-detail-note"><p>No previous notes available for this lead.</p></div>}
+            </div>
           </section>
 
           <section className="followup-detail-card">
-            <div className="followup-detail-card-head">
-              <div>
-                <h2>Follow-up timeline</h2>
-                <p>
-                  Important events for this
-                  follow-up.
-                </p>
-              </div>
-            </div>
-
+            <div className="followup-detail-card-head"><div><h2>Follow-up timeline</h2><p>Important events for this follow-up.</p></div></div>
             <div className="followup-detail-timeline">
-              <div className="followup-timeline-item">
-                <span className="followup-timeline-dot" />
-
-                <div>
-                  <strong>
-                    Follow-up scheduled
-                  </strong>
-
-                  <p>
-                    {formatDateTime(
-                      item?.createdAt
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="followup-timeline-item current">
-                <span className="followup-timeline-dot" />
-
-                <div>
-                  <strong>
-                    Current status:{" "}
-                    {followUpStatusLabel(
-                      status
-                    )}
-                  </strong>
-
-                  <p>
-                    Scheduled for{" "}
-                    {formatDateTime(
-                      item?.date
-                    )}
-                  </p>
-                </div>
-              </div>
+              <div className="followup-timeline-item"><span className="followup-timeline-dot"/><div><strong>Follow-up scheduled</strong><p>{formatDateTime(createdAt)}</p></div></div>
+              <div className="followup-timeline-item current"><span className="followup-timeline-dot"/><div><strong>Current status: {followUpStatusLabel(status)}</strong><p>Scheduled for {formatDateTime(scheduledDate)}</p></div></div>
             </div>
           </section>
+          <section className="followup-note-composer">
+            <textarea
+              value={newNoteText}
+              onChange={(event) => setNewNoteText(event.target.value)}
+              placeholder="Add a note about this follow-up — what was discussed, patient response, objections, next steps..."
+              aria-label="Add a note about this follow-up"
+            />
+            <div className="followup-note-composer-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={saveNewNote}
+                disabled={savingNewNote || !newNoteText.trim() || !leadId}
+              >
+                {savingNewNote ? "Saving..." : "Save note"}
+              </button>
+            </div>
+          </section>
+
+
         </main>
 
         <aside className="followup-detail-sidebar">
           <section className="followup-detail-card followup-status-card">
-            <div className="followup-detail-card-head">
-              <div>
-                <h2>Update status</h2>
-                <p>
-                  Mark what happened with
-                  this follow-up.
-                </p>
-              </div>
-            </div>
-
+            <div className="followup-detail-card-head"><div><h2>Update status</h2><p>Mark what happened with this follow-up.</p></div></div>
             <div className="followup-status-body">
-              <label htmlFor="followup-status">
-                Status
-              </label>
-
-              <select
-                id="followup-status"
-                value={
-                  COMPLETED_FOLLOW_UP_STATUSES.includes(
-                    status
-                  )
-                    ? status
-                    : ""
-                }
-                onChange={(event) => {
-                  setStatus(event.target.value);
-                  setStatusSaved(false);
-                  setStatusError("");
-                }}
-              >
-                <option value="">
-                  Change status
-                </option>
-
-                {FOLLOW_UP_STATUS_OPTIONS.map(
-                  (option) => (
-                    <option
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </option>
-                  )
-                )}
+              <label htmlFor="followup-status">Status</label>
+              <select id="followup-status" value={COMPLETED_FOLLOW_UP_STATUSES.includes(status) ? status : ""} onChange={(event) => {setStatus(event.target.value);setStatusSaved(false);setStatusError("");}}>
+                <option value="">Change status</option>
+                {FOLLOW_UP_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-
-              {statusError && (
-                <div className="followup-status-error">
-                  {statusError}
-                </div>
-              )}
-
-              {statusSaved && (
-                <div className="followup-status-success">
-                  Status updated successfully.
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="followup-status-save"
-                onClick={saveStatus}
-                disabled={savingStatus}
-              >
-                {savingStatus
-                  ? "Saving..."
-                  : "Save status"}
-              </button>
+              {statusError && <div className="followup-status-error">{statusError}</div>}
+              {statusSaved && <div className="followup-status-success">Status updated successfully.</div>}
+              <button type="button" className="followup-status-save" onClick={saveStatus} disabled={savingStatus}>{savingStatus ? "Saving..." : "Save status"}</button>
             </div>
           </section>
-
           <section className="followup-detail-card">
-            <div className="followup-detail-card-head">
-              <div>
-                <h2>Quick actions</h2>
-              </div>
-            </div>
-
+            <div className="followup-detail-card-head"><div><h2>Quick actions</h2></div></div>
             <div className="followup-quick-actions">
-              <button
-                type="button"
-                onClick={callLead}
-                disabled={!item?.phone}
-              >
-                <Icon name="phone" size={16} />
-                Call lead
-              </button>
-
-              <button
-                type="button"
-                onClick={whatsappLead}
-                disabled={!item?.phone}
-              >
-                <Icon
-                  name="whatsapp"
-                  size={16}
-                />
-                WhatsApp
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    typeof onReschedule ===
-                    "function"
-                  ) {
-                    onReschedule(item);
-                  }
-                }}
-              >
-                <Icon
-                  name="calendar"
-                  size={16}
-                />
-                Reschedule
-              </button>
+              <button type="button" onClick={callLead} disabled={!phone}><Icon name="phone" size={15}/> Call lead</button>
+              <button type="button" onClick={whatsappLead} disabled={!phone}><Icon name="whatsapp" size={15}/> WhatsApp</button>
+              <button type="button" onClick={() => typeof onReschedule === "function" && onReschedule(item)}><Icon name="calendar" size={15}/> Reschedule</button>
             </div>
           </section>
         </aside>
       </div>
 
-      <style>{`
-        .followup-detail-page {
-          padding: 28px 32px 60px;
-          min-height: 100%;
-          background: #f7f9fc;
-          color: #172033;
-          box-sizing: border-box;
-        }
-
-        .followup-detail-topbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 15px;
-          margin-bottom: 18px;
-        }
-
-        .followup-detail-back {
-          border: 0;
-          background: transparent;
-          color: #315ea8;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          padding: 5px 0;
-        }
-
-        .followup-detail-top-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .followup-detail-top-actions button {
-          min-height: 36px;
-          padding: 0 12px;
-          border: 1px solid #dbe3ef;
-          border-radius: 8px;
-          background: #fff;
-          color: #29405f;
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .followup-detail-top-actions button:disabled {
-          opacity: .5;
-          cursor: not-allowed;
-        }
-
-        .followup-detail-profile {
-          background: #fff;
-          border: 1px solid #e2e8f1;
-          border-radius: 16px;
-          padding: 22px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 20px;
-          box-shadow: 0 4px 20px rgba(24, 39, 75, .04);
-        }
-
-        .followup-detail-avatar {
-          width: 60px;
-          height: 60px;
-          border-radius: 50%;
-          background: #eaf1ff;
-          color: #2161e8;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          font-weight: 800;
-          flex-shrink: 0;
-        }
-
-        .followup-detail-profile-main {
-          min-width: 0;
-        }
-
-        .followup-detail-title-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .followup-detail-title-row h1 {
-          margin: 0;
-          font-size: 24px;
-          line-height: 1.2;
-          color: #172033;
-        }
-
-        .followup-detail-status,
-        .followup-detail-priority {
-          display: inline-flex;
-          align-items: center;
-          min-height: 25px;
-          padding: 0 9px;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 700;
-        }
-
-        .followup-detail-status.active {
-          background: #fff4dc;
-          color: #9b6400;
-        }
-
-        .followup-detail-status.completed {
-          background: #eaf8ef;
-          color: #168346;
-        }
-
-        .followup-detail-priority.low {
-          background: #edf7ff;
-          color: #2d6a9f;
-        }
-
-        .followup-detail-priority.medium {
-          background: #fff4e6;
-          color: #a96713;
-        }
-
-        .followup-detail-priority.high {
-          background: #fff0f0;
-          color: #c53030;
-        }
-
-        .followup-detail-profile-meta {
-          margin-top: 8px;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 7px 18px;
-          color: #718097;
-          font-size: 12px;
-        }
-
-        .followup-detail-layout {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 340px;
-          gap: 20px;
-          align-items: start;
-        }
-
-        .followup-detail-main,
-        .followup-detail-sidebar {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .followup-detail-card {
-          background: #fff;
-          border: 1px solid #e2e8f1;
-          border-radius: 15px;
-          overflow: hidden;
-          box-shadow: 0 4px 20px rgba(24, 39, 75, .035);
-        }
-
-        .followup-detail-card-head {
-          min-height: 66px;
-          padding: 16px 20px;
-          border-bottom: 1px solid #e7ebf2;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          box-sizing: border-box;
-        }
-
-        .followup-detail-card-head h2 {
-          margin: 0;
-          font-size: 15px;
-          color: #172033;
-        }
-
-        .followup-detail-card-head p {
-          margin: 5px 0 0;
-          color: #7a879c;
-          font-size: 11px;
-        }
-
-        .followup-detail-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .followup-detail-field {
-          min-height: 72px;
-          padding: 15px 20px;
-          border-bottom: 1px solid #edf0f5;
-          display: flex;
-          flex-direction: column;
-          gap: 7px;
-          box-sizing: border-box;
-        }
-
-        .followup-detail-field:nth-child(odd) {
-          border-right: 1px solid #edf0f5;
-        }
-
-        .followup-detail-field span {
-          color: #7b889d;
-          font-size: 10px;
-        }
-
-        .followup-detail-field strong {
-          color: #27354a;
-          font-size: 13px;
-          word-break: break-word;
-        }
-
-        .followup-detail-note-primary,
-        .followup-detail-note {
-          padding: 17px 20px;
-          border-bottom: 1px solid #edf0f5;
-        }
-
-        .followup-detail-note-primary > span,
-        .followup-detail-note > span {
-          color: #7b889d;
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: .03em;
-        }
-
-        .followup-detail-note-primary p,
-        .followup-detail-note p {
-          margin: 8px 0 0;
-          color: #33425a;
-          font-size: 13px;
-          line-height: 1.6;
-          white-space: pre-wrap;
-        }
-
-        .followup-detail-note small {
-          display: block;
-          margin-top: 7px;
-          color: #8a96a9;
-          font-size: 10px;
-        }
-
-        .followup-detail-notes-list {
-          border-top: 1px solid #edf0f5;
-        }
-
-        .followup-detail-notes-title {
-          padding: 14px 20px 0;
-          color: #172033;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .followup-detail-timeline {
-          padding: 20px;
-        }
-
-        .followup-timeline-item {
-          position: relative;
-          display: flex;
-          gap: 13px;
-          padding-bottom: 20px;
-        }
-
-        .followup-timeline-item:last-child {
-          padding-bottom: 0;
-        }
-
-        .followup-timeline-item:not(:last-child)::before {
-          content: "";
-          position: absolute;
-          left: 5px;
-          top: 14px;
-          bottom: 0;
-          width: 1px;
-          background: #dfe6f0;
-        }
-
-        .followup-timeline-dot {
-          width: 11px;
-          height: 11px;
-          margin-top: 2px;
-          border-radius: 50%;
-          background: #d8e5ff;
-          border: 2px solid #4e7eea;
-          box-sizing: border-box;
-          flex-shrink: 0;
-        }
-
-        .followup-timeline-item strong {
-          color: #263349;
-          font-size: 12px;
-        }
-
-        .followup-timeline-item p {
-          margin: 4px 0 0;
-          color: #8290a5;
-          font-size: 11px;
-        }
-
-        .followup-status-body {
-          padding: 18px 20px 20px;
-        }
-
-        .followup-status-body label {
-          display: block;
-          margin-bottom: 7px;
-          color: #6f7d93;
-          font-size: 11px;
-          font-weight: 600;
-        }
-
-        .followup-status-body select {
-          width: 100%;
-          min-height: 42px;
-          padding: 0 11px;
-          border: 1px solid #dbe3ef;
-          border-radius: 8px;
-          background: #fff;
-          color: #263349;
-          outline: none;
-          font-size: 12px;
-          box-sizing: border-box;
-        }
-
-        .followup-status-help {
-          margin: 9px 0 0;
-          color: #8592a6;
-          font-size: 10px;
-          line-height: 1.5;
-        }
-
-        .followup-status-error,
-        .followup-status-success {
-          margin-top: 12px;
-          padding: 9px 10px;
-          border-radius: 7px;
-          font-size: 11px;
-        }
-
-        .followup-status-error {
-          background: #fff1f1;
-          color: #c53030;
-        }
-
-        .followup-status-success {
-          background: #eaf8ef;
-          color: #168346;
-        }
-
-        .followup-status-save {
-          width: 100%;
-          margin-top: 13px;
-          min-height: 40px;
-          border: 0;
-          border-radius: 8px;
-          background: #2863dc;
-          color: #fff;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .followup-status-save:disabled {
-          opacity: .65;
-          cursor: not-allowed;
-        }
-
-        .followup-quick-actions {
-          padding: 14px 20px 18px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .followup-quick-actions button {
-          min-height: 40px;
-          border: 1px solid #dbe3ef;
-          border-radius: 8px;
-          background: #fff;
-          color: #29405f;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          padding: 0 12px;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-          text-align: left;
-        }
-
-        .followup-quick-actions button:hover {
-          background: #f7faff;
-          border-color: #c9d8ef;
-        }
-
-        .followup-quick-actions button:disabled {
-          opacity: .5;
-          cursor: not-allowed;
-        }
-
-        @media (max-width: 1050px) {
-          .followup-detail-layout {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 700px) {
-          .followup-detail-page {
-            padding: 20px 15px 40px;
-          }
-
-          .followup-detail-topbar {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .followup-detail-profile {
-            padding: 18px;
-          }
-
-          .followup-detail-avatar {
-            width: 52px;
-            height: 52px;
-            font-size: 16px;
-          }
-
-          .followup-detail-title-row h1 {
-            font-size: 20px;
-          }
-
-          .followup-detail-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .followup-detail-field:nth-child(odd) {
-            border-right: 0;
-          }
-
-          .followup-detail-top-actions {
-            width: 100%;
-          }
-
-          .followup-detail-top-actions button {
-            flex: 1;
-            justify-content: center;
-          }
-        }
-
-      `}</style>
+      {editingNote && (
+        <div className="followup-note-modal-backdrop" onClick={closeEditNote}>
+          <form className="followup-note-modal" onSubmit={saveEditedNote} onClick={(event) => event.stopPropagation()}>
+            <div className="followup-note-modal-head"><div><h2>Edit note</h2><p>Update this lead note.</p></div><button type="button" className="followup-note-modal-close" onClick={closeEditNote} disabled={savingNoteEdit} aria-label="Close">×</button></div>
+            <div className="followup-note-modal-body"><label htmlFor="followup-edit-note">Note</label><textarea id="followup-edit-note" value={editNoteText} onChange={(event) => setEditNoteText(event.target.value)} autoFocus required/></div>
+            {noteError && <div style={{padding:"0 20px 12px",color:"#c53030",fontSize:12}}>{noteError}</div>}
+            <div className="followup-note-modal-footer"><button type="button" onClick={closeEditNote} disabled={savingNoteEdit}>Cancel</button><button type="submit" className="primary" disabled={savingNoteEdit || !editNoteText.trim()}>{savingNoteEdit ? "Saving..." : "Save changes"}</button></div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

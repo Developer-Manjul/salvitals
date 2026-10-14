@@ -34,6 +34,41 @@ const DEFAULT_OWNERS = [
 
 ];
 
+function getLeadPageStorageKey(user) {
+  let currentUser = null;
+
+  try {
+    currentUser = JSON.parse(
+      sessionStorage.getItem("user") ||
+      sessionStorage.getItem("vitalsUser") ||
+      localStorage.getItem("user") ||
+      "null"
+    );
+  } catch {
+    currentUser = null;
+  }
+
+  const userId =
+    currentUser?._id ||
+    currentUser?.id ||
+    currentUser?.email ||
+    user?._id ||
+    user?.id ||
+    user?.email ||
+    "current";
+
+  return `saleVitalsLeadsPage_v1_${String(userId).trim()}`;
+}
+
+function readSavedLeadPage(user) {
+  try {
+    const savedPage = Number(sessionStorage.getItem(getLeadPageStorageKey(user)));
+    return Number.isInteger(savedPage) && savedPage > 0 ? savedPage : 1;
+  } catch {
+    return 1;
+  }
+}
+
 function getToken() {
   return (
     sessionStorage.getItem("token") ||
@@ -321,6 +356,9 @@ export default function Leads({
   const [loadingLeads, setLoadingLeads] =
     useState(true);
 
+  // Tracks whether the previous lead row has been restored after browser Back.
+  const hasRestoredLeadScrollRef = useRef(false);
+
   const [savingLead, setSavingLead] =
     useState(false);
 
@@ -342,8 +380,8 @@ export default function Leads({
   const [serviceFilter, setServiceFilter] =
     useState("All services");
 
-  const LEADS_PER_PAGE = 50;
-  const [currentPage, setCurrentPage] = useState(1);
+  const LEADS_PER_PAGE = 15;
+  const [currentPage, setCurrentPage] = useState(() => readSavedLeadPage(user));
 
   const [activeView, setActiveView] =
     useState("list");
@@ -808,20 +846,96 @@ export default function Leads({
     configuredSourceOptions,
   ]);
 
+  const hasMountedLeadFiltersRef = useRef(false);
+
   useEffect(() => {
+    // Do not reset the restored page on the first render after browser Back.
+    if (!hasMountedLeadFiltersRef.current) {
+      hasMountedLeadFiltersRef.current = true;
+      return;
+    }
+
     setCurrentPage(1);
   }, [search, sourceFilter, stageFilter, enquiryFilter, ownerFilter, serviceFilter]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(getLeadPageStorageKey(user), String(currentPage));
+    } catch {
+      // Keep pagination working even if session storage is unavailable.
+    }
+  }, [currentPage, user]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / LEADS_PER_PAGE));
 
   useEffect(() => {
+    // Wait until the leads API has finished loading before clamping the
+    // restored page. While loading, filteredLeads is temporarily empty and
+    // totalPages is 1; clamping at that point would erase a saved page 2+.
+    if (loadingLeads) return;
+
     setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
+  }, [totalPages, loadingLeads]);
 
   const paginatedLeads = useMemo(() => {
     const start = (currentPage - 1) * LEADS_PER_PAGE;
     return filteredLeads.slice(start, start + LEADS_PER_PAGE);
   }, [filteredLeads, currentPage]);
+
+  useEffect(() => {
+    if (loadingLeads || hasRestoredLeadScrollRef.current) return;
+
+    const storageKey = getLeadPageStorageKey(user);
+    const scrollKey = `${storageKey}_scrollY`;
+    const leadKey = `${storageKey}_leadId`;
+    let savedScrollY = null;
+    let savedLeadId = "";
+
+    try {
+      const savedValue = sessionStorage.getItem(scrollKey);
+      if (savedValue !== null) savedScrollY = Number(savedValue);
+      savedLeadId = sessionStorage.getItem(leadKey) || "";
+    } catch {
+      savedScrollY = null;
+      savedLeadId = "";
+    }
+
+    // Wait for React to render the saved page and target row before restoring.
+    let attempts = 0;
+    const restoreLeadPosition = () => {
+      attempts += 1;
+      const targetRow = savedLeadId
+        ? document.querySelector(`[data-lead-id="${CSS.escape(savedLeadId)}"]`)
+        : null;
+
+      if (targetRow) {
+        targetRow.scrollIntoView({ block: "center", behavior: "auto" });
+        hasRestoredLeadScrollRef.current = true;
+        try {
+          sessionStorage.removeItem(scrollKey);
+          sessionStorage.removeItem(leadKey);
+        } catch {}
+        return;
+      }
+
+      if (attempts < 12) {
+        requestAnimationFrame(restoreLeadPosition);
+        return;
+      }
+
+      if (Number.isFinite(savedScrollY) && savedScrollY >= 0) {
+        window.scrollTo({ top: savedScrollY, behavior: "auto" });
+      }
+      hasRestoredLeadScrollRef.current = true;
+      try {
+        sessionStorage.removeItem(scrollKey);
+        sessionStorage.removeItem(leadKey);
+      } catch {}
+    };
+
+    requestAnimationFrame(restoreLeadPosition);
+  }, [loadingLeads, currentPage, paginatedLeads, user]);
+
 
   const paginationStart = filteredLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PER_PAGE + 1;
   const paginationEnd = Math.min(currentPage * LEADS_PER_PAGE, filteredLeads.length);
@@ -1462,6 +1576,19 @@ export default function Leads({
 
   const openLeadDetails =
     (lead) => {
+      // Save the current list page before navigating to a lead's details.
+      try {
+        const storageKey = getLeadPageStorageKey(user);
+        sessionStorage.setItem(storageKey, String(currentPage));
+        sessionStorage.setItem(
+          `${storageKey}_scrollY`,
+          String(window.scrollY || window.pageYOffset || 0)
+        );
+        sessionStorage.setItem(`${storageKey}_leadId`, String(lead?._id || ""));
+      } catch {
+        // Navigation should still work if session storage is unavailable.
+      }
+
       const leadId = String(lead?._id || "");
 
       if (leadId) {
@@ -1919,6 +2046,7 @@ export default function Leads({
                           key={
                             lead._id
                           }
+                          data-lead-id={String(lead?._id || "")}
                           className={`lead-clickable-row ${unreadLeadIds.has(String(lead._id))
                             ? "lead-new-row"
                             : ""
@@ -1941,19 +2069,16 @@ export default function Leads({
 
                           <td>
 
-                            <div
-                              className="lead-name-cell"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() =>
-                                openLeadDetails(lead)
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  openLeadDetails(lead);
-                                }
-                              }}
+                           
+                        <div
+                          className="lead-name-cell"
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openLeadDetails(lead);
+                          }}
+
                             >
 
                               <span className="lead-avatar">
