@@ -54,6 +54,13 @@ const ADDONS = {
         quotaPerMonth: 3000,
         unitLabel: "AI conversations",
     },
+
+    pharmacy_invoice: {
+        name: "Pharmacy Invoice",
+        unitPrice: 1000,
+        quotaPerMonth: 0,
+        unitLabel: "invoices",
+    },
 };
 
 function getUserId(req) {
@@ -183,12 +190,17 @@ function calculateSubscription(
     };
 }
 
+
 function calculateAddon(
     addonType,
     quantity,
     currency
 ) {
-    const addon = getAddon(addonType);
+    const normalizedType = String(addonType || "")
+        .trim()
+        .toLowerCase();
+
+    const addon = getAddon(normalizedType);
 
     if (!addon) {
         return null;
@@ -198,26 +210,33 @@ function calculateAddon(
         return null;
     }
 
-    const packs = Number(quantity);
+    const isPharmacyInvoice =
+        normalizedType === "pharmacy_invoice";
 
-    if (
-        !Number.isInteger(packs) ||
-        packs < 1 ||
-        packs > 10
-    ) {
-        return null;
+    let packs = 1;
+
+    if (!isPharmacyInvoice) {
+        packs = Number(quantity);
+
+        if (
+            !Number.isInteger(packs) ||
+            packs < 1 ||
+            packs > 10
+        ) {
+            return null;
+        }
     }
 
-    const amount =
-        addon.unitPrice * packs;
+    const amount = isPharmacyInvoice
+        ? 1000
+        : addon.unitPrice * packs;
 
-    const quota =
-        addon.quotaPerMonth * packs;
+    const quota = isPharmacyInvoice
+        ? 0
+        : addon.quotaPerMonth * packs;
 
     return {
-        addonType: String(addonType)
-            .trim()
-            .toLowerCase(),
+        addonType: normalizedType,
         addonName: addon.name,
         quantity: packs,
         months: 1,
@@ -228,6 +247,7 @@ function calculateAddon(
         currency: "INR",
     };
 }
+
 
 function calculateSetupFee(
     user,
@@ -475,14 +495,18 @@ async function activateAddon(
         );
     }
 
-    if (
-        user.subscription?.status !==
-        "active"
-    ) {
-        throw new Error(
-            "Active subscription required for add-on"
-        );
-    }
+    const subscription = user.subscription || {};
+
+        const subscriptionIsActive =
+            subscription.status === "active" &&
+            subscription.expiresAt &&
+            new Date(subscription.expiresAt).getTime() > Date.now();
+
+        if (!subscriptionIsActive) {
+            throw new Error(
+                "An active, non-expired subscription is required for add-on"
+            );
+        }
 
     const addonType =
         String(
@@ -501,6 +525,9 @@ async function activateAddon(
         user.addons?.[
             addonType
         ] || {};
+    
+    const isPharmacyInvoice =
+    addonType === "pharmacy_invoice";
 
     const now =
         new Date();
@@ -520,10 +547,9 @@ async function activateAddon(
                     now.getTime()
         );
 
-    const purchasedQuota =
-        Number(
-            order.addonQuota || 0
-        );
+    const purchasedQuota = isPharmacyInvoice
+    ? 0
+    : Number(order.addonQuota || 0);
 
     const unitPrice =
         Number(
@@ -546,8 +572,7 @@ async function activateAddon(
                   )
                 : now;
 
-        expiresAt =
-            existingExpiresAt;
+       expiresAt = addMonths(existingExpiresAt, 1);
 
         quota =
             Number(
@@ -1105,16 +1130,20 @@ exports.createOrder =
                     });
                 }
 
-                if (
-                    user.subscription?.status !==
-                    "active"
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "Please activate a CRM plan before purchasing an add-on.",
-                    });
-                }
+               const subscription = user.subscription || {};
+
+                    const subscriptionIsActive =
+                        subscription.status === "active" &&
+                        subscription.expiresAt &&
+                        new Date(subscription.expiresAt).getTime() > Date.now();
+
+                    if (!subscriptionIsActive) {
+                        return res.status(400).json({
+                            success: false,
+                            message:
+                                "Please activate or renew your CRM plan before purchasing an add-on.",
+                        });
+                    }
 
                 const addonCalculation =
                     calculateAddon(

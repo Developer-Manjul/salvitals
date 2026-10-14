@@ -11,10 +11,12 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "html2pdf.js": "^0.14.0",
+    "lucide-react": "^1.56.0",
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "^7.18.3",
     "sass": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "xlsx": "^0.18.5"
   }
 }

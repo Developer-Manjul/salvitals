@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ClinicProfile from "./ClinicProfile";
 import Services from "./Services";
+import Pharmacy from "../components/Pharmacy";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 import { getApiBaseUrl } from "../config/api";
 import { PLANS, getPlanPrice } from "../config/pricing";
@@ -14,7 +15,7 @@ const baseSettingsGroups = [
   },
   {
     label: "CRM",
-    items: ["Lead Sources", "Lead Stages", "Services"],
+    items: ["Lead Sources", "Lead Stages", "Services", "Pharmacy"],
   },
   {
     label: "COMMUNICATION",
@@ -1868,6 +1869,7 @@ function PlanBillingContent() {
 
   const contactAddon = billing?.addons?.contacts || {};
   const aiAddon = billing?.addons?.ai_chat || {};
+  const pharmacyInvoiceAddon = billing?.addons?.pharmacy_invoice || {};
   const billingHistory = billing?.billingHistory || [];
 
   const addonCards = [
@@ -1895,6 +1897,17 @@ function PlanBillingContent() {
       enabled: true,
       tone: "purple",
     },
+
+    {
+    id: "pharmacy_invoice",
+    title: "Pharmacy Invoice",
+    description: "Create and manage pharmacy invoices in your CRM.",
+    price: 1000,
+    addon: pharmacyInvoiceAddon,
+    icon: "▤",
+    enabled: true,
+    tone: "green",
+  },
   ];
 
   if (loading) {
@@ -2102,24 +2115,105 @@ function PlanBillingContent() {
           <div className="plan-billing-section-title"><div><h3>Add-ons</h3><p>Increase your CRM capacity with simple quantity-based add-ons.</p></div></div>
           <div className="billing-addon-grid">
             {addonCards.map((addon) => {
-              const quantity = Number(addonQuantity[addon.id] || 1);
-              const totalQuota = addon.quota * quantity;
-              const totalAmount = addon.price * quantity;
-              const isEnabled = addon.addon?.status === "active";
+              
+            const quantity = Number(addonQuantity[addon.id] || 1);
+            const isPharmacyInvoice = addon.id === "pharmacy_invoice";
+            const totalQuota = Number(addon.quota || 0) * quantity;
+            const totalAmount = Number(addon.price || 0) * quantity;
+            const isEnabled = addon.addon?.status === "active";
+
               return (
-                <div className="billing-addon-card" key={addon.id}>
-                  <div className="billing-addon-head">
-                    <div><span className="billing-addon-icon">{addon.icon}</span><div><h4>{addon.title}</h4><p>{addon.description}</p></div></div>
-                    {isEnabled && <span className="billing-addon-active">Active</span>}
+                
+              <div className="billing-addon-card" key={addon.id}>
+                <div className="billing-addon-head">
+                  <div>
+                    <span className="billing-addon-icon">{addon.icon}</span>
+                    <div>
+                      <h4>{addon.title}</h4>
+                      <p>{addon.description}</p>
+                    </div>
                   </div>
-                  <div className="billing-addon-price"><strong>₹{addon.price.toLocaleString("en-IN")}</strong><span>/ pack</span></div>
-                  <div className="billing-addon-capacity"><strong>{addon.quota.toLocaleString("en-IN")}</strong><span>additional {addon.unit} per pack</span></div>
-                  {isEnabled && <div className="billing-addon-current"><span>Current remaining</span><strong>{Number(addon.addon?.remaining || 0).toLocaleString("en-IN")}</strong></div>}
-                  <div className="billing-addon-period"><span>Quantity</span><div className="billing-addon-quantity"><button type="button" onClick={() => updateQuantity(addon.id, quantity - 1)} disabled={quantity <= 1}>−</button><strong>{quantity}</strong><button type="button" onClick={() => updateQuantity(addon.id, quantity + 1)} disabled={quantity >= 10}>+</button></div></div>
-                  <div className="billing-addon-total"><span>Total capacity</span><strong>{totalQuota.toLocaleString("en-IN")} {addon.unit}</strong></div>
-                  <div className="billing-addon-total"><span>Amount</span><strong>₹{totalAmount.toLocaleString("en-IN")}</strong></div>
-                  <button type="button" className="billing-addon-button" onClick={() => startAddon(addon.id, quantity)} disabled={!isActive}>{!isActive ? "Activate a plan first" : "Pay Now"}</button>
+                  {isEnabled && (
+                    <span className="billing-addon-active">Active</span>
+                  )}
                 </div>
+
+                <div className="billing-addon-price">
+                  <strong>
+                    ₹{Number(addon.price || 0).toLocaleString("en-IN")}
+                  </strong>
+                  <span>{isPharmacyInvoice ? "/ month" : "/ pack"}</span>
+                </div>
+
+                {!isPharmacyInvoice && (
+                  <div className="billing-addon-capacity">
+                    <strong>
+                      {Number(addon.quota || 0).toLocaleString("en-IN")}
+                    </strong>
+                    <span>additional {addon.unit || ""} per pack</span>
+                  </div>
+                )}
+
+                {isEnabled && (
+                  <div className="billing-addon-current">
+                    <span>Current remaining</span>
+                    <strong>
+                      {Number(addon.addon?.remaining || 0).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                )}
+
+                {!isPharmacyInvoice && (
+                  <div className="billing-addon-period">
+                    <span>Quantity</span>
+                    <div className="billing-addon-quantity">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(addon.id, quantity - 1)}
+                        disabled={quantity <= 1}
+                      >
+                        −
+                      </button>
+                      <strong>{quantity}</strong>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(addon.id, quantity + 1)}
+                        disabled={quantity >= 10}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="billing-addon-total">
+                  <span>Total capacity</span>
+                  <strong>
+                    {isPharmacyInvoice
+                      ? "Unlimited"
+                      : `${(Number(addon.quota || 0) * quantity).toLocaleString("en-IN")} ${addon.unit || ""}`}
+                  </strong>
+                </div>
+
+                <div className="billing-addon-total">
+                  <span>Amount</span>
+                  <strong>
+                    ₹{(Number(addon.price || 0) * (isPharmacyInvoice ? 1 : quantity)).toLocaleString("en-IN")}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="billing-addon-button"
+                  onClick={() => startAddon(addon.id, isPharmacyInvoice ? 1 : quantity)}
+                  disabled={!isActive}
+                >
+                  {!isActive
+                    ? "Activate a plan first"
+                    : "Pay Now"}
+                </button>
+              </div>
+
               );
             })}
           </div>
@@ -2165,6 +2259,14 @@ export default function Settings({
     String(user?.speciality || "")
       .trim()
       .toLowerCase() === "healthcare";
+  
+  const pharmacyAddon = user?.addons?.pharmacy_invoice;
+
+const hasPharmacyAddon =
+  user?.subscription?.status === "active" &&
+  pharmacyAddon?.enabled === true &&
+  pharmacyAddon?.expiresAt &&
+  new Date(pharmacyAddon.expiresAt).getTime() > Date.now();
 
   const [activeTab, setActiveTab] =
     useState("Business Profile");
@@ -2263,6 +2365,9 @@ export default function Settings({
 
       case "Services":
         return <Services />;
+      
+     case "Pharmacy":
+  return hasPharmacyAddon ? <Pharmacy /> : null;
 
       case "Integrations":
         return <MetaIntegrationPanel />;
@@ -2290,50 +2395,48 @@ export default function Settings({
 
       <div className="settings-layout">
         <aside className="settings-sidebar">
-          {getSettingsGroups(isHealthcare, user).map(
-            (group) => (
-              <div
-                className="settings-group"
-                key={group.label}
-              >
-                <div className="settings-group-label">
-                  {group.label}
-                </div>
+         {getSettingsGroups(isHealthcare, user).map((group) => {
+          const visibleItems = group.items.filter((item) => {
+            if (item === "Pharmacy") {
+              return hasPharmacyAddon;
+            }
 
-                <div className="settings-group-items">
-                  {group.items.map((item) => {
-                    const isActive =
-                      activeTab === item;
+            return true;
+          });
 
-                    return (
-                      <button
-                        type="button"
-                        key={item}
-                        className={
-                          isActive
-                            ? "settings-tab active"
-                            : "settings-tab"
-                        }
-                        onClick={() =>
-                          setActiveTab(item)
-                        }
-                      >
-                        <span className="settings-tab-text">
-                          {item}
-                        </span>
+          if (visibleItems.length === 0) return null;
 
-                        {isActive && (
-                          <span className="settings-tab-arrow">
-                            ›
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+          return (
+            <div className="settings-group" key={group.label}>
+              <div className="settings-group-label">
+                {group.label}
               </div>
-            )
-          )}
+
+              <div className="settings-group-items">
+                {visibleItems.map((item) => {
+                  const isActive = activeTab === item;
+
+                  return (
+                    <button
+                      type="button"
+                      key={item}
+                      className={
+                        isActive ? "settings-tab active" : "settings-tab"
+                      }
+                      onClick={() => setActiveTab(item)}
+                    >
+                      <span className="settings-tab-text">{item}</span>
+
+                      {isActive && (
+                        <span className="settings-tab-arrow">›</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
         </aside>
 
         <main className="settings-content">

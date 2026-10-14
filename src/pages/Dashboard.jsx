@@ -11,6 +11,7 @@ import Contacts from "./Contacts";
 import FollowUps from "./FollowUps";
 import Calendar from "./Calendar";
 import Invoice from "./Invoice";
+import PharmacyInvoice from "./PharmacyInvoice";
 import AIAssistant from "./AIAssistant";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 
@@ -37,12 +38,15 @@ const navGroups = [
       ["WhatsApp", "whatsapp"],
     ],
   },
+  
   {
     label: "Revenue",
     items: [
       ["Invoices", "invoice"],
+      ["Pharmacy Invoice", "invoice"],
     ],
   },
+
   {
     label: "Manage",
     items: [
@@ -61,6 +65,7 @@ const NAV_PERMISSIONS = {
   "AI Assistant": "ai.view",
   WhatsApp: "whatsapp.view",
   Invoices: "invoices.view",
+  "Pharmacy Invoice": null,
   Integrations: "integrations.view",
   Settings: null,
 };
@@ -1282,12 +1287,30 @@ export default function Dashboard() {
   const canAccessNav = (name) =>
     hasPermission(NAV_PERMISSIONS[name]);
 
+  const hasActivePharmacyAddon = () => {
+    const addon = billing?.addons?.pharmacy_invoice;
+
+    return (
+        addon?.enabled === true &&
+        addon?.status === "active" &&
+        addon?.expiresAt &&
+        new Date(addon.expiresAt).getTime() > Date.now() &&
+        billing?.subscription?.status === "active" &&
+        billing?.subscription?.expiresAt &&
+        new Date(billing.subscription.expiresAt).getTime() > Date.now()
+    );
+};
+
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(([name]) =>
-        canAccessNav(name)
-      ),
+      items: group.items.filter(([name]) => {
+        if (name === "Pharmacy Invoice") {
+            return hasActivePharmacyAddon();
+        }
+
+        return canAccessNav(name);
+    }),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -1818,6 +1841,10 @@ export default function Dashboard() {
     if (active === "Invoices") {
       return <Invoice />;
     }
+
+    if (active === "Pharmacy Invoice") {
+      return <PharmacyInvoice />;
+  }
 
     if (
       active === "LeadDetails" &&

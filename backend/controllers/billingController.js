@@ -569,20 +569,6 @@ exports.getCurrentBilling =
             ]);
 
 
-            /*
-             * IMPORTANT:
-             *
-             * Leads are already converted/created as contacts
-             * in the current website lead flow.
-             *
-             * Therefore DO NOT add leadCount again.
-             *
-             * Old:
-             * contactCount + leadCount
-             *
-             * New:
-             * contactCount
-             */
 
             const contactUsed =
                 contactCount;
@@ -675,6 +661,11 @@ exports.getCurrentBilling =
                 normalizeAddon(
                     user.addons?.ai_chat
                 );
+            
+            const pharmacyInvoiceAddon = normalizeAddon(
+                user.addons?.pharmacy_invoice
+            );
+            
 
 
             const aiAddonLimit =
@@ -1026,6 +1017,11 @@ exports.getCurrentBilling =
                                 aiAddon
                             ),
                     },
+
+                     pharmacy_invoice: {
+                    ...pharmacyInvoiceAddon,
+                    status: getAddonStatus(pharmacyInvoiceAddon),
+                },
                 },
 
 

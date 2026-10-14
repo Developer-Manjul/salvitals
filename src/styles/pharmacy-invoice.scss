@@ -1,0 +1,731 @@
+/* Pharmacy invoice uses the same base layout as Invoice.jsx.
+   These rules only style Pharmacy-specific controls and print behavior. */
+
+.pharmacy-invoice-page .invoice-create-layout {
+  align-items: start;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-lines {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line-head,
+.pharmacy-invoice-page .pharmacy-invoice-line {
+  display: grid;
+  grid-template-columns: minmax(220px, 2.1fr) minmax(110px, .9fr) minmax(75px, .55fr) minmax(90px, .65fr) minmax(115px, .85fr) 30px;
+  gap: 10px;
+  align-items: start;
+  min-width: 820px;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line-head {
+  padding: 0 10px 10px;
+  color: #66758b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line {
+  padding: 12px 10px;
+  border: 1px solid #e1e7ef;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line > input,
+.pharmacy-invoice-page .pharmacy-invoice-line > select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #d6dfeb;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: #243247;
+  font: inherit;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line .invoice-field select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #d6dfeb;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: #243247;
+  font: inherit;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line .invoice-field small {
+  display: block;
+  margin-top: 6px;
+  color: #738198;
+  font-size: 11px;
+}
+
+.pharmacy-invoice-page .pharmacy-price-readonly {
+  background: #f7f9fc !important;
+}
+
+.pharmacy-invoice-page .pharmacy-line-total {
+  padding-top: 12px;
+  color: #1d293b;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pharmacy-invoice-page .pharmacy-customer-search {
+  position: relative;
+  z-index: 5;
+}
+
+.pharmacy-invoice-page .pharmacy-customer-options {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dce4ee;
+  border-radius: 9px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .12);
+}
+
+.pharmacy-invoice-page .pharmacy-customer-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid #edf1f6;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pharmacy-invoice-page .pharmacy-customer-options button:hover {
+  background: #f3f7ff;
+}
+
+.pharmacy-invoice-page .pharmacy-customer-options span {
+  color: #718096;
+  font-size: 12px;
+}
+
+.pharmacy-invoice-page .pharmacy-whatsapp-button {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document {
+  width: 100%;
+  max-width: 850px;
+  min-height: 1050px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 42px 38px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, .08);
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table th,
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table td {
+  overflow-wrap: anywhere;
+  padding: 10px 8px;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table th:first-child,
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table td:first-child {
+  width: 34px;
+  text-align: center;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table th:nth-child(2),
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table td:nth-child(2) {
+  width: 35%;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table th:nth-child(3),
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table td:nth-child(3) {
+  width: 55px;
+  text-align: right;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table th:nth-child(n+4),
+.pharmacy-invoice-page .pharmacy-invoice-document .invoice-document-table td:nth-child(n+4) {
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .pharmacy-invoice-page .invoice-create-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pharmacy-invoice-page .invoice-create-sidebar {
+    position: static;
+    order: -1;
+  }
+
+  .pharmacy-invoice-page .pharmacy-invoice-document {
+    min-height: auto;
+    padding: 25px 18px;
+  }
+
+  .pharmacy-invoice-page .invoice-preview-overlay {
+    padding: 8px;
+  }
+
+  .pharmacy-invoice-page .invoice-preview-modal {
+    max-height: calc(100vh - 16px);
+  }
+
+  .pharmacy-invoice-page .invoice-preview-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pharmacy-invoice-page .invoice-preview-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .pharmacy-preview-overlay,
+  .pharmacy-preview-overlay * {
+    visibility: visible !important;
+  }
+
+  .pharmacy-preview-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .pharmacy-preview-overlay .invoice-preview-modal {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .pharmacy-preview-overlay .invoice-preview-head,
+  .pharmacy-preview-overlay .invoice-preview-footer {
+    display: none !important;
+  }
+
+  .pharmacy-preview-overlay .invoice-preview-scroll {
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .pharmacy-invoice-page .pharmacy-invoice-document {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 12mm !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
+
+/* Pharmacy-specific form polish: clear labels, compact responsive medicine rows. */
+.pharmacy-invoice-page .pharmacy-invoice-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: #e8f5f5;
+  color: #00656a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-lines {
+  display: grid;
+  gap: 12px;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line {
+  display: grid;
+  grid-template-columns: minmax(220px, 2.2fr) minmax(130px, 1fr) minmax(85px, .55fr) minmax(90px, .65fr) minmax(115px, .85fr) 30px;
+  align-items: end;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dce6ef;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+  box-shadow: 0 3px 12px rgba(26, 54, 93, .035);
+}
+
+.pharmacy-invoice-page .pharmacy-line-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pharmacy-invoice-page .pharmacy-line-field > label {
+  display: block;
+  color: #53647b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .025em;
+}
+
+.pharmacy-invoice-page .pharmacy-line-field > input,
+.pharmacy-invoice-page .pharmacy-line-field > select,
+.pharmacy-invoice-page .pharmacy-line-field .invoice-field select {
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid #d4dfec;
+  border-radius: 8px;
+  background: #fff;
+  color: #203047;
+  font: inherit;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.pharmacy-invoice-page .pharmacy-line-field > input:focus,
+.pharmacy-invoice-page .pharmacy-line-field > select:focus,
+.pharmacy-invoice-page .pharmacy-line-field .invoice-field select:focus {
+  border-color: #00656a;
+  box-shadow: 0 0 0 3px rgba(0, 101, 106, .1);
+}
+
+.pharmacy-invoice-page .pharmacy-line-field .invoice-field {
+  width: 100%;
+}
+
+.pharmacy-invoice-page .pharmacy-line-field .invoice-field select {
+  width: 100%;
+}
+
+.pharmacy-invoice-page .pharmacy-line-field small {
+  color: #74839a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pharmacy-invoice-page .pharmacy-line-amount-field .pharmacy-line-total {
+  display: flex;
+  align-items: center;
+  min-height: 43px;
+  justify-content: flex-end;
+  padding: 0 4px;
+  color: #00656a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.pharmacy-invoice-page .pharmacy-price-readonly {
+  background: #f3f7fa !important;
+  color: #516177 !important;
+  font-weight: 700 !important;
+}
+
+.pharmacy-invoice-page .pharmacy-invoice-line .invoice-remove-item,
+.pharmacy-invoice-page .pharmacy-invoice-line .invoice-remove-item:disabled {
+  align-self: center;
+}
+
+.pharmacy-invoice-page .invoice-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.pharmacy-invoice-page .invoice-actions button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, .12);
+  transition: transform .15s ease, filter .15s ease;
+}
+
+.pharmacy-invoice-page .invoice-actions button:hover {
+  transform: translateY(-1px);
+  filter: brightness(.96);
+}
+
+.pharmacy-invoice-page .invoice-actions button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pharmacy-invoice-page .invoice-actions .pharmacy-action-edit { background: #00656a; }
+.pharmacy-invoice-page .invoice-actions .pharmacy-action-pdf { background: #3867d6; }
+.pharmacy-invoice-page .invoice-actions .pharmacy-action-download { background: #0e91a4; }
+.pharmacy-invoice-page .invoice-actions .pharmacy-action-whatsapp { background: #16a34a; }
+.pharmacy-invoice-page .invoice-actions .pharmacy-action-delete { background: #e34f5f; }
+
+.pharmacy-invoice-page .pharmacy-delivery-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pharmacy-invoice-page .pharmacy-delivery-status.is-sent { color: #137443; background: #e4f7ec; }
+.pharmacy-invoice-page .pharmacy-delivery-status.is-pending { color: #64748b; background: #f1f5f9; }
+
+.pharmacy-invoice-page .pharmacy-whatsapp-button {
+  border-radius: 9px !important;
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+
+@media (max-width: 1100px) {
+  .pharmacy-invoice-page .pharmacy-invoice-line {
+    grid-template-columns: minmax(220px, 2fr) minmax(120px, 1fr) minmax(80px, .6fr) minmax(90px, .7fr);
+  }
+  .pharmacy-invoice-page .pharmacy-line-amount-field { grid-column: 2 / 4; }
+}
+
+@media (max-width: 700px) {
+  .pharmacy-invoice-page .pharmacy-invoice-line {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    padding: 13px;
+  }
+  .pharmacy-invoice-page .pharmacy-line-field:first-child { grid-column: 1 / -1; }
+  .pharmacy-invoice-page .pharmacy-line-amount-field { grid-column: auto; }
+  .pharmacy-invoice-page .invoice-actions { flex-wrap: wrap; }
+  .pharmacy-invoice-page .invoice-actions button { width: 36px; height: 36px; }
+}
+
+
+/* Pharmacy invoice action buttons fix */
+.pharmacy-invoice-page {
+  .invoice-actions,
+  .pharmacy-invoice-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .invoice-actions button,
+  .pharmacy-invoice-actions button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    border: 1px solid #dbe3ef;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #334155;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+    opacity: 1;
+  }
+
+  .invoice-actions button svg,
+  .pharmacy-invoice-actions button svg {
+    color: inherit;
+    stroke: currentColor;
+    opacity: 1;
+  }
+
+  .invoice-actions button:hover,
+  .pharmacy-invoice-actions button:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #2563eb;
+  }
+}
+
+
+.pharmacy-invoice-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 12px;
+    color: #fff !important;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn svg {
+    color: #fff !important;
+    stroke: currentColor;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(0.92);
+}
+
+.pharmacy-action-edit {
+    background: #2864ed !important;
+}
+
+.pharmacy-action-pdf {
+    background: #0797b1 !important;
+}
+
+.pharmacy-action-preview {
+    background: #8138ed !important;
+}
+
+.pharmacy-action-whatsapp {
+    background: #16a34a !important;
+}
+
+.pharmacy-action-delete {
+    background: #e5262c !important;
+}
+
+
+.pharmacy-invoice-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  color: #fff !important;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn svg {
+  color: #fff !important;
+  stroke: currentColor;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(0.92);
+}
+
+.pharmacy-invoice-actions .pharmacy-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-edit {
+  background: #2864ed !important;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-pdf {
+  background: #0797b1 !important;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-preview {
+  background: #8138ed !important;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-whatsapp {
+  background: #16a34a !important;
+}
+
+.pharmacy-invoice-actions .pharmacy-action-delete {
+  background: #e5262c !important;
+}
+
+
+.invoice-whatsapp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 205px;
+    height: 40px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 10px;
+    background: #16a34a;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(22, 163, 74, 0.18);
+}
+
+.invoice-whatsapp-btn:hover {
+    background: #15803d;
+}
+
+.invoice-whatsapp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.invoice-whatsapp-svg {
+    width: 23px;
+    height: 23px;
+    flex-shrink: 0;
+}
+
+
+
+/* Fix Pharmacy Invoice action buttons */
+.pharmacy-invoice-page .invoice-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+    min-width: max-content;
+}
+
+.pharmacy-invoice-page .invoice-actions > button {
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.pharmacy-invoice-page .invoice-actions > .invoice-whatsapp-btn {
+    flex: 0 0 205px;
+    width: 205px;
+    min-width: 205px;
+    height: 44px;
+    padding: 0 12px;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: visible;
+    background: #16a34a;
+    color: #fff;
+    font-size: 11px !important;
+    font-weight: 600;
+}
+
+.pharmacy-invoice-page .invoice-actions > .invoice-whatsapp-btn span {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.pharmacy-invoice-page .invoice-actions > .invoice-whatsapp-btn .invoice-whatsapp-svg {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+}
+
+/* Keep the table wide enough for all action buttons */
+.pharmacy-invoice-page .invoice-table {
+    min-width: 1100px;
+}
+
+.pharmacy-invoice-page .invoice-table th:last-child,
+.pharmacy-invoice-page .invoice-table td:last-child {
+    min-width: 440px;
+}
+
+
+
+.invoice-whatsapp-btn {
+    display: inline-flex;
+    width: 100%;
+    min-height: 30px !important;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 8px 8px !important;
+    border: none;
+    border-radius: 10px;
+    background: #16a34a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.invoice-whatsapp-btn:hover {
+    background: #15803d;
+}
+
+.invoice-whatsapp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.invoice-whatsapp-svg {
+    width: 23px;
+    height: 23px;
+    flex-shrink: 0;
+}

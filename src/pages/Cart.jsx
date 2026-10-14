@@ -24,6 +24,14 @@ const ADDONS = {
     quota: 3000,
     unit: "conversations",
   },
+
+  pharmacy_invoice: {
+  id: "pharmacy_invoice",
+  name: "Pharmacy Invoice",
+  price: 1000,
+  quota: 0,
+  unit: "",
+  },
 };
 
 const goTo = (url) => {
@@ -392,6 +400,7 @@ const Cart = () => {
   const totalAddonQuota =
     addonQuota *
     Number(selectedQuantity);
+  const isPharmacyInvoice = addonType === "pharmacy_invoice";
 
   const formatPrice = (amount) => {
     if (
@@ -944,92 +953,62 @@ const Cart = () => {
             </button>
           </div>
 
-          <div className="cart-layout">
-            <section className="cart-plan-card">
-              <div className="selected-plan-header">
-                <div className="plan-icon">
-                  {addonType === "ai_chat"
-                    ? "✦"
-                    : "▤"}
-                </div>
+         <div className="cart-layout">
+        <section className="cart-plan-card">
+          <div className="selected-plan-header">
+            <div className="plan-icon">
+              {addonType === "ai_chat" ? "✦" : "▤"}
+            </div>
 
-                <div>
-                  <h2>
-                    {addonName}
-                  </h2>
+            <div>
+              <h2>{addonName}</h2>
+              <p>Sale Vitals CRM</p>
+            </div>
+          </div>
 
-                  <p>
-                    Sale Vitals CRM
-                  </p>
-                </div>
+          <div className="card-divider" />
+
+          <div className="selected-plan-row">
+            <div>
+              <span className="small-label">Selected add-on</span>
+              <h3>{addonName}</h3>
+            </div>
+
+            <strong>
+              ₹{selectedAddon.price.toLocaleString("en-IN")}/month
+            </strong>
+          </div>
+
+          {!isPharmacyInvoice && (
+            <div className="setup-section">
+              <div className="setup-check">✓</div>
+
+              <div className="setup-content">
+                <h3>Additional capacity</h3>
+
+                <p>
+                  {addonQuota.toLocaleString("en-IN")} additional{" "}
+                  {selectedAddon.unit} per pack.
+                </p>
+
+                <span>
+                  {totalAddonQuota.toLocaleString("en-IN")}{" "}
+                  {selectedAddon.unit} total for {selectedQuantity} pack
+                  {selectedQuantity > 1 ? "s" : ""}. Valid for 1 month.
+                </span>
               </div>
 
-              <div className="card-divider" />
-
-              <div className="selected-plan-row">
-                <div>
-                  <span className="small-label">
-                    Selected add-on
-                  </span>
-
-                  <h3>
-                    {addonName}
-                  </h3>
-                </div>
-
+              <div className="setup-price">
                 <strong>
-                  ₹
-                  {selectedAddon.price.toLocaleString(
-                    "en-IN"
-                  )}
-                  /month
+                  ₹{selectedAddon.price.toLocaleString("en-IN")}
                 </strong>
+                <small>/pack</small>
               </div>
+            </div>
+          )}
 
-              <div className="setup-section">
-                <div className="setup-check">
-                  ✓
-                </div>
-
-                <div className="setup-content">
-                  <h3>
-                    Additional capacity
-                  </h3>
-
-                  <p>
-                    {addonQuota.toLocaleString(
-                      "en-IN"
-                    )}{" "}
-                    additional{" "}
-                    {selectedAddon.unit}{" "}
-                    per pack.
-                  </p>
-
-                  <span>
-                    {totalAddonQuota.toLocaleString(
-                      "en-IN"
-                    )}{" "}
-                    {selectedAddon.unit}{" "}
-                    total for {selectedQuantity} pack
-                    {selectedQuantity > 1 ? "s" : ""}.
-                    Valid for 1 month.
-                  </span>
-                </div>
-
-                <div className="setup-price">
-                  <strong>
-                    ₹
-                    {selectedAddon.price.toLocaleString(
-                      "en-IN"
-                    )}
-                  </strong>
-
-                  <small>
-                    /pack
-                  </small>
-                </div>
-              </div>
-
+          {!isPharmacyInvoice && (
+            <>
               <div className="card-divider" />
 
               <div className="subscription-title">
@@ -1092,183 +1071,111 @@ const Cart = () => {
                   {selectedQuantity > 1 ? "s" : ""} · valid for 1 month
                 </span>
               </div>
+            </>
+          )}
 
-              <div className="features-included">
-                <span>✓</span>
-
-                Add-on will be activated on
-                your existing active plan.
-              </div>
-            </section>
-
-            <aside className="cart-sidebar">
-              <div className="order-summary-card">
-                <h2>
-                  Order summary
-                </h2>
-
-                <div className="summary-plan-row">
-                  <strong>
-                    {addonName}
-                  </strong>
-
-                  <strong>
-                    {formatPrice(
-                      addonSubtotal
-                    )}
-                  </strong>
-                </div>
-
-                <div className="summary-period">
-                  {selectedQuantity} pack
-                  {selectedQuantity > 1 ? "s" : ""} · Valid for 1 month
-                </div>
-
-                <div className="summary-plan-row">
-                  <div>
-                    <strong>
-                      Capacity
-                    </strong>
-
-                    <small>
-                      {totalAddonQuota.toLocaleString(
-                        "en-IN"
-                      )}{" "}
-                      {selectedAddon.unit}
-                    </small>
-                  </div>
-
-                  <strong>
-                    {totalAddonQuota.toLocaleString(
-                      "en-IN"
-                    )}
-                  </strong>
-                </div>
-
-                <div className="summary-divider" />
-
-                <div className="summary-row">
-                  <span>
-                    Subtotal
-                  </span>
-
-                  <strong>
-                    {formatPrice(
-                      addonSubtotal
-                    )}
-                  </strong>
-                </div>
-
-                <div className="summary-row">
-                  <span>
-                    Tax (
-                    {currency ===
-                    "INR"
-                      ? "18%"
-                      : "0%"}
-                    )
-                  </span>
-
-                  <strong>
-                    {formatPrice(
-                      addonTax
-                    )}
-                  </strong>
-                </div>
-
-                <div className="summary-divider" />
-
-                <div className="total-row">
-                  <div>
-                    <strong>
-                      Total
-                    </strong>
-
-                    <small>
-                      Includes applicable
-                      tax
-                    </small>
-                  </div>
-
-                  <strong className="total-price">
-                    {formatPrice(
-                      addonTotal
-                    )}
-                  </strong>
-                </div>
-
-                {error && (
-                  <div className="payment-error">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  className="payment-btn"
-                  disabled={
-                    loading ||
-                    billingLoading
-                  }
-                  onClick={
-                    handlePayment
-                  }
-                >
-                  {loading
-                    ? "Processing..."
-                    : "Continue to payment"}
-
-                  <span>
-                    →
-                  </span>
-                </button>
-
-                <div className="razorpay-text">
-                  🔒 Secure payment
-                  powered by
-                  Razorpay
-                </div>
-              </div>
-
-              <div className="security-card">
-                <div className="security-item">
-                  <div className="security-icon">
-                    ♧
-                  </div>
-
-                  <div>
-                    <strong>
-                      Secure checkout
-                    </strong>
-
-                    <span>
-                      Your payment
-                      information is
-                      protected.
-                    </span>
-                  </div>
-                </div>
-
-                <div className="security-item">
-                  <div className="security-icon">
-                    ✓
-                  </div>
-
-                  <div>
-                    <strong>
-                      Invoice
-                    </strong>
-
-                    <span>
-                      Invoice generated
-                      after successful
-                      payment.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </aside>
+          <div className="features-included">
+            <span>✓</span>
+            {isPharmacyInvoice
+              ? "Unlimited pharmacy invoice access for 1 month."
+              : "Add-on will be activated on your existing active plan."}
           </div>
+        </section>
+
+  <aside className="cart-sidebar">
+    <div className="order-summary-card">
+      <h2>Order summary</h2>
+
+      <div className="summary-plan-row">
+        <strong>{addonName}</strong>
+        <strong>{formatPrice(addonSubtotal)}</strong>
+      </div>
+
+      <div className="summary-period">
+        {isPharmacyInvoice
+          ? "Valid for 1 month"
+          : `${selectedQuantity} pack${selectedQuantity > 1 ? "s" : ""} · Valid for 1 month`}
+      </div>
+
+      {!isPharmacyInvoice && (
+        <div className="summary-plan-row">
+          <div>
+            <strong>Capacity</strong>
+            <small>
+              {totalAddonQuota.toLocaleString("en-IN")}{" "}
+              {selectedAddon.unit}
+            </small>
+          </div>
+
+          <strong>
+            {totalAddonQuota.toLocaleString("en-IN")}
+          </strong>
+        </div>
+      )}
+
+      <div className="summary-divider" />
+
+      <div className="summary-row">
+        <span>Subtotal</span>
+        <strong>{formatPrice(addonSubtotal)}</strong>
+      </div>
+
+      <div className="summary-row">
+        <span>Tax ({currency === "INR" ? "18%" : "0%"})</span>
+        <strong>{formatPrice(addonTax)}</strong>
+      </div>
+
+      <div className="summary-divider" />
+
+      <div className="total-row">
+        <div>
+          <strong>Total</strong>
+          <small>Includes applicable tax</small>
+        </div>
+
+        <strong className="total-price">
+          {formatPrice(addonTotal)}
+        </strong>
+      </div>
+
+      {error && (
+        <div className="payment-error">{error}</div>
+      )}
+
+      <button
+        type="button"
+        className="payment-btn"
+        disabled={loading || billingLoading}
+        onClick={handlePayment}
+      >
+        {loading ? "Processing..." : "Continue to payment"}
+        <span>→</span>
+      </button>
+
+      <div className="razorpay-text">
+        🔒 Secure payment powered by Razorpay
+      </div>
+    </div>
+
+    <div className="security-card">
+      <div className="security-item">
+        <div className="security-icon">♧</div>
+        <div>
+          <strong>Secure checkout</strong>
+          <span>Your payment information is protected.</span>
+        </div>
+      </div>
+
+      <div className="security-item">
+        <div className="security-icon">✓</div>
+        <div>
+          <strong>Invoice</strong>
+          <span>Invoice generated after successful payment.</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
         </main>
       </div>
     );

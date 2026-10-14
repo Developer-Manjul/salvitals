@@ -74,6 +74,8 @@ const googleIntegrationRoutes = require("./routes/googleIntegrationRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+const pharmacyRoutes = require("./routes/PharmacyRoutes");
+const pharmacyInvoiceRoutes = require("./routes/PharmacyInvoiceRoutes");
 const billingRoutes = require("./routes/billingRoutes");
 
 const aiAssistantRoutes = require("./routes/aiAssistantRoutes");
@@ -115,6 +117,8 @@ app.use("/api/integrations/google", googleIntegrationRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/pharmacy", pharmacyRoutes);
+app.use("/api/pharmacy-invoices", pharmacyInvoiceRoutes);
 app.use("/api/billing", billingRoutes);
 
 app.use("/api/ai-assistant", aiAssistantRoutes);
@@ -271,6 +275,9 @@ mongoose
             console.log(
                 `AI Widget API: http://localhost:${PORT}/api/ai-widget`
             );
+            console.log(
+    `Pharmacy Invoices API: http://localhost:${PORT}/api/pharmacy-invoices`
+);
         });
     })
     .catch((error) => {

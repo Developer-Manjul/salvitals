@@ -25,9 +25,9 @@ const orderSchema = new mongoose.Schema(
             default: "",
         },
 
-        addonType: {
+       addonType: {
             type: String,
-            enum: ["", "contacts", "ai_chat"],
+            enum: ["", "contacts", "ai_chat", "pharmacy_invoice"],
             default: "",
             index: true,
         },

@@ -324,6 +324,11 @@ const userSchema = new mongoose.Schema(
                 type: addonSchema,
                 default: () => ({}),
             },
+
+            pharmacy_invoice: {
+                type: addonSchema,
+                default: () => ({}),
+            },
         },
     },
     {
