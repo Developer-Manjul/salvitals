@@ -1735,13 +1735,14 @@ export default function Dashboard() {
     }
 
     if (active === "Settings") {
-      return (
-        <Settings
-          user={user}
-          initialTab={settingsTab}
-        />
-      );
-    }
+  return (
+    <Settings
+      user={user}
+      billing={billing}
+      initialTab={settingsTab}
+    />
+  );
+}
 
     if (active === "Leads") {
       return (
