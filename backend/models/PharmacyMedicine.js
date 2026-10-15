@@ -10,34 +10,39 @@ const pharmacyMedicineSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Medicine Name
     name: {
       type: String,
       required: true,
       trim: true,
     },
 
+    // Batch Number
     batchNo: {
       type: String,
       required: true,
       trim: true,
     },
 
-    price: {
+    // Pack MRP
+    packPrice: {
       type: Number,
       required: true,
       min: 0,
     },
 
-    quantity: {
+    // Individual units currently in stock
+    unitInStock: {
       type: Number,
       required: true,
       min: 0,
       validate: {
         validator: Number.isInteger,
-        message: "Quantity must be a whole number.",
+        message: "Units in stock must be a whole number.",
       },
     },
 
+    // Expiry Date
     expiryDate: {
       type: Date,
       required: true,

@@ -7,9 +7,7 @@ const {
   hasPermission,
 } = require("../utils/workspace");
 
-const getContext = async (req) => {
-  return await getWorkspaceContext(req);
-};
+const getContext = async (req) => getWorkspaceContext(req);
 
 const requirePermission = (context, permission, res) => {
   if (!context) {
@@ -32,62 +30,7 @@ const requirePermission = (context, permission, res) => {
   return true;
 };
 
-const normalizeMedicine = (body = {}) => {
-  const name = String(body.name || "").trim();
-  const batchNo = String(body.batchNo || "").trim();
-  const price = Number(body.price);
-  const quantity = Number(body.quantity);
-  const expiryDate = new Date(body.expiryDate);
-
-  if (!name) {
-    return { error: "Medicine name is required." };
-  }
-
-  if (!batchNo) {
-    return { error: "Batch number is required." };
-  }
-
-  if (
-    body.price === "" ||
-    body.price === undefined ||
-    body.price === null ||
-    !Number.isFinite(price) ||
-    price < 0
-  ) {
-    return { error: "Enter a valid unit price." };
-  }
-
-  if (
-    body.quantity === "" ||
-    body.quantity === undefined ||
-    body.quantity === null ||
-    !Number.isInteger(quantity) ||
-    quantity < 0
-  ) {
-    return {
-      error: "Quantity must be a whole number of zero or more.",
-    };
-  }
-
-  if (
-    !body.expiryDate ||
-    Number.isNaN(expiryDate.getTime())
-  ) {
-    return { error: "A valid expiry date is required." };
-  }
-
-  return {
-    data: {
-      name,
-      batchNo,
-      price,
-      quantity,
-      expiryDate,
-    },
-  };
-};
-
-const getMedicinePermission = (context, action) => {
+const getMedicinePermission = (action) => {
   const permissionMap = {
     view: "pharmacy.view",
     create: "pharmacy.create",
@@ -99,6 +42,9 @@ const getMedicinePermission = (context, action) => {
 };
 
 const getOwnerId = (context) => context?.workspaceOwnerId;
+
+const isValidMedicineId = (id) =>
+  mongoose.Types.ObjectId.isValid(id);
 
 const requireActivePharmacyAddon = async (ownerId, res) => {
   const owner = await User.findById(ownerId)
@@ -140,20 +86,141 @@ const requireActivePharmacyAddon = async (ownerId, res) => {
   return true;
 };
 
-const isValidMedicineId = (id) =>
-  mongoose.Types.ObjectId.isValid(id);
+// Supports frontend fields and Excel/CSV header variations.
+const getValue = (body, aliases) => {
+  if (!body || typeof body !== "object") return undefined;
+
+  const normalizeKey = (key) =>
+    String(key).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const aliasSet = new Set(aliases.map(normalizeKey));
+  const key = Object.keys(body).find((item) =>
+    aliasSet.has(normalizeKey(item))
+  );
+
+  return key === undefined ? undefined : body[key];
+};
+
+const normalizeMedicine = (body = {}) => {
+  const rawName = getValue(body, [
+    "name",
+    "Med Name",
+    "Medicine Name",
+    "Medicine",
+    "Item Name",
+  ]);
+
+  const rawBatch = getValue(body, [
+    "batchNo",
+    "Batch",
+    "Batch No",
+    "Batch Number",
+  ]);
+
+  const rawPackPrice = getValue(body, [
+    "packPrice",
+    "Pack(MRP)",
+    "Pack MRP",
+    "Pack Price",
+    "MRP",
+  ]);
+
+  const rawStock = getValue(body, [
+    "unitInStock",
+    "Units in Stock",
+    "Unit in Stock",
+    "Stock",
+    "Quantity",
+    "Qty",
+  ]);
+
+  const rawExpiry = getValue(body, [
+    "expiryDate",
+    "Expiry",
+    "Expiry Date",
+  ]);
+
+  const name = String(rawName ?? "").trim();
+  const batchNo = String(rawBatch ?? "").trim();
+  const packPrice = Number(rawPackPrice);
+  const unitInStock = Number(rawStock);
+
+  if (!name) {
+    return { error: "Medicine name is required." };
+  }
+
+  if (!batchNo) {
+    return { error: "Batch number is required." };
+  }
+
+  if (
+    rawPackPrice === "" ||
+    rawPackPrice === undefined ||
+    rawPackPrice === null ||
+    !Number.isFinite(packPrice) ||
+    packPrice < 0
+  ) {
+    return { error: "Enter a valid pack MRP." };
+  }
+
+  if (
+    rawStock === "" ||
+    rawStock === undefined ||
+    rawStock === null ||
+    !Number.isInteger(unitInStock) ||
+    unitInStock < 0
+  ) {
+    return {
+      error: "Units in stock must be a whole number of zero or more.",
+    };
+  }
+
+  const expiryText = String(rawExpiry ?? "").trim();
+  let expiryDate;
+
+  // Handles ISO dates and common spreadsheet formats such as Aug-2024.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(expiryText)) {
+    const [year, month, day] = expiryText.split("-").map(Number);
+    expiryDate = new Date(Date.UTC(year, month - 1, day));
+  } else if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(expiryText)) {
+    const parsed = new Date(`${expiryText} UTC`);
+    if (!Number.isNaN(parsed.getTime())) {
+      expiryDate = parsed;
+    }
+  } else if (/^[A-Za-z]{3}-\d{4}$/.test(expiryText)) {
+    const parsed = new Date(`01-${expiryText} UTC`);
+    if (!Number.isNaN(parsed.getTime())) {
+      expiryDate = parsed;
+    }
+  } else {
+    const parsed = new Date(expiryText);
+    if (!Number.isNaN(parsed.getTime())) {
+      expiryDate = parsed;
+    }
+  }
+
+  if (!expiryText || !expiryDate || Number.isNaN(expiryDate.getTime())) {
+    return {
+      error: "A valid expiry date is required. Use YYYY-MM-DD or MMM-YYYY.",
+    };
+  }
+
+  return {
+    data: {
+      name,
+      batchNo,
+      packPrice,
+      unitInStock,
+      expiryDate,
+    },
+  };
+};
 
 exports.getMedicines = async (req, res) => {
   try {
     const context = await getContext(req);
 
-    if (
-      !requirePermission(
-        context,
-        getMedicinePermission(context, "view"),
-        res
-      )
-    ) {
+    if (!requirePermission(context, getMedicinePermission("view"), res)) {
       return;
     }
 
@@ -161,16 +228,11 @@ exports.getMedicines = async (req, res) => {
 
     if (!(await requireActivePharmacyAddon(ownerId, res))) return;
 
-    const medicines = await PharmacyMedicine.find({
-      userId: ownerId,
-    })
+    const medicines = await PharmacyMedicine.find({ userId: ownerId })
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({
-      success: true,
-      medicines,
-    });
+    return res.json({ success: true, medicines });
   } catch (error) {
     console.error("GET PHARMACY MEDICINES ERROR:", error);
 
@@ -185,13 +247,7 @@ exports.createMedicine = async (req, res) => {
   try {
     const context = await getContext(req);
 
-    if (
-      !requirePermission(
-        context,
-        getMedicinePermission(context, "create"),
-        res
-      )
-    ) {
+    if (!requirePermission(context, getMedicinePermission("create"), res)) {
       return;
     }
 
@@ -232,13 +288,7 @@ exports.updateMedicine = async (req, res) => {
   try {
     const context = await getContext(req);
 
-    if (
-      !requirePermission(
-        context,
-        getMedicinePermission(context, "edit"),
-        res
-      )
-    ) {
+    if (!requirePermission(context, getMedicinePermission("edit"), res)) {
       return;
     }
 
@@ -265,15 +315,9 @@ exports.updateMedicine = async (req, res) => {
     }
 
     const medicine = await PharmacyMedicine.findOneAndUpdate(
-      {
-        _id: medicineId,
-        userId: ownerId,
-      },
+      { _id: medicineId, userId: ownerId },
       normalized.data,
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     );
 
     if (!medicine) {
@@ -302,13 +346,7 @@ exports.deleteMedicine = async (req, res) => {
   try {
     const context = await getContext(req);
 
-    if (
-      !requirePermission(
-        context,
-        getMedicinePermission(context, "delete"),
-        res
-      )
-    ) {
+    if (!requirePermission(context, getMedicinePermission("delete"), res)) {
       return;
     }
 
@@ -355,13 +393,7 @@ exports.importMedicines = async (req, res) => {
   try {
     const context = await getContext(req);
 
-    if (
-      !requirePermission(
-        context,
-        getMedicinePermission(context, "create"),
-        res
-      )
-    ) {
+    if (!requirePermission(context, getMedicinePermission("create"), res)) {
       return;
     }
 
@@ -394,7 +426,7 @@ exports.importMedicines = async (req, res) => {
       if (normalized.error) {
         errors.push({
           row: index + 2,
-          name: item?.name || "",
+          name: getValue(item, ["name", "Med Name", "Medicine Name"]) || "",
           message: normalized.error,
         });
         return;

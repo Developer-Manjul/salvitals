@@ -8,8 +8,8 @@ const API_BASE = getApiBaseUrl();
 const EMPTY_MEDICINE = {
   name: "",
   batchNo: "",
-  price: "",
-  quantity: "",
+  packPrice: "",
+  unitInStock: "",
   expiryDate: "",
 };
 
@@ -80,48 +80,90 @@ function formatDate(value) {
   const text = String(value).trim();
   if (!text) return "";
 
-  const dateOnly = text.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (dateOnly) return dateOnly[1];
+  const isoDate = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoDate) return isoDate[1];
+
+  // Handle spreadsheet expiry values such as Aug-2026.
+  const monthYear = text.match(/^([A-Za-z]{3,9})[-\s]+(\d{4})$/);
+  if (monthYear) {
+    const parsed = new Date(
+      `${monthYear[1]} 1, ${monthYear[2]} 00:00:00 UTC`
+    );
+
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+  }
 
   const parsed = new Date(text);
 
   return Number.isNaN(parsed.getTime())
-    ? text
+    ? ""
     : parsed.toISOString().slice(0, 10);
 }
 
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function normalizeMedicine(row) {
-  const getValue = (...keys) => {
+  const getValue = (...aliases) => {
+    const wanted = new Set(aliases.map(normalizeHeader));
     const key = Object.keys(row).find((item) =>
-      keys.includes(item.trim().toLowerCase())
+      wanted.has(normalizeHeader(item))
     );
 
-    return key ? row[key] : "";
+    return key === undefined ? "" : row[key];
   };
 
-  const rawPrice = getValue("price", "unit price", "selling price");
-  const rawQuantity = getValue(
-    "quantity",
-    "qty",
+  const rawPackPrice = getValue(
+    "packPrice",
+    "Pack(MRP)",
+    "Pack MRP",
+    "Pack Price",
+    "MRP",
+    "price"
+  );
+
+  const rawStock = getValue(
+    "unitInStock",
+    "Units in Stock",
+    "Unit in Stock",
     "stock",
-    "stock quantity"
+    "quantity",
+    "qty"
   );
 
   return {
     name: String(
-      getValue("name", "medicine name", "medicine", "item name")
+      getValue("name", "Med Name", "Medicine Name", "Medicine", "Item Name")
     ).trim(),
 
     batchNo: String(
-      getValue("batch no", "batch number", "batchno", "batch")
+      getValue("batchNo", "Batch", "Batch No", "Batch Number")
     ).trim(),
 
-    price: rawPrice === "" ? "" : Number(rawPrice),
-    quantity: rawQuantity === "" ? "" : Number(rawQuantity),
+    packPrice: rawPackPrice === "" ? "" : Number(rawPackPrice),
+    unitInStock: rawStock === "" ? "" : Number(rawStock),
 
     expiryDate: formatDate(
-      getValue("expiry date", "expiry", "expirydate")
+      getValue("expiryDate", "Expiry", "Expiry Date")
     ),
+  };
+}
+
+function normalizeLoadedMedicine(item) {
+  return {
+    ...item,
+    id: item._id || item.id,
+    name: item.name || "",
+    batchNo: item.batchNo || "",
+    packPrice: Number(item.packPrice) || 0,
+    unitInStock: Number(item.unitInStock) || 0,
+    expiryDate: formatDate(item.expiryDate),
   };
 }
 
@@ -142,20 +184,11 @@ export default function Pharmacy() {
   const loadMedicines = async () => {
     try {
       setLoading(true);
-
       const data = await api("/api/pharmacy");
 
       setMedicines(
         (Array.isArray(data.medicines) ? data.medicines : []).map(
-          (item) => ({
-            ...item,
-            id: item._id || item.id,
-            name: item.name || "",
-            batchNo: item.batchNo || "",
-            price: Number(item.price) || 0,
-            quantity: Number(item.quantity) || 0,
-            expiryDate: formatDate(item.expiryDate),
-          })
+          normalizeLoadedMedicine
         )
       );
     } catch (loadError) {
@@ -197,8 +230,8 @@ export default function Pharmacy() {
     setMedicine({
       name: item.name || "",
       batchNo: item.batchNo || "",
-      price: String(item.price ?? ""),
-      quantity: String(item.quantity ?? ""),
+      packPrice: String(item.packPrice ?? ""),
+      unitInStock: String(item.unitInStock ?? ""),
       expiryDate: formatDate(item.expiryDate),
     });
 
@@ -218,25 +251,25 @@ export default function Pharmacy() {
     }
 
     if (
-      medicine.price === "" ||
-      !Number.isFinite(Number(medicine.price)) ||
-      Number(medicine.price) < 0
+      medicine.packPrice === "" ||
+      !Number.isFinite(Number(medicine.packPrice)) ||
+      Number(medicine.packPrice) < 0
     ) {
-      setError("Please enter a valid price.");
+      setError("Please enter a valid pack MRP.");
       return false;
     }
 
     if (
-      medicine.quantity === "" ||
-      !Number.isInteger(Number(medicine.quantity)) ||
-      Number(medicine.quantity) < 0
+      medicine.unitInStock === "" ||
+      !Number.isInteger(Number(medicine.unitInStock)) ||
+      Number(medicine.unitInStock) < 0
     ) {
-      setError("Please enter a valid whole-number quantity.");
+      setError("Please enter a valid whole-number unit stock.");
       return false;
     }
 
-    if (!medicine.expiryDate) {
-      setError("Please select the medicine expiry date.");
+    if (!medicine.expiryDate || !formatDate(medicine.expiryDate)) {
+      setError("Please select a valid medicine expiry date.");
       return false;
     }
 
@@ -258,8 +291,8 @@ export default function Pharmacy() {
         body: JSON.stringify({
           name: medicine.name.trim(),
           batchNo: medicine.batchNo.trim(),
-          price: Number(medicine.price),
-          quantity: Number(medicine.quantity),
+          packPrice: Number(medicine.packPrice),
+          unitInStock: Number(medicine.unitInStock),
           expiryDate: medicine.expiryDate,
         }),
       });
@@ -268,14 +301,11 @@ export default function Pharmacy() {
         throw new Error("The server did not return the saved medicine.");
       }
 
-      const savedMedicine = {
-        ...data.medicine,
-        id: data.medicine._id || data.medicine.id,
-        batchNo: data.medicine.batchNo || medicine.batchNo.trim(),
-        expiryDate: formatDate(data.medicine.expiryDate),
-      };
+      setMedicines((previous) => [
+        normalizeLoadedMedicine(data.medicine),
+        ...previous,
+      ]);
 
-      setMedicines((previous) => [savedMedicine, ...previous]);
       resetMedicineForm();
       setSuccess(data.message || "Medicine added successfully.");
     } catch (saveError) {
@@ -307,8 +337,8 @@ export default function Pharmacy() {
           body: JSON.stringify({
             name: medicine.name.trim(),
             batchNo: medicine.batchNo.trim(),
-            price: Number(medicine.price),
-            quantity: Number(medicine.quantity),
+            packPrice: Number(medicine.packPrice),
+            unitInStock: Number(medicine.unitInStock),
             expiryDate: medicine.expiryDate,
           }),
         }
@@ -318,12 +348,7 @@ export default function Pharmacy() {
         throw new Error("The server did not return the updated medicine.");
       }
 
-      const updatedMedicine = {
-        ...data.medicine,
-        id: data.medicine._id || data.medicine.id,
-        batchNo: data.medicine.batchNo || medicine.batchNo.trim(),
-        expiryDate: formatDate(data.medicine.expiryDate),
-      };
+      const updatedMedicine = normalizeLoadedMedicine(data.medicine);
 
       setMedicines((previous) =>
         previous.map((item) =>
@@ -392,9 +417,7 @@ export default function Pharmacy() {
           return values;
         };
 
-        const headers = parseCSVLine(lines[0]).map((header) =>
-          header.trim().toLowerCase()
-        );
+        const headers = parseCSVLine(lines[0]);
 
         rows = lines.slice(1).map((line) => {
           const values = parseCSVLine(line);
@@ -419,7 +442,10 @@ export default function Pharmacy() {
           throw new Error("The Excel file does not contain a worksheet.");
         }
 
-        rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+        rows = XLSX.utils.sheet_to_json(firstSheet, {
+          defval: "",
+          raw: false,
+        });
       } else {
         throw new Error("Please select an .xlsx or .csv file.");
       }
@@ -430,14 +456,14 @@ export default function Pharmacy() {
           (item) =>
             item.name ||
             item.batchNo ||
-            item.price !== "" ||
-            item.quantity !== "" ||
+            item.packPrice !== "" ||
+            item.unitInStock !== "" ||
             item.expiryDate
         );
 
       if (!parsed.length) {
         throw new Error(
-          "No medicines found. Check the column headings and file data."
+          "No medicines found. Expected columns: Med Name, Batch, Pack(MRP), Units in Stock, Expiry."
         );
       }
 
@@ -445,21 +471,18 @@ export default function Pharmacy() {
         (item) =>
           !item.name ||
           !item.batchNo ||
-          item.price === "" ||
-          !Number.isFinite(item.price) ||
-          item.price < 0 ||
-          item.quantity === "" ||
-          !Number.isInteger(item.quantity) ||
-          item.quantity < 0 ||
-          !item.expiryDate ||
-          Number.isNaN(new Date(item.expiryDate).getTime())
+          item.packPrice === "" ||
+          !Number.isFinite(item.packPrice) ||
+          item.packPrice < 0 ||
+          item.unitInStock === "" ||
+          !Number.isInteger(item.unitInStock) ||
+          item.unitInStock < 0 ||
+          !item.expiryDate
       );
 
       if (invalidRow) {
         throw new Error(
-          `Check the medicine name, batch number, price, quantity and expiry date for "${
-            invalidRow.name || "unnamed medicine"
-          }".`
+          `Check medicine name, batch, pack MRP, units in stock and expiry date for "${itemName(invalidRow)}".`
         );
       }
 
@@ -474,14 +497,12 @@ export default function Pharmacy() {
 
       const importedMedicines = (
         Array.isArray(data.medicines) ? data.medicines : []
-      ).map((item) => ({
-        ...item,
-        id: item._id || item.id,
-        batchNo: item.batchNo || "",
-        expiryDate: formatDate(item.expiryDate),
-      }));
+      ).map(normalizeLoadedMedicine);
 
-      setMedicines((previous) => [...importedMedicines, ...previous]);
+      setMedicines((previous) => [
+        ...importedMedicines,
+        ...previous,
+      ]);
 
       setSuccess(
         data.message ||
@@ -531,12 +552,14 @@ export default function Pharmacy() {
   );
 
   const totalStock = medicines.reduce(
-    (total, item) => total + item.quantity,
+    (total, item) => total + item.unitInStock,
     0
   );
 
+  // Pack MRP is not a unit selling price. This is only the inventory
+  // value using the available pack MRP field, not a sales valuation.
   const stockValue = medicines.reduce(
-    (total, item) => total + item.price * item.quantity,
+    (total, item) => total + item.packPrice * item.unitInStock,
     0
   );
 
@@ -545,7 +568,7 @@ export default function Pharmacy() {
       <div className="pharmacy-header">
         <div>
           <h2>Pharmacy</h2>
-          <p>Manage medicines, stock quantities and expiry dates.</p>
+          <p>Manage medicines, batch numbers, stock and expiry dates.</p>
         </div>
 
         <div className="pharmacy-header-actions">
@@ -591,12 +614,12 @@ export default function Pharmacy() {
         </div>
 
         <div className="pharmacy-stat-card">
-          <span>Total Stock (Pieces)</span>
+          <span>Units in Stock</span>
           <strong>{totalStock.toLocaleString("en-IN")}</strong>
         </div>
 
         <div className="pharmacy-stat-card">
-          <span>Stock Value</span>
+          <span>Stock Value (Pack MRP × Units)</span>
           <strong>{formatMoney(stockValue)}</strong>
         </div>
       </div>
@@ -609,7 +632,7 @@ export default function Pharmacy() {
               <p>
                 {editingMedicineId
                   ? "Update the medicine and stock details."
-                  : "Enter the medicine and current stock details."}
+                  : "Enter the medicine, batch, pack MRP and unit stock."}
               </p>
             </div>
 
@@ -653,30 +676,30 @@ export default function Pharmacy() {
               </label>
 
               <label>
-                Unit Price (₹) *
+                Pack Price / MRP (₹) *
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="e.g. 500"
-                  value={medicine.price}
+                  placeholder="e.g. 210"
+                  value={medicine.packPrice}
                   onChange={(event) =>
-                    updateField("price", event.target.value)
+                    updateField("packPrice", event.target.value)
                   }
                   required
                 />
               </label>
 
               <label>
-                Quantity (Pieces) *
+                Unit in Stock *
                 <input
                   type="number"
                   min="0"
                   step="1"
-                  placeholder="e.g. 200"
-                  value={medicine.quantity}
+                  placeholder="e.g. 80"
+                  value={medicine.unitInStock}
                   onChange={(event) =>
-                    updateField("quantity", event.target.value)
+                    updateField("unitInStock", event.target.value)
                   }
                   required
                 />
@@ -743,10 +766,9 @@ export default function Pharmacy() {
               <tr>
                 <th>Medicine Name</th>
                 <th>Batch No.</th>
-                <th>Unit Price</th>
-                <th>Quantity</th>
+                <th>Pack Price (MRP)</th>
+                <th>Unit in Stock</th>
                 <th>Expiry Date</th>
-                <th>Stock Value</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -754,13 +776,13 @@ export default function Pharmacy() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="pharmacy-empty">
+                  <td colSpan="6" className="pharmacy-empty">
                     Loading medicines...
                   </td>
                 </tr>
               ) : filteredMedicines.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="pharmacy-empty">
+                  <td colSpan="6" className="pharmacy-empty">
                     {search
                       ? "No medicines match your search."
                       : "No medicines added yet. Add a medicine manually or import an Excel/CSV file."}
@@ -772,13 +794,10 @@ export default function Pharmacy() {
                     <td>
                       <strong>{item.name}</strong>
                     </td>
-
                     <td>{item.batchNo || "-"}</td>
-                    <td>{formatMoney(item.price)}</td>
-                    <td>{item.quantity.toLocaleString("en-IN")} pcs</td>
+                    <td>{formatMoney(item.packPrice)}</td>
+                    <td>{item.unitInStock.toLocaleString("en-IN")} units</td>
                     <td>{item.expiryDate || "-"}</td>
-                    <td>{formatMoney(item.price * item.quantity)}</td>
-
                     <td>
                       <div className="pharmacy-row-actions">
                         <button
@@ -839,4 +858,8 @@ export default function Pharmacy() {
       </div>
     </div>
   );
+}
+
+function itemName(item) {
+  return item?.name || "unnamed medicine";
 }
