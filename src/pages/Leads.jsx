@@ -344,6 +344,7 @@ export default function Leads({
   const [unreadLeadIds, setUnreadLeadIds] = useState(new Set());
   const [availableServices, setAvailableServices] =
     useState([]);
+  const [doctorOptions, setDoctorOptions] = useState([]);
 
   const [leadSources, setLeadSources] = useState([]);
 
@@ -604,6 +605,38 @@ export default function Leads({
     }
   };
 
+  
+const loadDoctors = async () => {
+  try {
+    const response = await fetch(
+      `${buildApiUrl("/api/team-members?type=doctor")}`,
+      {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Unable to load doctors.");
+    }
+
+    setDoctorOptions(
+      (data.members || [])
+        .filter((doctor) => doctor.status !== "inactive")
+        .map((doctor) => doctor.name)
+        .filter(Boolean)
+    );
+  } catch (error) {
+    console.error("LOAD DOCTORS ERROR:", error);
+    setDoctorOptions([]);
+  }
+};
+
+
   const loadLeadSettings = async () => {
     try {
       setLeadSettingsLoading(true);
@@ -677,11 +710,17 @@ export default function Leads({
     loadLeads();
   }, []);
 
-  useEffect(() => {
-    if (showAddModal) {
-      loadServices();
+ 
+useEffect(() => {
+  if (showAddModal) {
+    loadServices();
+
+    if (isHealthcare) {
+      loadDoctors();
     }
-  }, [showAddModal]);
+  }
+}, [showAddModal, isHealthcare]);
+
 
   const configuredSourceOptions = useMemo(() => {
     return [...new Set(
@@ -2731,7 +2770,7 @@ export default function Leads({
                         Select doctor
                       </option>
 
-                      {ownerOptions.map(
+                      {doctorOptions.map(
                         (doctor) => (
                           <option
                             value={

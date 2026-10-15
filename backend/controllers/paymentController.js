@@ -41,13 +41,22 @@ const DISCOUNTS = {
     24: 15,
 };
 
+
 const ADDONS = {
+    whatsapp_leads: {
+        name: "WhatsApp Lead Notifications",
+        unitPrice: 1000,
+        quotaPerMonth: 600,
+        unitLabel: "WhatsApp lead notifications",
+    },
+
     contacts: {
         name: "Extra Contacts",
         unitPrice: 500,
         quotaPerMonth: 1000,
         unitLabel: "contacts",
     },
+
     ai_chat: {
         name: "AI Chatbot",
         unitPrice: 500,
@@ -62,6 +71,7 @@ const ADDONS = {
         unitLabel: "invoices",
     },
 };
+
 
 function getUserId(req) {
     const authorization = req.headers.authorization || "";
@@ -445,6 +455,25 @@ async function activateSubscription(
         Number(
             order.setupFee || 0
         ) > 0;
+    
+    const previousSubscription = user.subscription || {};
+
+            const previousPlanIsActive =
+                previousSubscription.status === "active" &&
+                previousSubscription.expiresAt &&
+                new Date(previousSubscription.expiresAt).getTime() > Date.now();
+
+            if (user.addons) {
+                for (const addonType of [
+                    "contacts",
+                    "ai_chat",
+                    "pharmacy_invoice",
+                ]) {
+                    if (user.addons[addonType]) {
+                        user.addons[addonType].enabled = false;
+                    }
+                }
+            }
 
     user.subscription = {
         planId,
@@ -475,6 +504,10 @@ async function activateSubscription(
             "",
         setupFeePaid,
     };
+
+   const purchasedAddons = Array.isArray(order.addons)
+    ? order.addons
+    : [];
 
     await user.save();
 
@@ -520,6 +553,16 @@ async function activateAddon(
             "Invalid add-on type"
         );
     }
+
+    const alreadyActivated = await Order.exists({
+    _id: order._id,
+    orderType: "addon",
+    addonActivationStatus: "activated",
+});
+
+if (alreadyActivated) {
+    return await User.findById(order.userId);
+}
 
     const addon =
         user.addons?.[
@@ -635,10 +678,12 @@ async function activateAddon(
     order.addonQuotaUsed =
         used;
 
-    await order.save();
-    await user.save();
+   await user.save();
 
-    return user;
+order.addonActivationStatus = "activated";
+await order.save();
+
+return user;
 }
 
 async function activatePaidOrder(
@@ -1091,21 +1136,15 @@ exports.createOrder =
             }
 
             const {
-                orderType =
-                    "subscription",
-                currency =
-                    "INR",
+                orderType = "subscription",
+                currency = "INR",
                 planId,
-                period =
-                    1,
-                periodLabel =
-                    "",
-                country =
-                    "",
-                addonType =
-                    "",
-                quantity =
-                    1,
+                period = 1,
+                periodLabel = "",
+                country = "",
+                addonType = "",
+                quantity = 1,
+                selectedAddons = [],
             } = req.body;
 
             const curr =
@@ -1282,6 +1321,7 @@ exports.createOrder =
                                     ? "s"
                                     : ""
                             }`,
+                        
                         paymentStatus:
                             "pending",
                         razorpayOrderId:
@@ -1380,15 +1420,87 @@ exports.createOrder =
                 });
             }
 
-            const setupFee =
+           const setupFee =
                 calculateSetupFee(
                     user,
                     curr
                 );
 
+            // Validate selected add-ons
+            if (!Array.isArray(selectedAddons)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid add-ons selection.",
+                });
+            }
+
+            const allowedAddonTypes = [
+                "contacts",
+                "ai_chat",
+                "pharmacy_invoice",
+            ];
+
+            const calculatedAddons = [];
+
+            for (const item of selectedAddons) {
+                const addonTypeSelected = item?.addonType;
+                const addonQuantity = Number(item?.quantity ?? 1);
+
+                if (
+                    !allowedAddonTypes.includes(addonTypeSelected) ||
+                    !Number.isInteger(addonQuantity) ||
+                    addonQuantity < 1 ||
+                    addonQuantity > 10
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid add-on or quantity selected.",
+                    });
+                }
+
+                // Prevent duplicate add-on entries
+                if (
+                    calculatedAddons.some(
+                        addon => addon.addonType === addonTypeSelected
+                    )
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Duplicate add-on selected.",
+                    });
+                }
+
+                const addonCalculation = calculateAddon(
+                    addonTypeSelected,
+                    addonQuantity,
+                    curr
+                );
+
+                if (!addonCalculation) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Unable to calculate add-on amount.",
+                    });
+                }
+
+                calculatedAddons.push({
+                    addonType: addonCalculation.addonType,
+                    quantity: addonCalculation.quantity,
+                    unitPrice: addonCalculation.unitPrice,
+                    quota: addonCalculation.quota,
+                    amount: addonCalculation.amount,
+                });
+            }
+
+            const addonsAmount = calculatedAddons.reduce(
+                (sum, addon) => sum + addon.amount,
+                0
+            );
+
             const subtotal =
                 calculation.discountedAmount +
-                setupFee;
+                setupFee +
+                addonsAmount;
 
             const tax =
                 calculateTax(
@@ -1465,6 +1577,10 @@ exports.createOrder =
                             String(
                                 totalAmount
                             ),
+                        addonsAmount:
+                    String(addonsAmount),
+                     addons:
+                    JSON.stringify(calculatedAddons),
                         userId:
                             String(
                                 userId
@@ -1613,6 +1729,44 @@ exports.verifyPayment =
                 });
             }
 
+            if (order.paymentStatus === "paid") {
+                if (
+                    order.orderType === "addon" &&
+                    order.addonActivationStatus !== "activated"
+                ) {
+                    try {
+                        const user = await activateAddon(order);
+
+                        order.addonActivationStatus = "activated";
+                        await order.save();
+
+                        return res.status(200).json({
+                            success: true,
+                            message: "Add-on activation completed",
+                            order,
+                            orderType: order.orderType,
+                        });
+                    } catch (error) {
+                        console.error(
+                            "ADD-ON RETRY ACTIVATION ERROR:",
+                            error.message
+                        );
+
+                        return res.status(500).json({
+                            success: false,
+                            message: "Payment received, but add-on activation failed. Please retry.",
+                        });
+                    }
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    message: "Payment already verified",
+                    order,
+                    orderType: order.orderType,
+                });
+            }
+
             const currentYear =
                 new Date().getFullYear();
 
@@ -1670,6 +1824,11 @@ exports.verifyPayment =
                 await activatePaidOrder(
                     order
                 );
+            
+            if (order.orderType === "addon") {
+    order.addonActivationStatus = "activated";
+    await order.save();
+}
 
             await sendInvoiceIfNeeded(
                 order
@@ -1733,6 +1892,21 @@ exports.verifyPayment =
                                 order.addonExpiresAt,
                         }
                         : null,
+                purchasedAddons:
+                order.orderType === "subscription"
+                    ? (order.addons || []).map((addon) => ({
+                        type: addon.addonType,
+                        quantity: addon.quantity,
+                        quota: addon.quota,
+                        unitPrice: addon.unitPrice,
+                        amount: addon.amount,
+                        months: 1,
+                        startsAt:
+                            user?.addons?.[addon.addonType]?.startsAt || null,
+                        expiresAt:
+                            user?.addons?.[addon.addonType]?.expiresAt || null,
+                    }))
+                    : [],
                 subscription:
                     user?.subscription
                         ? {

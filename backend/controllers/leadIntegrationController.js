@@ -306,8 +306,8 @@ exports.createWebsiteLead = async (req, res) => {
       .toLowerCase();
 
     const leadSource =
-      normalizedPageType === "landing"
-        ? "Google Ad"
+    normalizedPageType === "landing"
+        ? "Google Ads"
         : "Website";
 
     console.log(
@@ -341,14 +341,24 @@ exports.createWebsiteLead = async (req, res) => {
       firstNote: String(firstNote || "").trim(),
     });
 
-    try {
-      await processNewLead(lead);
-    } catch (error) {
-      console.error(
+   console.log(
+    "WEBSITE LEAD PROCESSING START:",
+    String(lead._id)
+);
+
+try {
+    await processNewLead(lead);
+
+    console.log(
+        "WEBSITE LEAD PROCESSING COMPLETE:",
+        String(lead._id)
+    );
+} catch (error) {
+    console.error(
         "PROCESS WEBSITE LEAD ERROR:",
         error
-      );
-    }
+    );
+}
 
     return res.status(201).json({
       success: true,

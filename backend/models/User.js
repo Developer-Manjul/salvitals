@@ -315,6 +315,10 @@ const userSchema = new mongoose.Schema(
         },
 
         addons: {
+            whatsapp_leads: {
+                type: addonSchema,
+                default: () => ({}),
+            },
             contacts: {
                 type: addonSchema,
                 default: () => ({}),

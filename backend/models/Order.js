@@ -27,7 +27,13 @@ const orderSchema = new mongoose.Schema(
 
        addonType: {
             type: String,
-            enum: ["", "contacts", "ai_chat", "pharmacy_invoice"],
+            enum: [
+                "",
+                "whatsapp_leads",
+                "contacts",
+                "ai_chat",
+                "pharmacy_invoice",
+                ],
             default: "",
             index: true,
         },
@@ -35,6 +41,40 @@ const orderSchema = new mongoose.Schema(
         addonName: {
             type: String,
             default: "",
+        },
+
+        addons: {
+            type: [
+                {
+                    addonType: {
+                        type: String,
+                        enum: [
+                        "whatsapp_leads",
+                        "contacts",
+                        "ai_chat",
+                        "pharmacy_invoice",
+                    ],
+                        required: true,
+                    },
+                    quantity: {
+                        type: Number,
+                        default: 1,
+                    },
+                    unitPrice: {
+                        type: Number,
+                        default: 0,
+                    },
+                    quota: {
+                        type: Number,
+                        default: 0,
+                    },
+                    amount: {
+                        type: Number,
+                        default: 0,
+                    },
+                },
+            ],
+            default: [],
         },
 
         addonMonths: {
@@ -117,6 +157,12 @@ const orderSchema = new mongoose.Schema(
             ],
             default: "pending",
             index: true,
+        },
+
+        addonActivationStatus: {
+            type: String,
+            enum: ["pending", "activated"],
+            default: "pending",
         },
 
         razorpayOrderId: {

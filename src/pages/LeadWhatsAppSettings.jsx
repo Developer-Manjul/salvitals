@@ -14,10 +14,38 @@ const DEFAULT_SETTINGS = {
 };
 
 const LEAD_SOURCES = [
-  { name: "Website", description: "Leads from your website", icon: "◎", color: "#0d9488", background: "#effcf9", border: "#b7eee4" },
-  { name: "Facebook", description: "Leads from Facebook", icon: "f", color: "#1877f2", background: "#f0f6ff", border: "#c7dcff" },
-  { name: "Instagram", description: "Leads from Instagram", icon: "◎", color: "#c026d3", background: "#fff4fc", border: "#f5c7ed" },
-  { name: "AI Chat", description: "Leads from AI Assistant", icon: "✦", color: "#f08a19", background: "#fff8ef", border: "#ffdfb3" },
+  {
+    name: "Website",
+    description: "Leads from your website",
+    icon: "◎",
+    color: "#0d9488",
+    background: "#effcf9",
+    border: "#b7eee4",
+  },
+  {
+    name: "Meta",
+    description: "Leads from Facebook and Instagram",
+    icon: "f",
+    color: "#1877f2",
+    background: "#f0f6ff",
+    border: "#c7dcff",
+  },
+  {
+    name: "AI Chat",
+    description: "Leads from AI Assistant",
+    icon: "✦",
+    color: "#f08a19",
+    background: "#fff8ef",
+    border: "#ffdfb3",
+  },
+  {
+    name: "Google Ads",
+    description: "Leads from Google advertising",
+    icon: "G",
+    color: "#4285f4",
+    background: "#f0f6ff",
+    border: "#c7dcff",
+  },
 ];
 
 const TIMEZONES = [
@@ -338,22 +366,6 @@ export default function LeadWhatsAppSettings() {
             })}
           </div>
 
-          <div className="sv-lw-queue">
-            <div className="sv-lw-queue-icon" aria-hidden="true">◷</div>
-            <input
-              type="checkbox"
-              checked={settings.sendOutsideWindow}
-              onChange={(event) => updateSetting("sendOutsideWindow", event.target.checked)}
-              aria-label="Handle leads received outside the time window"
-            />
-            <div>
-              <strong>Handle leads received outside the time window</strong>
-              <p>
-                Queue these leads for the next notification window instead
-                of sending them immediately.
-              </p>
-            </div>
-          </div>
 
           <div className="sv-lw-actions">
             <button type="submit" className="sv-lw-save" disabled={saving}>

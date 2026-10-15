@@ -182,20 +182,33 @@ function calculatePercentage(used, limit) {
 }
 
 
+
 function normalizeAddon(addon) {
-    if (!addon || !addon.enabled) {
+    const now = Date.now();
+
+    const expiresAt = addon?.expiresAt
+        ? new Date(addon.expiresAt).getTime()
+        : null;
+
+    const isActive =
+        Boolean(addon?.enabled) &&
+        expiresAt !== null &&
+        !Number.isNaN(expiresAt) &&
+        expiresAt > now;
+
+    if (!isActive) {
         return {
             enabled: false,
             quota: 0,
             used: 0,
             remaining: 0,
-            months: 0,
-            unitPrice: 0,
-            startsAt: null,
-            expiresAt: null,
-            orderId: null,
-            razorpayOrderId: "",
-            paymentId: "",
+            months: Number(addon?.months || 0),
+            unitPrice: Number(addon?.unitPrice || 0),
+            startsAt: addon?.startsAt || null,
+            expiresAt: addon?.expiresAt || null,
+            orderId: addon?.orderId || null,
+            razorpayOrderId: addon?.razorpayOrderId || "",
+            paymentId: addon?.paymentId || "",
         };
     }
 
@@ -205,68 +218,50 @@ function normalizeAddon(addon) {
     );
 
     const used = Math.min(
-        Math.max(
-            Number(addon.used || 0),
-            0
-        ),
+        Math.max(Number(addon.used || 0), 0),
         quota
     );
 
     return {
         enabled: true,
-
         quota,
-
         used,
-
-        remaining: Math.max(
-            quota - used,
-            0
-        ),
-
-        months: Number(
-            addon.months || 0
-        ),
-
-        unitPrice: Number(
-            addon.unitPrice || 0
-        ),
-
-        startsAt:
-            addon.startsAt || null,
-
-        expiresAt:
-            addon.expiresAt || null,
-
-        orderId:
-            addon.orderId || null,
-
-        razorpayOrderId:
-            addon.razorpayOrderId || "",
-
-        paymentId:
-            addon.paymentId || "",
+        remaining: Math.max(quota - used, 0),
+        months: Number(addon.months || 0),
+        unitPrice: Number(addon.unitPrice || 0),
+        startsAt: addon.startsAt || null,
+        expiresAt: addon.expiresAt || null,
+        orderId: addon.orderId || null,
+        razorpayOrderId: addon.razorpayOrderId || "",
+        paymentId: addon.paymentId || "",
     };
 }
 
 
-function getAddonStatus(addon) {
-    if (!addon?.enabled) {
+
+function getAddonStatus(addon, isPlanActive = true) {
+    if (!isPlanActive || !addon?.enabled) {
         return "inactive";
     }
 
-    if (
-        addon.expiresAt &&
-        new Date(
-            addon.expiresAt
-        ).getTime() <= Date.now()
-    ) {
+    const expiresAt = addon.expiresAt
+        ? new Date(addon.expiresAt).getTime()
+        : NaN;
+
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
         return "expired";
+    }
+
+    const startsAt = addon.startsAt
+        ? new Date(addon.startsAt).getTime()
+        : NaN;
+
+    if (!Number.isFinite(startsAt) || startsAt > Date.now()) {
+        return "inactive";
     }
 
     return "active";
 }
-
 
 function buildSubscriptionFromOrder(order) {
     if (
@@ -369,716 +364,482 @@ function buildSubscriptionFromOrder(order) {
 }
 
 
-exports.getCurrentBilling =
-    async (req, res) => {
-        try {
-            const context =
-                await requireBillingPermission(
-                    req,
-                    res
-                );
+exports.getCurrentBilling = async (req, res) => {
+    try {
+        const context = await requireBillingPermission(req, res);
 
-            if (!context) {
-                return;
-            }
+        if (!context) {
+            return;
+        }
 
-            const ownerId =
-                context.workspaceOwnerId;
+        const ownerId = context.workspaceOwnerId;
 
-            let user =
-                await User.findById(ownerId)
-                    .select(
-                        "name email subscription addons"
-                    )
-                    .lean();
+        let user = await User.findById(ownerId)
+            .select("name email subscription addons")
+            .lean();
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: "User not found",
-                });
-            }
-
-
-            let subscription =
-                user.subscription || {};
-
-            let subscriptionExpiresAt =
-                subscription.expiresAt
-                    ? new Date(
-                        subscription.expiresAt
-                    ).getTime()
-                    : null;
-
-            let subscriptionIsActive =
-                String(
-                    subscription.status || ""
-                ).toLowerCase() === "active" &&
-
-                subscriptionExpiresAt &&
-
-                subscriptionExpiresAt > Date.now();
-
-
-            if (!subscriptionIsActive) {
-
-                const latestPaidOrder =
-                    await Order.findOne({
-                        userId: ownerId,
-                        orderType: "subscription",
-                        paymentStatus: "paid",
-                    })
-                        .sort({
-                            createdAt: -1,
-                        })
-                        .lean();
-
-
-                const recoveredSubscription =
-                    buildSubscriptionFromOrder(
-                        latestPaidOrder
-                    );
-
-
-                if (recoveredSubscription) {
-
-                    await User.findByIdAndUpdate(
-                        ownerId,
-                        {
-                            $set: {
-                                subscription:
-                                    recoveredSubscription,
-                            },
-                        }
-                    );
-
-
-                    subscription =
-                        recoveredSubscription;
-
-                    user.subscription =
-                        recoveredSubscription;
-
-                    subscriptionExpiresAt =
-                        new Date(
-                            subscription.expiresAt
-                        ).getTime();
-
-                    subscriptionIsActive =
-                        true;
-                }
-            }
-
-
-            const normalizedPlanId =
-                String(
-                    subscription.planId || ""
-                )
-                    .trim()
-                    .toLowerCase();
-
-
-            const resolvedPlanId =
-                subscriptionIsActive
-                    ? (
-                        normalizedPlanId === "custom"
-                            ? "enterprise"
-                            : normalizedPlanId
-                    )
-                    : "";
-
-
-            const resolvedPlanDetails =
-                getPlanDetails(
-                    resolvedPlanId
-                );
-
-
-            const activePlan = {
-
-                planId:
-                    subscriptionIsActive
-                        ? resolvedPlanId
-                        : "",
-
-                planName:
-                    subscriptionIsActive
-                        ? (
-                            subscription.planName ||
-                            resolvedPlanDetails?.name ||
-                            ""
-                        )
-                        : "",
-
-                status:
-                    subscriptionIsActive
-                        ? "active"
-                        : "none",
-
-                startedAt:
-                    subscription.startedAt ||
-                    null,
-
-                expiresAt:
-                    subscription.expiresAt ||
-                    null,
-
-                nextBillingAt:
-                    subscription.nextBillingAt ||
-                    null,
-
-                planLimit:
-                    subscriptionIsActive
-                        ? getContactLimit(
-                            resolvedPlanId
-                        )
-                        : 0,
-
-                addonLimit:
-                    subscriptionIsActive
-                        ? Number(
-                            user.addons?.contacts?.quota ||
-                            0
-                        )
-                        : 0,
-            };
-
-
-            const [
-                contactCount,
-                leadCount,
-            ] = await Promise.all([
-
-                Contact.countDocuments({
-                    userId: ownerId,
-                    deletedAt: null,
-                }),
-
-                Lead.countDocuments({
-                    userId: ownerId,
-                    stage: {
-                        $nin: [
-                            "Junk",
-                            "Junk Lead",
-                            "junk",
-                            "junk lead",
-                        ],
-                    },
-                }),
-
-            ]);
-
-
-
-            const contactUsed =
-                contactCount;
-
-
-            const contactPlanLimit =
-                activePlan.planLimit ??
-                getContactLimit(
-                    activePlan.planId
-                );
-
-
-            const contactAddonLimit =
-                Number(
-                    activePlan.addonLimit || 0
-                );
-
-
-            const contactTotalLimit =
-                contactPlanLimit === null
-                    ? null
-                    : Number(
-                        contactPlanLimit || 0
-                    ) +
-                    contactAddonLimit;
-
-
-            const contactRemaining =
-                contactTotalLimit === null
-                    ? null
-                    : Math.max(
-                        contactTotalLimit -
-                        contactUsed,
-                        0
-                    );
-
-
-            const contactAddon =
-                normalizeAddon(
-                    user.addons?.contacts
-                );
-
-
-            const teamMemberLimit =
-                activePlan.planId
-                    ? getTeamMemberLimit(
-                        activePlan.planId
-                    )
-                    : 0;
-
-
-            const teamMemberUsed =
-                await TeamMember.countDocuments({
-                    owner: ownerId,
-                    memberType: "team",
-                });
-
-
-            const teamMemberRemaining =
-                Math.max(
-                    teamMemberLimit -
-                    teamMemberUsed,
-                    0
-                );
-
-
-            const totalSeats =
-                teamMemberLimit + 1;
-
-
-            const usedSeats =
-                teamMemberUsed + 1;
-
-
-            const aiPlanId =
-                normalizeAIPlanId(
-                    activePlan.planId
-                );
-
-
-            const aiPlanLimit =
-                activePlan.planId
-                    ? getAIChatbotLimit(
-                        aiPlanId
-                    )
-                    : 0;
-
-
-            const aiAddon =
-                normalizeAddon(
-                    user.addons?.ai_chat
-                );
-            
-            const pharmacyInvoiceAddon = normalizeAddon(
-                user.addons?.pharmacy_invoice
-            );
-            
-
-
-            const aiAddonLimit =
-                aiAddon.enabled
-                    ? aiAddon.quota
-                    : 0;
-
-
-            const aiTotalLimit =
-                aiPlanLimit === null
-                    ? null
-                    : Number(
-                        aiPlanLimit || 0
-                    ) +
-                    aiAddonLimit;
-
-
-            const monthKey =
-                getMonthKey();
-
-
-            const aiUsage =
-                await AIUsage.findOne({
-                    ownerId,
-                    monthKey,
-                }).lean();
-
-
-            const aiUsed =
-                Number(
-                    aiUsage?.count || 0
-                );
-
-
-            const aiRemaining =
-                aiTotalLimit === null
-                    ? null
-                    : Math.max(
-                        aiTotalLimit -
-                        aiUsed,
-                        0
-                    );
-
-
-            const daysRemaining =
-                getDaysRemaining(
-                    activePlan.expiresAt
-                );
-
-
-            const planDetails =
-                getPlanDetails(
-                    activePlan.planId
-                );
-
-
-            const billingHistory =
-                await Order.find({
-                    userId: ownerId,
-                    paymentStatus: "paid",
-                })
-                    .sort({
-                        createdAt: -1,
-                    })
-                    .limit(100)
-                    .lean();
-
-
-            const formattedHistory =
-                billingHistory.map(
-                    (order) => {
-
-                        const isAddon =
-                            order.orderType ===
-                            "addon";
-
-
-                        const itemName =
-                            isAddon
-                                ? (
-                                    order.addonName ||
-                                    (
-                                        order.addonType ===
-                                        "contacts"
-                                            ? "Extra Contacts"
-                                            : order.addonType ===
-                                                "ai_chat"
-                                                ? "AI Chatbot"
-                                                : "Add-on"
-                                    )
-                                )
-                                : (
-                                    order.planName ||
-                                    getPlanDetails(
-                                        order.planId
-                                    )?.name ||
-                                    order.planId ||
-                                    "Plan"
-                                );
-
-
-                        const amount =
-                            Number(
-                                order.amount || 0
-                            );
-
-
-                        const tax =
-                            Number(
-                                order.tax || 0
-                            );
-
-
-                        return {
-
-                            id:
-                                String(
-                                    order._id
-                                ),
-
-                            invoiceNumber:
-                                order.invoiceNumber ||
-                                "",
-
-                            date:
-                                order.createdAt ||
-                                null,
-
-                            orderType:
-                                order.orderType ||
-                                "subscription",
-
-                            itemName,
-
-                            planId:
-                                order.planId ||
-                                "",
-
-                            planName:
-                                order.planName ||
-                                "",
-
-                            addonType:
-                                order.addonType ||
-                                "",
-
-                            addonName:
-                                order.addonName ||
-                                "",
-
-                            addonMonths:
-                                Number(
-                                    order.addonMonths ||
-                                    0
-                                ),
-
-                            addonQuota:
-                                Number(
-                                    order.addonQuota ||
-                                    0
-                                ),
-
-                            amount,
-
-                            tax,
-
-                            total:
-                                amount,
-
-                            currency:
-                                order.currency ||
-                                "INR",
-
-                            paymentStatus:
-                                order.paymentStatus,
-
-                            razorpayPaymentId:
-                                order.razorpayPaymentId ||
-                                "",
-
-                            period:
-                                Number(
-                                    order.period || 0
-                                ),
-
-                            periodLabel:
-                                order.periodLabel ||
-                                "",
-
-                            createdAt:
-                                order.createdAt ||
-                                null,
-                        };
-                    }
-                );
-
-
-            return res.json({
-
-                success: true,
-
-
-                subscription: {
-
-                    planId:
-                        activePlan.planId,
-
-                    planName:
-                        activePlan.planName,
-
-                    status:
-                        activePlan.status,
-
-                    billingCycle:
-                        subscription.billingCycle ||
-                        "monthly",
-
-                    startedAt:
-                        activePlan.startedAt ||
-                        null,
-
-                    expiresAt:
-                        activePlan.expiresAt ||
-                        null,
-
-                    nextBillingAt:
-                        activePlan.nextBillingAt ||
-                        null,
-
-                    daysRemaining,
-
-                    amount:
-                        Number(
-                            subscription.amount ||
-                            0
-                        ),
-
-                    currency:
-                        subscription.currency ||
-                        "INR",
-
-                    setupFeePaid:
-                        Boolean(
-                            subscription.setupFeePaid
-                        ),
-
-                    orderId:
-                        subscription.orderId ||
-                        null,
-
-                    paymentId:
-                        subscription.paymentId ||
-                        "",
-                },
-
-
-                usage: {
-
-                    contacts: {
-
-                        planLimit:
-                            contactPlanLimit,
-
-                        addonLimit:
-                            contactAddonLimit,
-
-                        totalLimit:
-                            contactTotalLimit,
-
-                        used:
-                            contactUsed,
-
-                        remaining:
-                            contactRemaining,
-
-                        percentage:
-                            calculatePercentage(
-                                contactUsed,
-                                contactTotalLimit
-                            ),
-                    },
-
-
-                    aiChatbot: {
-
-                        planLimit:
-                            aiPlanLimit,
-
-                        addonLimit:
-                            aiAddonLimit,
-
-                        totalLimit:
-                            aiTotalLimit,
-
-                        used:
-                            aiUsed,
-
-                        remaining:
-                            aiRemaining,
-
-                        percentage:
-                            calculatePercentage(
-                                aiUsed,
-                                aiTotalLimit
-                            ),
-                    },
-
-
-                    teamMembers: {
-
-                        limit:
-                            teamMemberLimit,
-
-                        used:
-                            teamMemberUsed,
-
-                        remaining:
-                            teamMemberRemaining,
-
-                        totalSeats,
-
-                        usedSeats,
-
-                        availableSeats:
-                            teamMemberRemaining,
-                    },
-                },
-
-
-                addons: {
-
-                    contacts: {
-
-                        ...contactAddon,
-
-                        status:
-                            getAddonStatus(
-                                contactAddon
-                            ),
-                    },
-
-
-                    ai_chat: {
-
-                        ...aiAddon,
-
-                        status:
-                            getAddonStatus(
-                                aiAddon
-                            ),
-                    },
-
-                     pharmacy_invoice: {
-                    ...pharmacyInvoiceAddon,
-                    status: getAddonStatus(pharmacyInvoiceAddon),
-                },
-                },
-
-
-                plan: {
-
-                    id:
-                        planDetails?.id ||
-                        activePlan.planId ||
-                        "",
-
-                    name:
-                        planDetails?.name ||
-                        activePlan.planName ||
-                        "",
-
-                    contactLimit:
-                        contactTotalLimit,
-
-                    baseContactLimit:
-                        contactPlanLimit,
-
-                    aiChatbotLimit:
-                        aiTotalLimit,
-
-                    baseAIChatbotLimit:
-                        aiPlanLimit,
-
-                    teamMemberLimit:
-                        teamMemberLimit,
-                },
-
-
-                plans:
-                    getAvailablePlans(
-                        activePlan.planId
-                    ),
-
-
-                billingHistory:
-                    formattedHistory,
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "GET CURRENT BILLING ERROR:",
-                error
-            );
-
-            return res.status(500).json({
+        if (!user) {
+            return res.status(404).json({
                 success: false,
-                message:
-                    "Unable to load billing information",
+                message: "User not found",
             });
         }
-    };
+
+        let subscription = user.subscription || {};
+
+        let subscriptionExpiresAt = subscription.expiresAt
+            ? new Date(subscription.expiresAt).getTime()
+            : null;
+
+        let subscriptionIsActive =
+            String(subscription.status || "").toLowerCase() === "active" &&
+            subscriptionExpiresAt &&
+            subscriptionExpiresAt > Date.now();
+
+        if (!subscriptionIsActive) {
+            const latestPaidOrder = await Order.findOne({
+                userId: ownerId,
+                orderType: "subscription",
+                paymentStatus: "paid",
+            })
+                .sort({ createdAt: -1 })
+                .lean();
+
+            const recoveredSubscription =
+                buildSubscriptionFromOrder(latestPaidOrder);
+
+            if (recoveredSubscription) {
+                await User.findByIdAndUpdate(ownerId, {
+                    $set: {
+                        subscription: recoveredSubscription,
+                    },
+                });
+
+                subscription = recoveredSubscription;
+                user.subscription = recoveredSubscription;
+
+                subscriptionExpiresAt = new Date(
+                    subscription.expiresAt
+                ).getTime();
+
+                subscriptionIsActive =
+                    Boolean(
+                        subscription.status === "active" &&
+                        subscriptionExpiresAt > Date.now()
+                    );
+            }
+        }
+
+        // Disable all add-ons when the CRM subscription is inactive.
+        if (!subscriptionIsActive) {
+            await User.findByIdAndUpdate(ownerId, {
+                $set: {
+                    "addons.contacts.enabled": false,
+                    "addons.ai_chat.enabled": false,
+                    "addons.pharmacy_invoice.enabled": false,
+                    "addons.whatsapp_leads.enabled": false,
+                },
+            });
+
+            if (user.addons) {
+                if (user.addons.contacts) {
+                    user.addons.contacts.enabled = false;
+                }
+
+                if (user.addons.ai_chat) {
+                    user.addons.ai_chat.enabled = false;
+                }
+
+                if (user.addons.pharmacy_invoice) {
+                    user.addons.pharmacy_invoice.enabled = false;
+                }
+
+                if (user.addons.whatsapp_leads) {
+                    user.addons.whatsapp_leads.enabled = false;
+                }
+            }
+        }
+
+        const normalizedPlanId = String(
+            subscription.planId || ""
+        )
+            .trim()
+            .toLowerCase();
+
+        const resolvedPlanId = subscriptionIsActive
+            ? (
+                normalizedPlanId === "custom"
+                    ? "enterprise"
+                    : normalizedPlanId
+            )
+            : "";
+
+        const resolvedPlanDetails = getPlanDetails(resolvedPlanId);
+
+        const activePlan = {
+            planId: subscriptionIsActive ? resolvedPlanId : "",
+
+            planName: subscriptionIsActive
+                ? (
+                    subscription.planName ||
+                    resolvedPlanDetails?.name ||
+                    ""
+                )
+                : "",
+
+            status: subscriptionIsActive ? "active" : "none",
+
+            startedAt: subscription.startedAt || null,
+
+            expiresAt: subscription.expiresAt || null,
+
+            nextBillingAt: subscription.nextBillingAt || null,
+
+            planLimit: subscriptionIsActive
+                ? getContactLimit(resolvedPlanId)
+                : 0,
+
+            addonLimit: subscriptionIsActive
+                ? Number(user.addons?.contacts?.quota || 0)
+                : 0,
+        };
+
+        const [contactCount, leadCount] = await Promise.all([
+            Contact.countDocuments({
+                userId: ownerId,
+                deletedAt: null,
+            }),
+
+            Lead.countDocuments({
+                userId: ownerId,
+                stage: {
+                    $nin: [
+                        "Junk",
+                        "Junk Lead",
+                        "junk",
+                        "junk lead",
+                    ],
+                },
+            }),
+        ]);
+
+        const contactUsed = contactCount;
+
+        const contactPlanLimit =
+            activePlan.planLimit ?? getContactLimit(activePlan.planId);
+
+        const contactAddonLimit = Number(
+            activePlan.addonLimit || 0
+        );
+
+        const contactTotalLimit = contactPlanLimit === null
+            ? null
+            : Number(contactPlanLimit || 0) + contactAddonLimit;
+
+        const contactRemaining = contactTotalLimit === null
+            ? null
+            : Math.max(contactTotalLimit - contactUsed, 0);
+
+        const contactAddon = normalizeAddon(
+            user.addons?.contacts
+        );
+
+        const teamMemberLimit = activePlan.planId
+            ? getTeamMemberLimit(activePlan.planId)
+            : 0;
+
+        const teamMemberUsed = await TeamMember.countDocuments({
+            owner: ownerId,
+            memberType: "team",
+        });
+
+        const teamMemberRemaining = Math.max(
+            teamMemberLimit - teamMemberUsed,
+            0
+        );
+
+        const totalSeats = teamMemberLimit + 1;
+        const usedSeats = teamMemberUsed + 1;
+
+        const aiPlanId = normalizeAIPlanId(activePlan.planId);
+
+        const aiPlanLimit = activePlan.planId
+            ? getAIChatbotLimit(aiPlanId)
+            : 0;
+
+        const aiAddon = normalizeAddon(
+            user.addons?.ai_chat
+        );
+
+        const pharmacyInvoiceAddon = normalizeAddon(
+            user.addons?.pharmacy_invoice
+        );
+
+        const whatsappLeadsAddon = normalizeAddon(
+            user.addons?.whatsapp_leads
+        );
+
+        const isPlanActive =
+            activePlan.status === "active" &&
+            activePlan.expiresAt &&
+            new Date(activePlan.expiresAt).getTime() > Date.now();
+
+        const aiAddonLimit = aiAddon.enabled
+            ? aiAddon.quota
+            : 0;
+
+        const aiTotalLimit = aiPlanLimit === null
+            ? null
+            : Number(aiPlanLimit || 0) + aiAddonLimit;
+
+        const monthKey = getMonthKey();
+
+        const aiUsage = await AIUsage.findOne({
+            ownerId,
+            monthKey,
+        }).lean();
+
+        const aiUsed = Number(aiUsage?.count || 0);
+
+        const aiRemaining = aiTotalLimit === null
+            ? null
+            : Math.max(aiTotalLimit - aiUsed, 0);
+
+        const daysRemaining = getDaysRemaining(
+            activePlan.expiresAt
+        );
+
+        const planDetails = getPlanDetails(
+            activePlan.planId
+        );
+
+        const billingHistory = await Order.find({
+            userId: ownerId,
+            paymentStatus: "paid",
+        })
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        const formattedHistory = billingHistory.map((order) => {
+            const isAddon = order.orderType === "addon";
+
+            const itemName = isAddon
+                ? (
+                    order.addonName ||
+                    (
+                        order.addonType === "contacts"
+                            ? "Extra Contacts"
+                            : order.addonType === "ai_chat"
+                                ? "AI Chatbot"
+                                : order.addonType === "pharmacy_invoice"
+                                    ? "Pharmacy Invoice"
+                                    : order.addonType === "whatsapp_leads"
+                                        ? "WhatsApp Lead Notifications"
+                                        : "Add-on"
+                    )
+                )
+                : (
+                    order.planName ||
+                    getPlanDetails(order.planId)?.name ||
+                    order.planId ||
+                    "Plan"
+                );
+
+            const amount = Number(order.amount || 0);
+            const tax = Number(order.tax || 0);
+
+            return {
+                id: String(order._id),
+
+                invoiceNumber: order.invoiceNumber || "",
+
+                date: order.createdAt || null,
+
+                orderType: order.orderType || "subscription",
+
+                itemName,
+
+                planId: order.planId || "",
+
+                planName: order.planName || "",
+
+                addonType: order.addonType || "",
+
+                addonName: order.addonName || "",
+
+                addonMonths: Number(order.addonMonths || 0),
+
+                addonQuota: Number(order.addonQuota || 0),
+
+                amount,
+
+                tax,
+
+                total: amount,
+
+                currency: order.currency || "INR",
+
+                paymentStatus: order.paymentStatus,
+
+                razorpayPaymentId: order.razorpayPaymentId || "",
+
+                period: Number(order.period || 0),
+
+                periodLabel: order.periodLabel || "",
+
+                createdAt: order.createdAt || null,
+            };
+        });
+
+        return res.json({
+            success: true,
+
+            subscription: {
+                planId: activePlan.planId,
+
+                planName: activePlan.planName,
+
+                status: activePlan.status,
+
+                billingCycle: subscription.billingCycle || "monthly",
+
+                startedAt: activePlan.startedAt || null,
+
+                expiresAt: activePlan.expiresAt || null,
+
+                nextBillingAt: activePlan.nextBillingAt || null,
+
+                daysRemaining,
+
+                amount: Number(subscription.amount || 0),
+
+                currency: subscription.currency || "INR",
+
+                setupFeePaid: Boolean(subscription.setupFeePaid),
+
+                orderId: subscription.orderId || null,
+
+                paymentId: subscription.paymentId || "",
+            },
+
+            usage: {
+                contacts: {
+                    planLimit: contactPlanLimit,
+
+                    addonLimit: contactAddonLimit,
+
+                    totalLimit: contactTotalLimit,
+
+                    used: contactUsed,
+
+                    remaining: contactRemaining,
+
+                    percentage: calculatePercentage(
+                        contactUsed,
+                        contactTotalLimit
+                    ),
+                },
+
+                aiChatbot: {
+                    planLimit: aiPlanLimit,
+
+                    addonLimit: aiAddonLimit,
+
+                    totalLimit: aiTotalLimit,
+
+                    used: aiUsed,
+
+                    remaining: aiRemaining,
+
+                    percentage: calculatePercentage(
+                        aiUsed,
+                        aiTotalLimit
+                    ),
+                },
+
+                teamMembers: {
+                    limit: teamMemberLimit,
+
+                    used: teamMemberUsed,
+
+                    remaining: teamMemberRemaining,
+
+                    totalSeats,
+
+                    usedSeats,
+
+                    availableSeats: teamMemberRemaining,
+                },
+            },
+
+            addons: {
+                contacts: {
+                    ...contactAddon,
+                    status: getAddonStatus(
+                        contactAddon,
+                        isPlanActive
+                    ),
+                },
+
+                ai_chat: {
+                    ...aiAddon,
+                    status: getAddonStatus(
+                        aiAddon,
+                        isPlanActive
+                    ),
+                },
+
+                pharmacy_invoice: {
+                    ...pharmacyInvoiceAddon,
+                    status: getAddonStatus(
+                        pharmacyInvoiceAddon,
+                        isPlanActive
+                    ),
+                },
+
+                whatsapp_leads: {
+                    ...whatsappLeadsAddon,
+                    status: getAddonStatus(
+                        whatsappLeadsAddon,
+                        isPlanActive
+                    ),
+                },
+            },
+
+            plan: {
+                id: planDetails?.id || activePlan.planId || "",
+
+                name: planDetails?.name || activePlan.planName || "",
+
+                contactLimit: contactTotalLimit,
+
+                baseContactLimit: contactPlanLimit,
+
+                aiChatbotLimit: aiTotalLimit,
+
+                baseAIChatbotLimit: aiPlanLimit,
+
+                teamMemberLimit: teamMemberLimit,
+            },
+
+            plans: getAvailablePlans(activePlan.planId),
+
+            billingHistory: formattedHistory,
+        });
+
+    } catch (error) {
+        console.error(
+            "GET CURRENT BILLING ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load billing information",
+        });
+    }
+};
 
 
 exports.getPlans =

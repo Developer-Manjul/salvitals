@@ -1,4 +1,6 @@
 const Lead = require("../models/Lead");
+const User = require("../models/User");
+const { processNewLead } = require("../services/leadProcessingService");
 
 const {
     getWorkspaceContext,
@@ -173,6 +175,11 @@ exports.createLead = async (req, res) => {
             firstNote:
                 firstNote?.trim() || "",
         });
+
+        console.log(
+    "MANUAL LEAD PROCESSING START:",
+    String(lead._id)
+);
 
         await processNewLeadSafely(lead);
 

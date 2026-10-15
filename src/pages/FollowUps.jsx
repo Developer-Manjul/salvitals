@@ -748,6 +748,25 @@ function FollowUpDetails({
             </div>
           </section>
 
+             <section className="followup-note-composer">
+            <textarea
+              value={newNoteText}
+              onChange={(event) => setNewNoteText(event.target.value)}
+              placeholder="Add a note about this follow-up — what was discussed, patient response, objections, next steps..."
+              aria-label="Add a note about this follow-up"
+            />
+            <div className="followup-note-composer-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={saveNewNote}
+                disabled={savingNewNote || !newNoteText.trim() || !leadId}
+              >
+                {savingNewNote ? "Saving..." : "Save note"}
+              </button>
+            </div>
+          </section>
+
           <section className="followup-detail-card">
             <div className="followup-detail-card-head"><div><h2>Conversation & notes</h2><p>Notes associated with this lead and follow-up.</p></div></div>
             <div className="followup-detail-note-primary"><span>Follow-up note</span><p>{item?.note || "No note was added for this follow-up."}</p></div>
@@ -774,24 +793,7 @@ function FollowUpDetails({
               <div className="followup-timeline-item current"><span className="followup-timeline-dot"/><div><strong>Current status: {followUpStatusLabel(status)}</strong><p>Scheduled for {formatDateTime(scheduledDate)}</p></div></div>
             </div>
           </section>
-          <section className="followup-note-composer">
-            <textarea
-              value={newNoteText}
-              onChange={(event) => setNewNoteText(event.target.value)}
-              placeholder="Add a note about this follow-up — what was discussed, patient response, objections, next steps..."
-              aria-label="Add a note about this follow-up"
-            />
-            <div className="followup-note-composer-actions">
-              <button
-                type="button"
-                className="primary"
-                onClick={saveNewNote}
-                disabled={savingNewNote || !newNoteText.trim() || !leadId}
-              >
-                {savingNewNote ? "Saving..." : "Save note"}
-              </button>
-            </div>
-          </section>
+       
 
 
         </main>

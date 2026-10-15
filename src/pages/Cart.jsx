@@ -10,6 +10,14 @@ import "../styles/cart.scss";
 import { getApiBaseUrl } from "../config/api";
 
 const ADDONS = {
+  whatsapp_leads: {
+    id: "whatsapp_leads",
+    name: "WhatsApp Lead Notifications",
+    price: 1000,
+    quota: 600,
+    unit: "leads",
+  },
+
   contacts: {
     id: "contacts",
     name: "Extra Contacts",
@@ -17,6 +25,7 @@ const ADDONS = {
     quota: 1000,
     unit: "contacts",
   },
+
   ai_chat: {
     id: "ai_chat",
     name: "AI Chatbot",
@@ -26,11 +35,11 @@ const ADDONS = {
   },
 
   pharmacy_invoice: {
-  id: "pharmacy_invoice",
-  name: "Pharmacy Invoice",
-  price: 1000,
-  quota: 0,
-  unit: "",
+    id: "pharmacy_invoice",
+    name: "Pharmacy Invoice",
+    price: 1000,
+    quota: 0,
+    unit: "invoices",
   },
 };
 
@@ -190,6 +199,9 @@ const Cart = () => {
 
   const [loading, setLoading] =
     useState(false);
+  
+  const [selectedAddons, setSelectedAddons] =
+    useState([]);
 
   const [error, setError] =
     useState("");
@@ -495,15 +507,14 @@ const Cart = () => {
                 Authorization:
                   `Bearer ${token}`,
               },
-              body: JSON.stringify({
-                planId,
-                currency,
-                period:
-                  selectedMonths,
-                country,
-                orderType:
-                  "subscription",
-              }),
+             body: JSON.stringify({
+              planId,
+              currency,
+              period: selectedMonths,
+              country,
+              orderType: "subscription",
+              selectedAddons: selectedAddons,
+            }),
             }
           );
 

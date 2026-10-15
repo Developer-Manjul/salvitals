@@ -6,6 +6,11 @@ const {
 } = require("./leadWhatsAppService");
 
 async function processNewLead(lead) {
+
+  console.log(
+    "PROCESS NEW LEAD ENTERED:",
+    String(lead?._id)
+);
   console.log("LEAD CREATED:", {
     userId: String(lead.userId),
     leadId: String(lead._id),

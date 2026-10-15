@@ -5,6 +5,7 @@ import Pharmacy from "../components/Pharmacy";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 import { getApiBaseUrl } from "../config/api";
 import { PLANS, getPlanPrice } from "../config/pricing";
+import LeadWhatsAppSettings from "./LeadWhatsAppSettings";
 import "../styles/settings-fixed.scss";
 import "../styles/settings-fixed-planbilling.scss";
 
@@ -21,6 +22,7 @@ const baseSettingsGroups = [
   label: "COMMUNICATION",
   items: [
     "WhatsApp",
+    "WhatsApp Lead Notifications",
     "Integrations",
     "Notification Settings",
   ],
@@ -86,6 +88,7 @@ const SETTINGS_PERMISSION_MAP = {
   Services: ["services.view"],
   WhatsApp: ["whatsapp.view", "whatsapp.use"],
 
+  "WhatsApp Lead Notifications": ["leads.view"],
   Integrations: ["integrations.view"],
   "Notification Settings": ["notifications.view"],
   "Invoice Settings": ["invoices.view"],
@@ -1875,6 +1878,19 @@ function PlanBillingContent() {
 
   const addonCards = [
     {
+      id: "whatsapp_leads",
+      title: "WhatsApp Lead Notifications",
+      description: "Receive new lead alerts on WhatsApp during your selected time window.",
+      price: 1000,
+      quota: 600,
+      unit: "leads",
+      addon: billing?.addons?.whatsapp_leads || {},
+      icon: "◉",
+      enabled: true,
+      tone: "green",
+    },
+
+    {
       id: "contacts",
       title: "Extra Contacts",
       description: "Add more contacts to your CRM.",
@@ -2118,7 +2134,8 @@ function PlanBillingContent() {
             {addonCards.map((addon) => {
               
             const quantity = Number(addonQuantity[addon.id] || 1);
-            const isPharmacyInvoice = addon.id === "pharmacy_invoice";
+              const isPharmacyInvoice = addon.id === "pharmacy_invoice";
+              const isWhatsAppLeads = addon.id === "whatsapp_leads";
             const totalQuota = Number(addon.quota || 0) * quantity;
             const totalAmount = Number(addon.price || 0) * quantity;
             const isEnabled = addon.addon?.status === "active";
@@ -2143,7 +2160,11 @@ function PlanBillingContent() {
                   <strong>
                     ₹{Number(addon.price || 0).toLocaleString("en-IN")}
                   </strong>
-                  <span>{isPharmacyInvoice ? "/ month" : "/ pack"}</span>
+                 <span>
+              {isPharmacyInvoice || isWhatsAppLeads
+                ? "/ month"
+                : "/ pack"}
+            </span>
                 </div>
 
                 {!isPharmacyInvoice && (
@@ -2272,6 +2293,20 @@ export default function Settings({
     billing?.subscription?.status === "active" &&
     billing?.subscription?.expiresAt &&
     new Date(billing.subscription.expiresAt).getTime() > Date.now();
+  
+  
+  const whatsappLeadsAddon = billing?.addons?.whatsapp_leads;
+
+  const hasWhatsAppLeadsAddon =
+    whatsappLeadsAddon?.enabled === true &&
+    whatsappLeadsAddon?.status === "active" &&
+    whatsappLeadsAddon?.expiresAt &&
+    new Date(whatsappLeadsAddon.expiresAt).getTime() > Date.now() &&
+    billing?.subscription?.status === "active" &&
+    billing?.subscription?.expiresAt &&
+    new Date(billing.subscription.expiresAt).getTime() > Date.now();
+
+
 
   const [activeTab, setActiveTab] = useState("Business Profile");
 
@@ -2290,13 +2325,17 @@ export default function Settings({
 
     setActiveTab(
       visibleTabs.includes(requestedTab) &&
-        (requestedTab !== "Pharmacy" || hasPharmacyAddon)
+  (requestedTab !== "Pharmacy" || hasPharmacyAddon) &&
+  (
+    requestedTab !== "WhatsApp Lead Notifications" ||
+    hasWhatsAppLeadsAddon
+  )
         ? requestedTab
         : visibleTabs.includes("Business Profile")
           ? "Business Profile"
           : visibleTabs[0] || ""
     );
-  }, [isHealthcare, initialTab, user, billing, hasPharmacyAddon]);
+  }, [isHealthcare, initialTab, user, billing, hasPharmacyAddon, hasWhatsAppLeadsAddon]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -2334,6 +2373,10 @@ export default function Settings({
           />
         );
 
+      case "WhatsApp Lead Notifications":
+  return hasWhatsAppLeadsAddon
+    ? <LeadWhatsAppSettings />
+    : null;
 
       case "Notification Settings":
         return (
@@ -2396,13 +2439,19 @@ export default function Settings({
       <div className="settings-layout">
         <aside className="settings-sidebar">
           {getSettingsGroups(isHealthcare, user).map((group) => {
-            const visibleItems = group.items.filter((item) => {
-              if (item === "Pharmacy") {
-                return Boolean(hasPharmacyAddon);
-              }
+            
+          const visibleItems = group.items.filter((item) => {
+            if (item === "Pharmacy") {
+              return Boolean(hasPharmacyAddon);
+            }
 
-              return true;
-            });
+            if (item === "WhatsApp Lead Notifications") {
+              return Boolean(hasWhatsAppLeadsAddon);
+            }
+
+            return true;
+          });
+
 
             if (visibleItems.length === 0) return null;
 
@@ -2449,4 +2498,4 @@ export default function Settings({
       </div>
     </div>
   );
-}
+}  

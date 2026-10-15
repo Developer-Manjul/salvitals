@@ -353,6 +353,7 @@ function ArrowIcon() {
 }
 export default function Contacts({ user }) {
   const [contacts, setContacts] = useState([]);
+  const [doctorOptions, setDoctorOptions] = useState([]);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -412,9 +413,41 @@ export default function Contacts({ user }) {
       setLoading(false);
     }
   };
-  useEffect(() => {
-    loadContacts();
-  }, []);
+
+  
+const loadDoctors = async () => {
+  try {
+    const response = await fetch(
+      buildApiUrl("/api/team-members?type=doctor"),
+      {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Unable to load doctors");
+    }
+
+    setDoctorOptions(
+      (data.members || [])
+        .filter((doctor) => doctor.status !== "inactive")
+        .map((doctor) => doctor.name)
+        .filter(Boolean)
+    );
+  } catch (error) {
+    console.error("LOAD CONTACT DOCTORS ERROR:", error);
+  }
+};
+
+useEffect(() => {
+  loadContacts();
+  loadDoctors();
+}, []);
   useEffect(() => {
     setForm(getDefaultForm(user));
   }, [user]);
@@ -1475,16 +1508,21 @@ export default function Contacts({ user }) {
               </label>
               <label>
                 Doctor
-                <input
-                  type="text"
-                  value={form.doctor}
-                  onChange={(event) =>
-                    updateField(
-                      "doctor",
-                      event.target.value
-                    )
-                  }
-                />
+               
+              <select
+                value={form.doctor}
+                onChange={(event) =>
+                  updateField("doctor", event.target.value)
+                }
+              >
+                <option value="">Select doctor</option>
+                {doctorOptions.map((doctor) => (
+                  <option key={doctor} value={doctor}>
+                    {doctor}
+                  </option>
+                ))}
+              </select>
+
               </label>
               <label>
                 Owner

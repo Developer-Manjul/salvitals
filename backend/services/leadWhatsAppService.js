@@ -1,5 +1,5 @@
-
 const axios = require("axios");
+const User = require("../models/User");
 const LeadWhatsAppSetting = require("../models/LeadWhatsAppSetting");
 const LeadWhatsAppDelivery = require("../models/LeadWhatsAppDelivery");
 
@@ -15,6 +15,48 @@ function normalizePhone(value) {
     return /^[1-9]\d{9,14}$/.test(phone) ? phone : "";
 }
 
+function normalizeLeadSource(value) {
+    const source = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ");
+
+    if (
+        ["website", "web", "website lead", "website leads"].includes(source)
+    ) {
+        return "Website";
+    }
+
+    if (
+        [
+            "meta",
+            "meta ads",
+            "meta ad",
+            "facebook",
+            "facebook ads",
+            "instagram",
+            "instagram ads",
+        ].includes(source)
+    ) {
+        return "Meta";
+    }
+
+    if (
+        ["ai chat", "ai chatbot", "ai assistant", "chatbot"].includes(source)
+    ) {
+        return "AI Chat";
+    }
+
+    if (
+        ["google ads", "google ad", "google", "google advertising"].includes(source)
+    ) {
+        return "Google Ads";
+    }
+
+    return source ? String(value).trim() : "Other";
+}
+
 function isWithinAllowedWindow(settings, now = new Date()) {
     const parts = new Intl.DateTimeFormat("en-GB", {
         timeZone: settings.timezone || "Asia/Kolkata",
@@ -23,12 +65,23 @@ function isWithinAllowedWindow(settings, now = new Date()) {
         hourCycle: "h23",
     }).formatToParts(now);
 
-    const hour = Number(parts.find((part) => part.type === "hour").value);
-    const minute = Number(parts.find((part) => part.type === "minute").value);
+    const hour = Number(
+        parts.find((part) => part.type === "hour").value
+    );
+
+    const minute = Number(
+        parts.find((part) => part.type === "minute").value
+    );
+
     const current = hour * 60 + minute;
 
-    const [startHour, startMinute] = settings.startTime.split(":").map(Number);
-    const [endHour, endMinute] = settings.endTime.split(":").map(Number);
+    const [startHour, startMinute] = settings.startTime
+        .split(":")
+        .map(Number);
+
+    const [endHour, endMinute] = settings.endTime
+        .split(":")
+        .map(Number);
 
     const start = startHour * 60 + startMinute;
     const end = endHour * 60 + endMinute;
@@ -37,12 +90,90 @@ function isWithinAllowedWindow(settings, now = new Date()) {
         return current >= start && current < end;
     }
 
+    // Supports windows that cross midnight, e.g. 19:00–10:00.
     return current >= start || current < end;
+}
+
+async function reserveWhatsAppQuota(userId) {
+    const now = new Date();
+
+    // Atomically reserve one notification so concurrent leads
+    // cannot exceed the purchased quota.
+    const user = await User.findOneAndUpdate(
+        {
+            _id: userId,
+
+            "subscription.status": "active",
+            "subscription.expiresAt": { $gt: now },
+
+            "addons.whatsapp_leads.enabled": true,
+            "addons.whatsapp_leads.startsAt": { $lte: now },
+            "addons.whatsapp_leads.expiresAt": { $gt: now },
+
+            $expr: {
+                $lt: [
+                    {
+                        $ifNull: [
+                            "$addons.whatsapp_leads.used",
+                            0,
+                        ],
+                    },
+                    {
+                        $ifNull: [
+                            "$addons.whatsapp_leads.quota",
+                            0,
+                        ],
+                    },
+                ],
+            },
+        },
+        {
+            $inc: {
+                "addons.whatsapp_leads.used": 1,
+            },
+        },
+        {
+            new: true,
+            projection: {
+                _id: 1,
+                "addons.whatsapp_leads.quota": 1,
+                "addons.whatsapp_leads.used": 1,
+            },
+        }
+    );
+
+    if (!user) {
+        return {
+            reserved: false,
+            reason: "plan_addon_inactive_or_quota_exhausted",
+        };
+    }
+
+    return {
+        reserved: true,
+    };
+}
+
+async function releaseWhatsAppQuota(userId) {
+    await User.updateOne(
+        {
+            _id: userId,
+            "addons.whatsapp_leads.used": { $gt: 0 },
+        },
+        {
+            $inc: {
+                "addons.whatsapp_leads.used": -1,
+            },
+        }
+    );
 }
 
 async function sendLeadWhatsAppNotification(lead) {
     if (!lead?._id || !lead?.userId) {
-        return { sent: false, reason: "invalid_lead" };
+        return {
+            sent: false,
+            reason: "invalid_lead",
+        };
     }
 
     const settings = await LeadWhatsAppSetting.findOne({
@@ -50,25 +181,39 @@ async function sendLeadWhatsAppNotification(lead) {
     }).lean();
 
     if (!settings?.enabled) {
-        return { sent: false, reason: "disabled" };
+        return {
+            sent: false,
+            reason: "disabled",
+        };
     }
 
-    const source = String(lead.source || "Other").trim();
+    const normalizedSource = normalizeLeadSource(lead.source);
 
-    if (!settings.leadSources?.includes(source)) {
-        return { sent: false, reason: "source_not_selected" };
+    const selectedSources = Array.isArray(settings.leadSources)
+        ? settings.leadSources.map(normalizeLeadSource)
+        : [];
+
+    if (!selectedSources.includes(normalizedSource)) {
+        return {
+            sent: false,
+            reason: "source_not_selected",
+        };
     }
 
     const recipientNumber = normalizePhone(settings.recipientNumber);
 
     if (!recipientNumber) {
-        return { sent: false, reason: "invalid_recipient" };
+        return {
+            sent: false,
+            reason: "invalid_recipient",
+        };
     }
 
-    const withinWindow = isWithinAllowedWindow(settings);
-
-    if (!withinWindow && !settings.sendOutsideWindow) {
-        return { sent: false, reason: "outside_window" };
+    if (!isWithinAllowedWindow(settings)) {
+        return {
+            sent: false,
+            reason: "outside_window",
+        };
     }
 
     const accessToken =
@@ -83,9 +228,17 @@ async function sendLeadWhatsAppNotification(lead) {
     const graphVersion = process.env.META_GRAPH_VERSION || "v22.0";
 
     if (!accessToken || !phoneNumberId) {
-        console.error("LEAD WHATSAPP ERROR: API configuration is missing.");
-        return { sent: false, reason: "api_not_configured" };
+        console.error(
+            "LEAD WHATSAPP ERROR: API configuration is missing."
+        );
+
+        return {
+            sent: false,
+            reason: "api_not_configured",
+        };
     }
+
+    
 
     let delivery;
 
@@ -112,14 +265,23 @@ async function sendLeadWhatsAppNotification(lead) {
         );
     } catch (error) {
         if (error.code === 11000) {
-            return { sent: false, reason: "already_registered" };
+            return {
+                sent: false,
+                reason: "already_registered",
+            };
         }
 
         throw error;
     }
 
-    if (delivery.status === "sent" || delivery.status === "processing") {
-        return { sent: false, reason: "already_processed" };
+    if (
+        delivery.status === "sent" ||
+        delivery.status === "processing"
+    ) {
+        return {
+            sent: false,
+            reason: "already_processed",
+        };
     }
 
     const claimed = await LeadWhatsAppDelivery.findOneAndUpdate(
@@ -130,18 +292,52 @@ async function sendLeadWhatsAppNotification(lead) {
         {
             $set: {
                 status: "processing",
+                recipientNumber,
                 lastError: "",
             },
-            $inc: { attempts: 1 },
+            $inc: {
+                attempts: 1,
+            },
         },
-        { new: true }
+        {
+            new: true,
+        }
     );
 
     if (!claimed) {
-        return { sent: false, reason: "already_claimed" };
+        return {
+            sent: false,
+            reason: "already_claimed",
+        };
     }
 
+    let quotaReserved = false;
+
     try {
+        const reservation = await reserveWhatsAppQuota(lead.userId);
+
+        if (!reservation.reserved) {
+            await LeadWhatsAppDelivery.updateOne(
+                {
+                    _id: claimed._id,
+                    status: "processing",
+                },
+                {
+                    $set: {
+                        status: "pending",
+                        lastError: reservation.reason,
+                    },
+                }
+            );
+
+            return {
+                sent: false,
+                reason: reservation.reason,
+            };
+        }
+
+        quotaReserved = true;
+
         const response = await axios.post(
             `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
             {
@@ -149,9 +345,13 @@ async function sendLeadWhatsAppNotification(lead) {
                 to: recipientNumber,
                 type: "template",
                 template: {
-                    name: process.env.WHATSAPP_LEAD_TEMPLATE_NAME || "new_lead_notification",
+                    name:
+                        process.env.WHATSAPP_LEAD_TEMPLATE_NAME ||
+                        "new_lead_notification",
                     language: {
-                        code: process.env.WHATSAPP_LEAD_TEMPLATE_LANGUAGE || "en",
+                        code:
+                            process.env.WHATSAPP_LEAD_TEMPLATE_LANGUAGE ||
+                            "en",
                     },
                     components: [
                         {
@@ -159,15 +359,19 @@ async function sendLeadWhatsAppNotification(lead) {
                             parameters: [
                                 {
                                     type: "text",
-                                    text: String(lead.name || "New lead").slice(0, 200),
+                                    text: String(
+                                        lead.name || "New lead"
+                                    ).slice(0, 200),
                                 },
                                 {
                                     type: "text",
-                                    text: source.slice(0, 100),
+                                    text: normalizedSource.slice(0, 100),
                                 },
                                 {
                                     type: "text",
-                                    text: String(lead.phone || "Not provided").slice(0, 100),
+                                    text: String(
+                                        lead.phone || "Not provided"
+                                    ).slice(0, 100),
                                 },
                             ],
                         },
@@ -184,7 +388,10 @@ async function sendLeadWhatsAppNotification(lead) {
         );
 
         await LeadWhatsAppDelivery.updateOne(
-            { _id: claimed._id, status: "processing" },
+            {
+                _id: claimed._id,
+                status: "processing",
+            },
             {
                 $set: {
                     status: "sent",
@@ -204,8 +411,25 @@ async function sendLeadWhatsAppNotification(lead) {
             error.message ||
             "WhatsApp send failed.";
 
+        // If Meta explicitly rejects the request, release the reserved
+        // quota. For network timeouts, delivery may be uncertain, so keep
+        // the reservation to avoid double-counting a possibly sent message.
+        if (quotaReserved && error.response) {
+            try {
+                await releaseWhatsAppQuota(lead.userId);
+            } catch (releaseError) {
+                console.error(
+                    "WHATSAPP QUOTA RELEASE ERROR:",
+                    releaseError.message
+                );
+            }
+        }
+
         await LeadWhatsAppDelivery.updateOne(
-            { _id: claimed._id, status: "processing" },
+            {
+                _id: claimed._id,
+                status: "processing",
+            },
             {
                 $set: {
                     status: "failed",
@@ -214,9 +438,16 @@ async function sendLeadWhatsAppNotification(lead) {
             }
         );
 
-        console.error("LEAD WHATSAPP SEND ERROR:", message);
+        console.error(
+            "LEAD WHATSAPP SEND ERROR:",
+            message
+        );
 
-        return { sent: false, reason: "send_failed", message };
+        return {
+            sent: false,
+            reason: "send_failed",
+            message,
+        };
     }
 }
 
@@ -224,4 +455,5 @@ module.exports = {
     sendLeadWhatsAppNotification,
     isWithinAllowedWindow,
     normalizePhone,
+    normalizeLeadSource,
 };
