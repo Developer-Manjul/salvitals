@@ -162,29 +162,20 @@ const getOwnerBillingProfile = (owner) => ({
 });
 
 
-// GST-inclusive amount calculation.
-// Inventory price includes GST; GST is not added on top.
-const calculateAmounts = (price, quantity, gstRate) => {
-    const gross = roundMoney(price * quantity);
-    const rate = Number(gstRate);
 
-    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-        throw new Error("GST rate must be between 0 and 100.");
-    }
 
-    const taxableAmount =
-        rate === 0
-            ? gross
-            : roundMoney(gross / (1 + rate / 100));
-
-    const gstAmount = roundMoney(gross - taxableAmount);
+const calculateAmounts = (price, quantity) => {
+    const totalAmount = roundMoney(
+        Number(price) * Number(quantity)
+    );
 
     return {
-        taxableAmount,
-        gstAmount,
-        totalAmount: gross,
+        taxableAmount: totalAmount,
+        gstAmount: 0,
+        totalAmount,
     };
 };
+
 
 const getNextInvoiceNumber = async (ownerId, session) => {
     const year = new Date().getFullYear();
@@ -206,9 +197,8 @@ const getNextInvoiceNumber = async (ownerId, session) => {
     return `PH/${year}/${String(counter.sequence).padStart(3, "0")}`;
 };
 
-// Accepts an array like:
-// [{ medicineId: "...", quantity: 2, gstRate: 18 }]
-// Prices and medicine names always come from the owner's inventory.
+
+
 const prepareItems = async (items, ownerId, session) => {
     if (!Array.isArray(items) || items.length === 0) {
         throw new Error("Add at least one medicine to the invoice.");
@@ -217,21 +207,16 @@ const prepareItems = async (items, ownerId, session) => {
     const prepared = [];
 
     for (const item of items) {
-        const { medicineId, quantity, gstRate } = item;
+        const { medicineId, quantity } = item;
 
         if (!isValidId(medicineId)) {
             throw new Error("Invalid medicine selected.");
         }
 
         const qty = Number(quantity);
-        const rate = Number(gstRate);
 
         if (!Number.isInteger(qty) || qty < 1) {
             throw new Error("Medicine quantity must be a positive whole number.");
-        }
-
-        if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-            throw new Error("Enter a valid GST rate between 0 and 100.");
         }
 
         const medicine = await PharmacyMedicine.findOne({
@@ -245,34 +230,32 @@ const prepareItems = async (items, ownerId, session) => {
             throw new Error("A selected medicine was not found in your inventory.");
         }
 
-        const amounts = calculateAmounts(medicine.price, qty, rate);
+        const amounts = calculateAmounts(medicine.price, qty);
 
         prepared.push({
             medicineId: medicine._id,
             medicineName: medicine.name,
             price: Number(medicine.price),
             quantity: qty,
-            gstRate: rate,
+            gstRate: 0,
             taxableAmount: amounts.taxableAmount,
-            gstAmount: amounts.gstAmount,
+            gstAmount: 0,
             totalAmount: amounts.totalAmount,
         });
     }
-
-    const subtotal = roundMoney(
-        prepared.reduce((sum, item) => sum + item.taxableAmount, 0)
-    );
-
-    const gstAmount = roundMoney(
-        prepared.reduce((sum, item) => sum + item.gstAmount, 0)
-    );
 
     const total = roundMoney(
         prepared.reduce((sum, item) => sum + item.totalAmount, 0)
     );
 
-    return { items: prepared, subtotal, gstAmount, total };
+    return {
+        items: prepared,
+        subtotal: total,
+        gstAmount: 0,
+        total,
+    };
 };
+
 
 // Decrement inventory without allowing stock to become negative.
 const deductStock = async (items, ownerId, session) => {
@@ -404,6 +387,7 @@ exports.getInvoiceById = async (req, res) => {
 
 
 
+
 exports.createInvoice = async (req, res) => {
     const session = await mongoose.startSession();
 
@@ -475,8 +459,8 @@ exports.createInvoice = async (req, res) => {
                         address: String(address || "").trim(),
                         invoiceDate: parsedDate,
                         items: prepared.items,
-                        subtotal: prepared.subtotal,
-                        gstAmount: prepared.gstAmount,
+                        subtotal: prepared.total,
+                        gstAmount: 0,
                         total: prepared.total,
                         notes: String(notes || ""),
                         status,
@@ -488,7 +472,7 @@ exports.createInvoice = async (req, res) => {
             createdInvoice = invoice;
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Pharmacy invoice created successfully.",
             invoice: createdInvoice,
@@ -496,7 +480,7 @@ exports.createInvoice = async (req, res) => {
     } catch (error) {
         console.error("Create pharmacy invoice error:", error);
 
-        res.status(400).json({
+        return res.status(400).json({
             success: false,
             message: error.message || "Failed to create pharmacy invoice.",
         });
@@ -506,11 +490,13 @@ exports.createInvoice = async (req, res) => {
 };
 
 
+
+
 exports.updateInvoice = async (req, res) => {
     const session = await mongoose.startSession();
 
     try {
-       const context = await getWorkspaceContext(req);
+        const context = await getWorkspaceContext(req);
 
         if (!requirePermission(context, "pharmacy.edit", res)) return;
 
@@ -582,28 +568,44 @@ exports.updateInvoice = async (req, res) => {
                 await deductStock(prepared.items, ownerId, session);
 
                 invoice.items = prepared.items;
-                invoice.subtotal = prepared.subtotal;
-                invoice.gstAmount = prepared.gstAmount;
+                invoice.subtotal = prepared.total;
+                invoice.gstAmount = 0;
                 invoice.total = prepared.total;
+            } else {
+                // Existing invoice ko edit karte waqt bhi GST zero rakho.
+                invoice.gstAmount = 0;
             }
 
             if (customerName !== undefined) {
                 invoice.customerName = String(customerName).trim();
             }
 
-            if (phone !== undefined) invoice.phone = String(phone).trim();
-            if (email !== undefined) invoice.email = String(email).trim();
-            if (address !== undefined) invoice.address = String(address).trim();
-            if (notes !== undefined) invoice.notes = String(notes);
+            if (phone !== undefined) {
+                invoice.phone = String(phone).trim();
+            }
 
-            if (status !== undefined) invoice.status = status;
+            if (email !== undefined) {
+                invoice.email = String(email).trim();
+            }
+
+            if (address !== undefined) {
+                invoice.address = String(address).trim();
+            }
+
+            if (notes !== undefined) {
+                invoice.notes = String(notes);
+            }
+
+            if (status !== undefined) {
+                invoice.status = status;
+            }
 
             await invoice.save({ session });
 
             updatedInvoice = invoice;
         });
 
-        res.json({
+        return res.json({
             success: true,
             message: "Pharmacy invoice updated successfully.",
             invoice: updatedInvoice,
@@ -614,7 +616,7 @@ exports.updateInvoice = async (req, res) => {
         const statusCode =
             error.message === "Pharmacy invoice not found." ? 404 : 400;
 
-        res.status(statusCode).json({
+        return res.status(statusCode).json({
             success: false,
             message: error.message || "Failed to update invoice.",
         });
@@ -718,6 +720,7 @@ async function getInvoiceLogoBuffer(logo) {
 
 
 
+
 const generateInvoicePDF = async (invoice, owner) => {
     const profile = getOwnerBillingProfile(owner);
 
@@ -798,7 +801,10 @@ const generateInvoicePDF = async (invoice, owner) => {
                         fit: [logoSize, logoSize],
                     });
                 } catch (error) {
-                    console.warn("Unable to render pharmacy logo:", error.message);
+                    console.warn(
+                        "Unable to render pharmacy logo:",
+                        error.message
+                    );
                 }
             }
 
@@ -815,11 +821,11 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             let headerY = 75;
 
+            // GSTIN removed from business details
             const businessLines = [
                 profile.address,
                 profile.phone ? `Phone: ${profile.phone}` : "",
                 profile.email ? `Email: ${profile.email}` : "",
-                profile.gstin ? `GSTIN: ${profile.gstin}` : "",
             ].filter(Boolean);
 
             for (const line of businessLines) {
@@ -882,24 +888,20 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             const invoiceDetailsY = customerNameY + 19;
 
-            doc.text(`Invoice date: ${formatDate(invoice.invoiceDate)}`, 300, invoiceDetailsY, {
-                width: 250,
-            });
-
-            if (profile.gstin) {
-                doc.text(`GSTIN: ${profile.gstin}`, 300, invoiceDetailsY + 14, {
-                    width: 250,
-                });
-            }
+            doc.text(
+                `Invoice date: ${formatDate(invoice.invoiceDate)}`,
+                300,
+                invoiceDetailsY,
+                { width: 250 }
+            );
 
             y = Math.max(customerY, detailsY + 75) + 20;
 
-            // Medicine table
+            // Medicine table without GST column
             const col = {
                 number: left,
                 medicine: left + 35,
-                qty: left + 300,
-                gst: left + 355,
+                qty: left + 330,
                 amount: left + 415,
             };
 
@@ -914,18 +916,15 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             doc.text("#", col.number + 10, y + 10, { width: 20 });
 
-            doc.text("DESCRIPTION OF MEDICINE", col.medicine, y + 10, {
-                width: 250,
-                ellipsis: true,
-            });
+            doc.text(
+                "DESCRIPTION OF MEDICINE",
+                col.medicine,
+                y + 10,
+                { width: 250, ellipsis: true }
+            );
 
             doc.text("QTY", col.qty, y + 10, {
                 width: 40,
-                align: "right",
-            });
-
-            doc.text("GST", col.gst, y + 10, {
-                width: 45,
                 align: "right",
             });
 
@@ -941,7 +940,7 @@ const generateInvoicePDF = async (invoice, owner) => {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
 
-                // Start a new page before the row would run into the footer.
+                // Start a new page before the row reaches the footer.
                 if (y > 690) {
                     doc.addPage();
                     y = 50;
@@ -949,8 +948,10 @@ const generateInvoicePDF = async (invoice, owner) => {
 
                 const medicineName = item.medicineName || "Medicine";
                 const quantity = Number(item.quantity || 0);
-                const gstRate = Number(item.gstRate || 0);
-                const amount = Number(item.totalAmount || 0);
+                const amount = Number(
+                    item.totalAmount ??
+                    (Number(item.price || 0) * quantity)
+                );
 
                 doc.fillColor("#222222")
                     .font("Helvetica")
@@ -971,49 +972,17 @@ const generateInvoicePDF = async (invoice, owner) => {
                     align: "right",
                 });
 
-                doc.text(gstRate > 0 ? `${gstRate}%` : "0%", col.gst, y, {
-                    width: 45,
-                    align: "right",
-                });
-
                 doc.text(money(amount), col.amount, y, {
                     width: 90,
                     align: "right",
                 });
 
-                // Clean row spacing: no line under every medicine.
                 y += 29;
             }
 
             y += 18;
 
-            // Totals
-            const summaryRow = (label, value, bold = false) => {
-                doc.fillColor(bold ? "#172033" : "#64748B")
-                    .font(bold ? "Helvetica-Bold" : "Helvetica")
-                    .fontSize(bold ? 11 : 10)
-                    .text(label, 325, y, {
-                        width: 100,
-                        align: "right",
-                    });
-
-                doc.fillColor("#172033")
-                    .font(bold ? "Helvetica-Bold" : "Helvetica")
-                    .fontSize(bold ? 11 : 10)
-                    .text(money(value), 430, y, {
-                        width: 120,
-                        align: "right",
-                    });
-
-                y += bold ? 30 : 22;
-            };
-
-            if (Number(invoice.gstAmount) > 0) {
-                summaryRow("Subtotal", invoice.subtotal);
-                summaryRow("GST", invoice.gstAmount);
-            }
-
-            // Grand Total highlight
+            // Grand Total only; GST and subtotal rows removed
             doc.roundedRect(325, y - 2, 225, 40, 7)
                 .fill("#172033");
 
@@ -1056,8 +1025,7 @@ const generateInvoicePDF = async (invoice, owner) => {
                 y = doc.y + 15;
             }
 
-            // Footer positioned like the normal invoice.
-            // Keep it below the content without adding an extra divider.
+            // Footer
             const footerY = Math.min(Math.max(y + 25, 750), 775);
 
             doc.fillColor("#64748B")
@@ -1078,6 +1046,7 @@ const generateInvoicePDF = async (invoice, owner) => {
         }
     });
 };
+
 
 
 

@@ -78,16 +78,12 @@ const newInvoice = () => ({
   notes: "",
   paymentMode: "",
   status: "Unpaid",
-  items: [{ medicineId: "", quantity: "1", gstRate: "0" }],
+  items: [{ medicineId: "", quantity: "1" }],
 });
 
-const lineAmounts = (price, quantity, rate) => {
-  const total = Math.round((Number(price || 0) * Number(quantity || 0) + Number.EPSILON) * 100) / 100;
-  const taxable = Number(rate) > 0
-    ? Math.round((total / (1 + Number(rate) / 100) + Number.EPSILON) * 100) / 100
-    : total;
-  return { total, taxable, gst: Math.round((total - taxable + Number.EPSILON) * 100) / 100 };
-};
+const lineAmounts = (price, quantity) => ({
+  total: Math.round((Number(price || 0) * Number(quantity || 0) + Number.EPSILON) * 100) / 100,
+});
 
 export default function PharmacyInvoice() {
   const [view, setView] = useState("list");
@@ -169,20 +165,17 @@ export default function PharmacyInvoice() {
   const businessAddress = profileValue(profile, ["address", "clinicAddress", "businessAddress"]);
   const businessPhone = profileValue(profile, ["phone", "mobile", "contactNumber"]);
   const businessEmail = profileValue(profile, ["email", "businessEmail"]);
-  const businessGstin = profileValue(profile, ["gstin", "gstNumber", "gstNo"]);
   const businessLogo = profileValue(profile, ["clinicLogo", "logo", "businessLogo", "profileImage"]);
 
   const calculatedItems = useMemo(() => form.items.map((line) => {
     const medicine = medicines.find((item) => item.id === String(line.medicineId));
-    const amounts = lineAmounts(medicine?.price || 0, line.quantity, line.gstRate);
-    return { ...line, medicine, rate: Number(line.gstRate) || 0, ...amounts };
+    const amounts = lineAmounts(medicine?.price || 0, line.quantity);
+    return { ...line, medicine, ...amounts };
   }), [form.items, medicines]);
 
-  const totals = useMemo(() => calculatedItems.reduce((acc, item) => ({
-    taxable: Math.round((acc.taxable + item.taxable) * 100) / 100,
-    gst: Math.round((acc.gst + item.gst) * 100) / 100,
-    total: Math.round((acc.total + item.total) * 100) / 100,
-  }), { taxable: 0, gst: 0, total: 0 }), [calculatedItems]);
+  const totals = useMemo(() => ({
+    total: Math.round(calculatedItems.reduce((sum, item) => sum + item.total, 0) * 100) / 100,
+  }), [calculatedItems]);
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -195,7 +188,7 @@ export default function PharmacyInvoice() {
 
   const addItem = () => setForm((prev) => ({
     ...prev,
-    items: [...prev.items, { medicineId: "", quantity: "1", gstRate: "0" }],
+    items: [...prev.items, { medicineId: "", quantity: "1" }],
   }));
 
   const removeItem = (index) => setForm((prev) => ({
@@ -248,7 +241,7 @@ export default function PharmacyInvoice() {
       items: (invoice.items || []).map((item) => ({
         medicineId: String(item.medicineId?._id || item.medicineId || ""),
         quantity: String(item.quantity || 1),
-        gstRate: String(item.gstRate ?? 0),
+
       })),
     });
     setCustomerSearch(invoice.customerName || "");
@@ -296,7 +289,7 @@ export default function PharmacyInvoice() {
         items: calculatedItems.map((item) => ({
           medicineId: item.medicineId,
           quantity: Number(item.quantity),
-          gstRate: Number(item.rate),
+
         })),
       };
       const isEditing = Boolean(form._id);
@@ -401,12 +394,11 @@ export default function PharmacyInvoice() {
             {businessAddress && <p>{businessAddress}</p>}
             {businessPhone && <p>{businessPhone}</p>}
             {businessEmail && <p>{businessEmail}</p>}
-            {businessGstin && <p>GSTIN: {businessGstin}</p>}
             {invoiceData.paymentMode && <p>Payment mode: {invoiceData.paymentMode}</p>}
           </div>
         </div>
         <div className="invoice-document-title">
-          <span>PHARMACY TAX INVOICE</span>
+          <span>PHARMACY INVOICE</span>
           <strong>{invoiceData.invoiceNumber || "Assigned when saved"}</strong>
           <p>Invoice date: {formatDate(invoiceData.invoiceDate)}</p>
         </div>
@@ -425,12 +417,11 @@ export default function PharmacyInvoice() {
           <span>INVOICE DETAILS</span>
           <strong>{invoiceData.invoiceNumber || "Assigned when saved"}</strong>
           <p>Invoice date: {formatDate(invoiceData.invoiceDate)}</p>
-          {businessGstin && <p>GSTIN: {businessGstin}</p>}
         </div>
       </div>
       <div className="invoice-document-table-wrap">
         <table className="invoice-document-table">
-          <thead><tr><th>#</th><th>DESCRIPTION OF MEDICINE</th><th>QTY</th><th>RATE</th><th>GST</th><th>AMOUNT</th></tr></thead>
+          <thead><tr><th>#</th><th>DESCRIPTION OF MEDICINE</th><th>QTY</th><th>UNIT PRICE</th><th>AMOUNT</th></tr></thead>
           <tbody>
             {lines.map((item, index) => (
               <tr key={`${item.medicineId || item.medicineName || "item"}-${index}`}>
@@ -438,7 +429,6 @@ export default function PharmacyInvoice() {
                 <td>{item.medicine?.name || item.medicineName || "Medicine"}</td>
                 <td>{Number(item.quantity) || 0}</td>
                 <td>{money(item.medicine?.price ?? item.price ?? 0)}</td>
-                <td>{Number(item.rate ?? item.gstRate) > 0 ? `${Number(item.rate ?? item.gstRate)}% (${money(item.gst)})` : "0%"}</td>
                 <td>{money(item.total ?? item.totalAmount ?? 0)}</td>
               </tr>
             ))}
@@ -450,10 +440,6 @@ export default function PharmacyInvoice() {
           {invoiceData.notes && <><span>NOTES</span><p>{invoiceData.notes}</p></>}
         </div>
         <div className="invoice-document-total-box">
-          {summary.gst > 0 && <>
-            <div><span>Subtotal</span><strong>{money(summary.taxable ?? summary.subtotal ?? 0)}</strong></div>
-            <div><span>GST</span><strong>{money(summary.gst ?? summary.gstAmount ?? 0)}</strong></div>
-          </>}
           <div className="grand"><span>Grand Total</span><strong>{money(summary.total ?? summary.grandTotal ?? 0)}</strong></div>
         </div>
       </div>
@@ -588,7 +574,7 @@ export default function PharmacyInvoice() {
                 <div className="invoice-card-header"><h2>Billed By</h2></div>
                 <div className="invoice-billed-profile">
                   <div className="invoice-business-logo">{businessLogo ? <img src={businessLogo} alt={businessName} /> : <span>{businessName.charAt(0).toUpperCase()}</span>}</div>
-                  <div><strong>{businessName}</strong>{businessOwner && <span>{businessOwner}</span>}{businessAddress && <span>{businessAddress}</span>}{businessPhone && <span>{businessPhone}</span>}{businessEmail && <span>{businessEmail}</span>}{businessGstin && <span>GSTIN: {businessGstin}</span>}</div>
+                  <div><strong>{businessName}</strong>{businessOwner && <span>{businessOwner}</span>}{businessAddress && <span>{businessAddress}</span>}{businessPhone && <span>{businessPhone}</span>}{businessEmail && <span>{businessEmail}</span>}</div>
                 </div>
               </section>
 
@@ -609,14 +595,13 @@ export default function PharmacyInvoice() {
               </section>
 
               <section className="invoice-card">
-                <div className="invoice-card-header"><div><h2>Medicines & Items</h2><p>Select medicines already added to Pharmacy inventory. Price includes GST.</p></div><button type="button" className="invoice-add-item-btn" onClick={addItem}>+ Add medicine</button></div>
+                <div className="invoice-card-header"><div><h2>Medicines & Items</h2><p>Select medicines already added to Pharmacy inventory.</p></div><button type="button" className="invoice-add-item-btn" onClick={addItem}>+ Add medicine</button></div>
                 <div className="pharmacy-invoice-lines">
                   {calculatedItems.map((item, index) => (
                     <div className="pharmacy-invoice-line" key={`${item.medicineId}-${index}`}>
                       <div className="invoice-field pharmacy-line-field"><label>Medicine</label><select required value={item.medicineId} onChange={(e) => updateItem(index, "medicineId", e.target.value)}><option value="">Select medicine</option>{medicines.map((medicine) => <option key={medicine.id} value={medicine.id} disabled={medicine.quantity < 1 && medicine.id !== item.medicineId}>{medicine.name} — {money(medicine.price)} (Stock: {medicine.quantity})</option>)}</select>{item.medicine && <small>Expiry: {item.medicine.expiryDate ? formatDate(item.medicine.expiryDate) : "—"} · Available: {item.medicine.quantity}</small>}</div>
-                      <div className="pharmacy-line-field"><label>Price (incl. GST)</label><input className="pharmacy-price-readonly" readOnly value={item.medicine ? money(item.medicine.price) : ""} placeholder="Auto-filled" /></div>
+                      <div className="pharmacy-line-field"><label>Unit Price</label><input className="pharmacy-price-readonly" readOnly value={item.medicine ? money(item.medicine.price) : ""} placeholder="Auto-filled" /></div>
                       <div className="pharmacy-line-field"><label>Quantity</label><input type="number" min="1" step="1" required value={item.quantity} onChange={(e) => updateItem(index, "quantity", e.target.value)} /></div>
-                      <div className="pharmacy-line-field"><label>GST</label><select value={item.gstRate} onChange={(e) => updateItem(index, "gstRate", e.target.value)}><option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option></select></div>
                       <div className="pharmacy-line-field pharmacy-line-amount-field"><label>Amount</label><strong className="pharmacy-line-total">{money(item.total)}</strong></div>
                       <button type="button" className="invoice-remove-item" onClick={() => removeItem(index)} disabled={form.items.length === 1} aria-label="Remove medicine">×</button>
                     </div>
@@ -625,7 +610,6 @@ export default function PharmacyInvoice() {
                 <div className="invoice-bottom-area">
                   <div className="invoice-notes"><label>Notes for customer</label><textarea rows="4" value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Add a note..." /></div>
                   <div className="invoice-calculation">
-                    {totals.gst > 0 && <><div><span>Subtotal</span><strong>{money(totals.taxable)}</strong></div><div><span>GST</span><strong>{money(totals.gst)}</strong></div></>}
                     <div className="invoice-grand-total"><span>Grand Total</span><strong>{money(totals.total)}</strong></div>
                   </div>
                 </div>
@@ -672,7 +656,6 @@ export default function PharmacyInvoice() {
                 <div><span>Invoice Date</span><strong>{formatDate(form.invoiceDate)}</strong></div>
                 <div><span>Customer</span><strong>{form.customerName || "Not selected"}</strong></div>
                 <div><span>Medicine lines</span><strong>{calculatedItems.length}</strong></div>
-                {totals.gst > 0 && <div><span>GST</span><strong>{money(totals.gst)}</strong></div>}
                 <div><span>Total</span><strong>{money(totals.total)}</strong></div>
               </div>
             </aside>

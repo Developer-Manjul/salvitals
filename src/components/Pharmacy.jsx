@@ -7,6 +7,7 @@ const API_BASE = getApiBaseUrl();
 
 const EMPTY_MEDICINE = {
   name: "",
+  batchNo: "",
   price: "",
   quantity: "",
   expiryDate: "",
@@ -71,7 +72,9 @@ function formatDate(value) {
 
   if (typeof value === "number" && value > 0) {
     const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
-    return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+    return Number.isNaN(date.getTime())
+      ? ""
+      : date.toISOString().slice(0, 10);
   }
 
   const text = String(value).trim();
@@ -108,8 +111,14 @@ function normalizeMedicine(row) {
     name: String(
       getValue("name", "medicine name", "medicine", "item name")
     ).trim(),
+
+    batchNo: String(
+      getValue("batch no", "batch number", "batchno", "batch")
+    ).trim(),
+
     price: rawPrice === "" ? "" : Number(rawPrice),
     quantity: rawQuantity === "" ? "" : Number(rawQuantity),
+
     expiryDate: formatDate(
       getValue("expiry date", "expiry", "expirydate")
     ),
@@ -137,14 +146,17 @@ export default function Pharmacy() {
       const data = await api("/api/pharmacy");
 
       setMedicines(
-        (Array.isArray(data.medicines) ? data.medicines : []).map((item) => ({
-          ...item,
-          id: item._id || item.id,
-          name: item.name || "",
-          price: Number(item.price) || 0,
-          quantity: Number(item.quantity) || 0,
-          expiryDate: formatDate(item.expiryDate),
-        }))
+        (Array.isArray(data.medicines) ? data.medicines : []).map(
+          (item) => ({
+            ...item,
+            id: item._id || item.id,
+            name: item.name || "",
+            batchNo: item.batchNo || "",
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 0,
+            expiryDate: formatDate(item.expiryDate),
+          })
+        )
       );
     } catch (loadError) {
       setError(loadError.message || "Unable to load medicines.");
@@ -184,6 +196,7 @@ export default function Pharmacy() {
 
     setMedicine({
       name: item.name || "",
+      batchNo: item.batchNo || "",
       price: String(item.price ?? ""),
       quantity: String(item.quantity ?? ""),
       expiryDate: formatDate(item.expiryDate),
@@ -193,14 +206,15 @@ export default function Pharmacy() {
     setShowForm(true);
   };
 
-  const addMedicine = async (event) => {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-
+  const validateMedicine = () => {
     if (!medicine.name.trim()) {
       setError("Please enter the medicine name.");
-      return;
+      return false;
+    }
+
+    if (!medicine.batchNo.trim()) {
+      setError("Please enter the batch number.");
+      return false;
     }
 
     if (
@@ -209,7 +223,7 @@ export default function Pharmacy() {
       Number(medicine.price) < 0
     ) {
       setError("Please enter a valid price.");
-      return;
+      return false;
     }
 
     if (
@@ -218,13 +232,23 @@ export default function Pharmacy() {
       Number(medicine.quantity) < 0
     ) {
       setError("Please enter a valid whole-number quantity.");
-      return;
+      return false;
     }
 
     if (!medicine.expiryDate) {
       setError("Please select the medicine expiry date.");
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  const addMedicine = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!validateMedicine()) return;
 
     try {
       setSaving(true);
@@ -233,6 +257,7 @@ export default function Pharmacy() {
         method: "POST",
         body: JSON.stringify({
           name: medicine.name.trim(),
+          batchNo: medicine.batchNo.trim(),
           price: Number(medicine.price),
           quantity: Number(medicine.quantity),
           expiryDate: medicine.expiryDate,
@@ -246,6 +271,7 @@ export default function Pharmacy() {
       const savedMedicine = {
         ...data.medicine,
         id: data.medicine._id || data.medicine.id,
+        batchNo: data.medicine.batchNo || medicine.batchNo.trim(),
         expiryDate: formatDate(data.medicine.expiryDate),
       };
 
@@ -269,33 +295,7 @@ export default function Pharmacy() {
       return;
     }
 
-    if (!medicine.name.trim()) {
-      setError("Please enter the medicine name.");
-      return;
-    }
-
-    if (
-      medicine.price === "" ||
-      !Number.isFinite(Number(medicine.price)) ||
-      Number(medicine.price) < 0
-    ) {
-      setError("Please enter a valid price.");
-      return;
-    }
-
-    if (
-      medicine.quantity === "" ||
-      !Number.isInteger(Number(medicine.quantity)) ||
-      Number(medicine.quantity) < 0
-    ) {
-      setError("Please enter a valid whole-number quantity.");
-      return;
-    }
-
-    if (!medicine.expiryDate) {
-      setError("Please select the medicine expiry date.");
-      return;
-    }
+    if (!validateMedicine()) return;
 
     try {
       setSaving(true);
@@ -306,6 +306,7 @@ export default function Pharmacy() {
           method: "PUT",
           body: JSON.stringify({
             name: medicine.name.trim(),
+            batchNo: medicine.batchNo.trim(),
             price: Number(medicine.price),
             quantity: Number(medicine.quantity),
             expiryDate: medicine.expiryDate,
@@ -320,6 +321,7 @@ export default function Pharmacy() {
       const updatedMedicine = {
         ...data.medicine,
         id: data.medicine._id || data.medicine.id,
+        batchNo: data.medicine.batchNo || medicine.batchNo.trim(),
         expiryDate: formatDate(data.medicine.expiryDate),
       };
 
@@ -427,6 +429,7 @@ export default function Pharmacy() {
         .filter(
           (item) =>
             item.name ||
+            item.batchNo ||
             item.price !== "" ||
             item.quantity !== "" ||
             item.expiryDate
@@ -441,6 +444,7 @@ export default function Pharmacy() {
       const invalidRow = parsed.find(
         (item) =>
           !item.name ||
+          !item.batchNo ||
           item.price === "" ||
           !Number.isFinite(item.price) ||
           item.price < 0 ||
@@ -453,7 +457,7 @@ export default function Pharmacy() {
 
       if (invalidRow) {
         throw new Error(
-          `Check the medicine name, price, quantity and expiry date for "${
+          `Check the medicine name, batch number, price, quantity and expiry date for "${
             invalidRow.name || "unnamed medicine"
           }".`
         );
@@ -473,6 +477,7 @@ export default function Pharmacy() {
       ).map((item) => ({
         ...item,
         id: item._id || item.id,
+        batchNo: item.batchNo || "",
         expiryDate: formatDate(item.expiryDate),
       }));
 
@@ -520,7 +525,9 @@ export default function Pharmacy() {
   };
 
   const filteredMedicines = medicines.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
+    `${item.name} ${item.batchNo || ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
   );
 
   const totalStock = medicines.reduce(
@@ -633,7 +640,20 @@ export default function Pharmacy() {
               </label>
 
               <label>
-                Price (₹) *
+                Batch No. *
+                <input
+                  type="text"
+                  placeholder="e.g. BATCH-001"
+                  value={medicine.batchNo}
+                  onChange={(event) =>
+                    updateField("batchNo", event.target.value)
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                Unit Price (₹) *
                 <input
                   type="number"
                   min="0"
@@ -722,7 +742,8 @@ export default function Pharmacy() {
             <thead>
               <tr>
                 <th>Medicine Name</th>
-                <th>Price</th>
+                <th>Batch No.</th>
+                <th>Unit Price</th>
                 <th>Quantity</th>
                 <th>Expiry Date</th>
                 <th>Stock Value</th>
@@ -733,13 +754,13 @@ export default function Pharmacy() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="pharmacy-empty">
+                  <td colSpan="7" className="pharmacy-empty">
                     Loading medicines...
                   </td>
                 </tr>
               ) : filteredMedicines.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="pharmacy-empty">
+                  <td colSpan="7" className="pharmacy-empty">
                     {search
                       ? "No medicines match your search."
                       : "No medicines added yet. Add a medicine manually or import an Excel/CSV file."}
@@ -751,10 +772,13 @@ export default function Pharmacy() {
                     <td>
                       <strong>{item.name}</strong>
                     </td>
+
+                    <td>{item.batchNo || "-"}</td>
                     <td>{formatMoney(item.price)}</td>
                     <td>{item.quantity.toLocaleString("en-IN")} pcs</td>
                     <td>{item.expiryDate || "-"}</td>
                     <td>{formatMoney(item.price * item.quantity)}</td>
+
                     <td>
                       <div className="pharmacy-row-actions">
                         <button
