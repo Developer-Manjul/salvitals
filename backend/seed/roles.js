@@ -80,6 +80,17 @@ const roles = [
       "roles.view",
 
       "billing.view",
+
+            "pharmacy.view",
+      "pharmacy.create",
+      "pharmacy.edit",
+      "pharmacy.delete",
+
+      "pharmacy_invoices.view",
+      "pharmacy_invoices.create",
+      "pharmacy_invoices.edit",
+      "pharmacy_invoices.delete",
+      "pharmacy_invoices.send",
     ],
   },
 
@@ -135,6 +146,15 @@ const roles = [
       "business_profile.view",
 
       "billing.view",
+
+            "pharmacy.view",
+      "pharmacy.create",
+      "pharmacy.edit",
+
+      "pharmacy_invoices.view",
+      "pharmacy_invoices.create",
+      "pharmacy_invoices.edit",
+      "pharmacy_invoices.send",
     ],
   },
 
@@ -174,6 +194,15 @@ const roles = [
       "services.create",
 
       "notifications.view",
+
+            "pharmacy.view",
+      "pharmacy.create",
+      "pharmacy.edit",
+
+      "pharmacy_invoices.view",
+      "pharmacy_invoices.create",
+      "pharmacy_invoices.edit",
+      "pharmacy_invoices.send",
     ],
   },
 ];
