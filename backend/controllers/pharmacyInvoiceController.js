@@ -164,17 +164,38 @@ const getOwnerBillingProfile = (owner) => ({
 
 
 
-const calculateAmounts = (price, quantity) => {
-    const totalAmount = roundMoney(
-        Number(price) * Number(quantity)
-    );
 
-    return {
-        taxableAmount: totalAmount,
-        gstAmount: 0,
-        totalAmount,
-    };
+
+const calculateAmounts = (price, quantity) => {
+  const unitPrice = Number(price);
+  const qty = Number(quantity);
+
+  if (
+    price === undefined ||
+    price === null ||
+    price === "" ||
+    !Number.isFinite(unitPrice) ||
+    unitPrice < 0 ||
+    quantity === undefined ||
+    quantity === null ||
+    quantity === "" ||
+    !Number.isInteger(qty) ||
+    qty < 1
+  ) {
+    throw new Error(
+      `Invalid medicine price or quantity. Price: ${price}, Quantity: ${quantity}`
+    );
+  }
+
+  const totalAmount = Math.round(unitPrice * qty * 100) / 100;
+
+  return {
+    taxableAmount: totalAmount,
+    gstAmount: 0,
+    totalAmount,
+  };
 };
+
 
 
 const getNextInvoiceNumber = async (ownerId, session) => {
@@ -199,6 +220,7 @@ const getNextInvoiceNumber = async (ownerId, session) => {
 
 
 
+
 const prepareItems = async (items, ownerId, session) => {
     if (!Array.isArray(items) || items.length === 0) {
         throw new Error("Add at least one medicine to the invoice.");
@@ -216,7 +238,9 @@ const prepareItems = async (items, ownerId, session) => {
         const qty = Number(quantity);
 
         if (!Number.isInteger(qty) || qty < 1) {
-            throw new Error("Medicine quantity must be a positive whole number.");
+            throw new Error(
+                "Medicine quantity must be a positive whole number."
+            );
         }
 
         const medicine = await PharmacyMedicine.findOne({
@@ -227,15 +251,42 @@ const prepareItems = async (items, ownerId, session) => {
             .lean();
 
         if (!medicine) {
-            throw new Error("A selected medicine was not found in your inventory.");
+            throw new Error(
+                "A selected medicine was not found in your inventory."
+            );
         }
 
-        const amounts = calculateAmounts(medicine.price, qty);
+        // Read the actual fields from PharmacyMedicine model
+        const medicinePrice = Number(medicine.packPrice);
+        const availableStock = Number(medicine.unitInStock);
+
+        if (!Number.isFinite(medicinePrice) || medicinePrice < 0) {
+            throw new Error(
+                `Invalid pack price for "${medicine.name}".`
+            );
+        }
+
+        if (
+            !Number.isInteger(availableStock) ||
+            availableStock < 0
+        ) {
+            throw new Error(
+                `Invalid stock for "${medicine.name}".`
+            );
+        }
+
+        if (qty > availableStock) {
+            throw new Error(
+                `Insufficient stock for "${medicine.name}". Available: ${availableStock}, requested: ${qty}.`
+            );
+        }
+
+        const amounts = calculateAmounts(medicinePrice, qty);
 
         prepared.push({
             medicineId: medicine._id,
             medicineName: medicine.name,
-            price: Number(medicine.price),
+            price: medicinePrice,
             quantity: qty,
             gstRate: 0,
             taxableAmount: amounts.taxableAmount,
@@ -245,7 +296,10 @@ const prepareItems = async (items, ownerId, session) => {
     }
 
     const total = roundMoney(
-        prepared.reduce((sum, item) => sum + item.totalAmount, 0)
+        prepared.reduce(
+            (sum, item) => sum + item.totalAmount,
+            0
+        )
     );
 
     return {
@@ -257,36 +311,84 @@ const prepareItems = async (items, ownerId, session) => {
 };
 
 
-// Decrement inventory without allowing stock to become negative.
+
+
 const deductStock = async (items, ownerId, session) => {
     for (const item of items) {
-        const result = await PharmacyMedicine.updateOne(
-            {
-                _id: item.medicineId,
-                userId: ownerId,
-                quantity: { $gte: item.quantity },
-            },
-            { $inc: { quantity: -item.quantity } },
-            { session }
-        );
+        const medicineId = item.medicineId?._id || item.medicineId;
+        const requestedQty = Number(item.quantity);
 
-        if (result.modifiedCount !== 1) {
+        if (!isValidId(medicineId)) {
             throw new Error(
-                `Insufficient stock for "${item.medicineName}". Please check inventory.`
+                `Invalid medicine ID for "${item.medicineName}".`
             );
         }
+
+        if (!Number.isInteger(requestedQty) || requestedQty < 1) {
+            throw new Error(
+                `Invalid quantity for "${item.medicineName}".`
+            );
+        }
+
+        const medicine = await PharmacyMedicine.findOne({
+            _id: medicineId,
+            userId: ownerId,
+        }).session(session);
+
+        if (!medicine) {
+            throw new Error(
+                `Medicine "${item.medicineName}" was not found in your inventory.`
+            );
+        }
+
+        const availableStock = Number(medicine.unitInStock);
+
+        if (
+            !Number.isInteger(availableStock) ||
+            availableStock < requestedQty
+        ) {
+            throw new Error(
+                `Insufficient stock for "${medicine.name}". Available: ${availableStock}, requested: ${requestedQty}.`
+            );
+        }
+
+        medicine.unitInStock = availableStock - requestedQty;
+
+        await medicine.save({ session });
     }
 };
 
-// Restore quantities from an existing invoice.
+
+
+
+
 const restoreStock = async (items, ownerId, session) => {
     for (const item of items) {
+        const medicineId = item.medicineId?._id || item.medicineId;
+        const quantity = Number(item.quantity);
+
+        if (!isValidId(medicineId)) {
+            throw new Error(
+                `Invalid medicine ID for "${item.medicineName}".`
+            );
+        }
+
+        if (!Number.isInteger(quantity) || quantity < 1) {
+            throw new Error(
+                `Invalid restore quantity for "${item.medicineName}".`
+            );
+        }
+
         const result = await PharmacyMedicine.updateOne(
             {
-                _id: item.medicineId,
+                _id: medicineId,
                 userId: ownerId,
             },
-            { $inc: { quantity: item.quantity } },
+            {
+                $inc: {
+                    unitInStock: quantity,
+                },
+            },
             { session }
         );
 
@@ -297,6 +399,7 @@ const restoreStock = async (items, ownerId, session) => {
         }
     }
 };
+
 
 const getInvoiceForOwner = async (invoiceId, ownerId, session = null) => {
     if (!isValidId(invoiceId)) return null;

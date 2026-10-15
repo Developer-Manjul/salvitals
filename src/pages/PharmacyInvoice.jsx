@@ -95,6 +95,8 @@ export default function PharmacyInvoice() {
   const [showPreview, setShowPreview] = useState(false);
   const [search, setSearch] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
+  const [medicineSearch, setMedicineSearch] = useState({});
+const [showMedicineOptions, setShowMedicineOptions] = useState({});
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,27 +140,48 @@ export default function PharmacyInvoice() {
     }
   };
 
-  const loadAll = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [medicineData, invoiceData] = await Promise.all([
-        api("/api/pharmacy"),
-        api("/api/pharmacy-invoices"),
-      ]);
-      setMedicines((Array.isArray(medicineData.medicines) ? medicineData.medicines : []).map((item) => ({
+ 
+const loadAll = async () => {
+  setLoading(true);
+  setError("");
+
+  try {
+    const [medicineData, invoiceData] = await Promise.all([
+      api("/api/pharmacy"),
+      api("/api/pharmacy-invoices"),
+    ]);
+
+    const medicineList = Array.isArray(medicineData.medicines)
+      ? medicineData.medicines
+      : [];
+
+    setMedicines(
+      medicineList.map((item) => ({
         ...item,
-        id: String(item._id || item.id),
-        price: Number(item.price) || 0,
-        quantity: Number(item.quantity) || 0,
-      })));
-      setInvoices(Array.isArray(invoiceData.invoices) ? invoiceData.invoices : []);
-    } catch (err) {
-      setError(err.message || "Unable to load pharmacy data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+        _id: String(item._id || item.id || ""),
+        id: String(item._id || item.id || ""),
+        name: item.name || item.medicineName || "",
+        batchNo: item.batchNo || item.batchNumber || "",
+        price: Number(
+          item.price ?? item.packPrice ?? item.mrp ?? item.unitPrice ?? 0
+        ),
+        quantity: Number(
+          item.quantity ?? item.unitInStock ?? item.stock ?? 0
+        ),
+        expiryDate: item.expiryDate || item.expiry || "",
+      }))
+    );
+
+    setInvoices(
+      Array.isArray(invoiceData.invoices) ? invoiceData.invoices : []
+    );
+  } catch (err) {
+    setError(err.message || "Unable to load pharmacy data.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const businessName = profileValue(profile, ["displayName", "clinicName", "businessName", "name"]) || "SaleVitals";
   const businessOwner = profileValue(profile, ["name", "ownerName", "doctorName"]);
@@ -168,7 +191,9 @@ export default function PharmacyInvoice() {
   const businessLogo = profileValue(profile, ["clinicLogo", "logo", "businessLogo", "profileImage"]);
 
   const calculatedItems = useMemo(() => form.items.map((line) => {
-    const medicine = medicines.find((item) => item.id === String(line.medicineId));
+    const medicine = medicines.find(
+  (item) => String(item._id || item.id) === String(line.medicineId)
+);
     const amounts = lineAmounts(medicine?.price || 0, line.quantity);
     return { ...line, medicine, ...amounts };
   }), [form.items, medicines]);
@@ -216,6 +241,74 @@ export default function PharmacyInvoice() {
     if (!query) return true;
     return `${customer.name || ""} ${customer.fullName || ""} ${customer.patientName || ""} ${customer.phone || customer.mobile || ""} ${customer.email || ""}`.toLowerCase().includes(query);
   }).slice(0, 8);
+
+  const getFilteredMedicines = (index) => {
+  const query = (medicineSearch[index] || "").trim().toLowerCase();
+
+  return medicines
+    .filter((medicine) => {
+      const searchableText = [
+        medicine.name,
+        medicine.batchNo,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return !query || searchableText.includes(query);
+    })
+    .slice(0, 50);
+};
+
+
+
+const chooseMedicine = (index, medicine) => {
+  const medicineId = String(medicine._id || medicine.id || "");
+
+  const price = Number(
+    medicine.price ??
+    medicine.packPrice ??
+    medicine.mrp ??
+    medicine.unitPrice ??
+    0
+  );
+
+  const stock = Number(
+    medicine.quantity ??
+    medicine.unitInStock ??
+    medicine.stock ??
+    0
+  );
+
+  setForm((previous) => {
+    const items = [...previous.items];
+
+    items[index] = {
+      ...items[index],
+      medicineId,
+      medicineName: medicine.name || medicine.medicineName || "",
+      batchNo: medicine.batchNo || medicine.batchNumber || "",
+      price,
+      quantity: "1",
+      availableStock: stock,
+      expiryDate: medicine.expiryDate || medicine.expiry || "",
+    };
+
+    return { ...previous, items };
+  });
+
+  setMedicineSearch((previous) => ({
+    ...previous,
+    [index]: "",
+  }));
+
+  setShowMedicineOptions((previous) => ({
+    ...previous,
+    [index]: false,
+  }));
+};
+
+
 
   const openCreate = () => {
     setError("");
@@ -599,7 +692,72 @@ export default function PharmacyInvoice() {
                 <div className="pharmacy-invoice-lines">
                   {calculatedItems.map((item, index) => (
                     <div className="pharmacy-invoice-line" key={`${item.medicineId}-${index}`}>
-                      <div className="invoice-field pharmacy-line-field"><label>Medicine</label><select required value={item.medicineId} onChange={(e) => updateItem(index, "medicineId", e.target.value)}><option value="">Select medicine</option>{medicines.map((medicine) => <option key={medicine.id} value={medicine.id} disabled={medicine.quantity < 1 && medicine.id !== item.medicineId}>{medicine.name} — {money(medicine.price)} (Stock: {medicine.quantity})</option>)}</select>{item.medicine && <small>Expiry: {item.medicine.expiryDate ? formatDate(item.medicine.expiryDate) : "—"} · Available: {item.medicine.quantity}</small>}</div>
+                      <div className="invoice-field pharmacy-line-field"><label>Medicine</label>
+<div className="pharmacy-medicine-search">
+  <input
+    type="text"
+    placeholder="Search medicine by name or batch..."
+    value={
+      showMedicineOptions[index]
+        ? medicineSearch[index] || ""
+        : item.medicine?.name || ""
+    }
+    autoComplete="off"
+    onFocus={() => {
+      setMedicineSearch((previous) => ({
+        ...previous,
+        [index]: item.medicine?.name || "",
+      }));
+      setShowMedicineOptions((previous) => ({
+        ...previous,
+        [index]: true,
+      }));
+    }}
+    onChange={(e) => {
+      setMedicineSearch((previous) => ({
+        ...previous,
+        [index]: e.target.value,
+      }));
+      updateItem(index, "medicineId", "");
+      setShowMedicineOptions((previous) => ({
+        ...previous,
+        [index]: true,
+      }));
+    }}
+    required={!item.medicineId}
+  />
+
+ 
+{showMedicineOptions[index] && (
+  <div className="pharmacy-medicine-options">
+    {getFilteredMedicines(index).length > 0 ? (
+      getFilteredMedicines(index).map((medicine) => (
+     <button
+  type="button"
+  key={medicine._id || medicine.id}
+  onMouseDown={(e) => e.preventDefault()}
+  onClick={() => {
+    chooseMedicine(index, medicine);
+  }}
+>
+          <strong>{medicine.name}</strong>
+          <span>
+            Batch: {medicine.batchNo || "-"} ·
+            {" "}{money(medicine.price)} ·
+            {" "}Stock: {medicine.quantity}
+          </span>
+        </button>
+      ))
+    ) : (
+      <div className="pharmacy-medicine-no-results">
+        No matching medicines found.
+      </div>
+    )}
+  </div>
+)}
+
+</div>
+{item.medicine && <small>Expiry: {item.medicine.expiryDate ? formatDate(item.medicine.expiryDate) : "—"} · Available: {item.medicine.quantity}</small>}</div>
                       <div className="pharmacy-line-field"><label>Unit Price</label><input className="pharmacy-price-readonly" readOnly value={item.medicine ? money(item.medicine.price) : ""} placeholder="Auto-filled" /></div>
                       <div className="pharmacy-line-field"><label>Quantity</label><input type="number" min="1" step="1" required value={item.quantity} onChange={(e) => updateItem(index, "quantity", e.target.value)} /></div>
                       <div className="pharmacy-line-field pharmacy-line-amount-field"><label>Amount</label><strong className="pharmacy-line-total">{money(item.total)}</strong></div>
