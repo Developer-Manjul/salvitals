@@ -436,7 +436,7 @@ RULES:
 7. Short questions such as "cost?", "how much?", "and hair?", "timing?", "aur iska?", "kitna?" should be understood from previous conversation.
 8. Do not return NO_REPLY.
 9. Always give the visitor a useful response.
-10. If verified information is not available, politely say that you do not have verified information for that specific detail.
+10. If the exact treatment price is not available in verified business information, explain that the cost depends on the patient's individual concerns, condition, and the procedure and treatment plan recommended by the doctor. Do not say that the treatment information is unknown or unavailable. Do not invent or estimate a price. Recommend a consultation to discuss suitable options and the estimated cost. Answer the visitor's question before asking for their name, mobile number, or offering an appointment. For consultation-fee questions, provide the verified consultation fee directly if available in the knowledge.
 11. Keep responses short and conversational.
 12. Prefer 1 to 4 short sentences.
 13. Do not dump website content.
@@ -565,10 +565,9 @@ async function generateAIReply({
       cleanUserMessage
     );
 
-  const shouldAskAppointment =
-    currentQuestionCount >= 2 &&
+ const shouldAskAppointment =
     !appointmentAlreadyAsked &&
-    !directAppointmentRequest;
+    directAppointmentRequest;
 
   const systemPrompt =
     buildSystemPrompt({
