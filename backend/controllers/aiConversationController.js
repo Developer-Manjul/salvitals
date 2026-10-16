@@ -157,13 +157,21 @@ function isNo(text) {
   ]).has(value);
 }
 
-function isDirectAppointmentRequest(
-  text
-) {
-  const value =
-    normalizeMessage(text);
+
+function isDirectAppointmentRequest(text) {
+  const value = normalizeMessage(text);
 
   if (!value) {
+    return false;
+  }
+
+  // Consultation fee/cost questions are information requests,
+  // not appointment booking requests.
+  const isPricingQuestion =
+    /\b(fee|fees|cost|price|pricing|charges|kitna|kitne|kitni|kharcha|rate)\b/i.test(value) ||
+    /\bhow much\b/i.test(value);
+
+  if (isPricingQuestion) {
     return false;
   }
 
@@ -176,7 +184,6 @@ function isDirectAppointmentRequest(
     "schedule appointment",
     "schedule a appointment",
     "schedule an appointment",
-    "consultation",
     "consult",
     "appointment book",
     "appointment booking",
@@ -190,11 +197,10 @@ function isDirectAppointmentRequest(
   ];
 
   return appointmentWords.some(
-    (word) =>
-      value === word ||
-      value.includes(word)
+    (word) => value === word || value.includes(word)
   );
 }
+
 
 function getGreeting(
   assistant
