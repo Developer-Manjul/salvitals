@@ -787,14 +787,6 @@ function adjustMobileChatForKeyboard() {
   }
 }
 
-if (window.visualViewport) {
-  window.visualViewport.addEventListener(
-    "resize",
-    adjustMobileChatForKeyboard
-  );
-}
-
-
   var send =
     shadow.getElementById(
       "send"
@@ -1365,10 +1357,11 @@ if (window.visualViewport) {
       );
     } finally {
       state.sending = false;
+send.disabled = false;
 
-      send.disabled = false;
-
-      input.focus();
+if (!window.matchMedia("(max-width: 767px)").matches) {
+    input.focus();
+}
     }
   }
 
@@ -1461,13 +1454,11 @@ if (window.visualViewport) {
         render();
       }
 
-      setTimeout(
-        function () {
-          input.focus();
-        },
-        100
-      );
-    };
+      setTimeout(function () {
+    if (!window.matchMedia("(max-width: 767px)").matches) {
+        input.focus();
+    }
+}, 100);
 
   close.onclick =
     function () {
