@@ -495,14 +495,40 @@ const apiOrigin = "https://salevitals.com";
     border-radius: 17px;
   }
 
-  #panel {
+  
+#panel {
+    position: fixed;
     right: 10px;
     bottom: 82px;
-    width: calc(100vw - 20px);
-    height: calc(100vh - 105px);
-    max-height: none;
+    left: 10px;
+    width: auto;
+    height: calc(100dvh - 105px);
+    max-height: calc(100dvh - 105px);
+    min-height: 0;
     border-radius: 19px;
-  }
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+#panel .body {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#panel .foot {
+    flex-shrink: 0;
+}
+
+#panel .input-row {
+    flex-shrink: 0;
+}
+
+#panel .foot input {
+    min-width: 0;
+    font-size: 16px;
+}
+
 
   .head {
     min-height: 74px;
@@ -730,6 +756,44 @@ const apiOrigin = "https://salevitals.com";
     shadow.getElementById(
       "input"
     );
+
+    
+function adjustMobileChatForKeyboard() {
+  if (!window.matchMedia("(max-width: 520px)").matches) {
+    return;
+  }
+
+  var viewport = window.visualViewport;
+
+  if (!viewport) return;
+
+  var keyboardOpen =
+    viewport.height < window.innerHeight * 0.75;
+
+  if (keyboardOpen) {
+    panel.style.setProperty("top", "8px", "important");
+    panel.style.setProperty(
+      "height",
+      Math.max(200, viewport.height - 16) + "px",
+      "important"
+    );
+    panel.style.setProperty("bottom", "8px", "important");
+    panel.style.setProperty("max-height", "none", "important");
+  } else {
+    panel.style.removeProperty("top");
+    panel.style.removeProperty("height");
+    panel.style.removeProperty("bottom");
+    panel.style.removeProperty("max-height");
+  }
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener(
+    "resize",
+    adjustMobileChatForKeyboard
+  );
+}
+
 
   var send =
     shadow.getElementById(
