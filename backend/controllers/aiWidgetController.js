@@ -1301,11 +1301,11 @@ const apiOrigin = "https://salevitals.com";
       );
     } finally {
       state.sending = false;
-send.disabled = false;
 
-if (!window.matchMedia("(max-width: 767px)").matches) {
-    input.focus();
-}
+      send.disabled = false;
+
+      input.focus();
+    }
   }
 
   function startPolling() {
@@ -1397,11 +1397,14 @@ if (!window.matchMedia("(max-width: 767px)").matches) {
         render();
       }
 
-     setTimeout(function () {
-    if (!window.matchMedia("(max-width: 767px)").matches) {
-        input.focus();
-    }
-}, 100);
+      setTimeout(
+        function () {
+          input.focus();
+        },
+        100
+      );
+    };
+
   close.onclick =
     function () {
       state.open = false;
