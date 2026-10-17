@@ -9,6 +9,8 @@ const EMPTY_MEDICINE = {
   name: "",
   batchNo: "",
   packPrice: "",
+  gst: "0",
+  packSize: "10",
   unitInStock: "",
   expiryDate: "",
 };
@@ -62,6 +64,14 @@ function formatMoney(value) {
   }).format(Number(value) || 0);
 }
 
+function calculateGST(basePrice, gstRate) {
+  return ((Number(basePrice) || 0) * (Number(gstRate) || 0)) / 100;
+}
+
+function calculateFinalPrice(basePrice, gstRate) {
+  return (Number(basePrice) || 0) + calculateGST(basePrice, gstRate);
+}
+
 function formatDate(value) {
   if (!value) return "";
 
@@ -83,8 +93,8 @@ function formatDate(value) {
   const isoDate = text.match(/^(\d{4}-\d{2}-\d{2})/);
   if (isoDate) return isoDate[1];
 
-  // Handle spreadsheet expiry values such as Aug-2026.
   const monthYear = text.match(/^([A-Za-z]{3,9})[-\s]+(\d{4})$/);
+
   if (monthYear) {
     const parsed = new Date(
       `${monthYear[1]} 1, ${monthYear[2]} 00:00:00 UTC`
@@ -124,8 +134,27 @@ function normalizeMedicine(row) {
     "Pack(MRP)",
     "Pack MRP",
     "Pack Price",
+    "Base Price",
+    "BasePrice",
     "MRP",
     "price"
+  );
+
+  const rawGST = getValue(
+    "gst",
+    "GST (%)",
+    "GST %",
+    "GST Percentage",
+    "GST Rate",
+    "Tax Rate"
+  );
+
+  const rawPackSize = getValue(
+    "packSize",
+    "Pack Size",
+    "Pieces Per Pack",
+    "Tablets Per Pack",
+    "Units Per Pack"
   );
 
   const rawStock = getValue(
@@ -137,6 +166,16 @@ function normalizeMedicine(row) {
     "qty"
   );
 
+  const gstText =
+    rawGST === "" || rawGST === null || rawGST === undefined
+      ? "0"
+      : String(rawGST).replace(/%/g, "").trim();
+
+  const packSizeText =
+    rawPackSize === "" || rawPackSize === null || rawPackSize === undefined
+      ? "10"
+      : String(rawPackSize).trim();
+
   return {
     name: String(
       getValue("name", "Med Name", "Medicine Name", "Medicine", "Item Name")
@@ -146,8 +185,23 @@ function normalizeMedicine(row) {
       getValue("batchNo", "Batch", "Batch No", "Batch Number")
     ).trim(),
 
-    packPrice: rawPackPrice === "" ? "" : Number(rawPackPrice),
-    unitInStock: rawStock === "" ? "" : Number(rawStock),
+    packPrice:
+      rawPackPrice === "" || rawPackPrice === null
+        ? ""
+        : Number(
+            typeof rawPackPrice === "string"
+              ? rawPackPrice.replace(/,/g, "").trim()
+              : rawPackPrice
+          ),
+
+    gst: gstText === "" ? 0 : Number(gstText),
+
+    packSize: Number(packSizeText),
+
+    unitInStock:
+      rawStock === "" || rawStock === null
+        ? ""
+        : Number(rawStock),
 
     expiryDate: formatDate(
       getValue("expiryDate", "Expiry", "Expiry Date")
@@ -162,6 +216,8 @@ function normalizeLoadedMedicine(item) {
     name: item.name || "",
     batchNo: item.batchNo || "",
     packPrice: Number(item.packPrice) || 0,
+    gst: Number(item.gst) || 0,
+    packSize: Number(item.packSize) || 10,
     unitInStock: Number(item.unitInStock) || 0,
     expiryDate: formatDate(item.expiryDate),
   };
@@ -173,6 +229,8 @@ export default function Pharmacy() {
   const [showForm, setShowForm] = useState(false);
   const [editingMedicineId, setEditingMedicineId] = useState("");
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [importing, setImporting] = useState(false);
@@ -231,6 +289,8 @@ export default function Pharmacy() {
       name: item.name || "",
       batchNo: item.batchNo || "",
       packPrice: String(item.packPrice ?? ""),
+      gst: String(item.gst ?? 0),
+      packSize: String(item.packSize ?? 10),
       unitInStock: String(item.unitInStock ?? ""),
       expiryDate: formatDate(item.expiryDate),
     });
@@ -255,7 +315,26 @@ export default function Pharmacy() {
       !Number.isFinite(Number(medicine.packPrice)) ||
       Number(medicine.packPrice) < 0
     ) {
-      setError("Please enter a valid pack MRP.");
+      setError("Please enter a valid base price.");
+      return false;
+    }
+
+    if (
+      medicine.gst === "" ||
+      !Number.isFinite(Number(medicine.gst)) ||
+      Number(medicine.gst) < 0 ||
+      Number(medicine.gst) > 100
+    ) {
+      setError("Please enter a valid GST percentage between 0 and 100.");
+      return false;
+    }
+
+    if (
+      medicine.packSize === "" ||
+      !Number.isInteger(Number(medicine.packSize)) ||
+      Number(medicine.packSize) < 1
+    ) {
+      setError("Please enter a valid whole-number pack size greater than zero.");
       return false;
     }
 
@@ -292,6 +371,8 @@ export default function Pharmacy() {
           name: medicine.name.trim(),
           batchNo: medicine.batchNo.trim(),
           packPrice: Number(medicine.packPrice),
+          gst: Number(medicine.gst),
+          packSize: Number(medicine.packSize),
           unitInStock: Number(medicine.unitInStock),
           expiryDate: medicine.expiryDate,
         }),
@@ -338,6 +419,8 @@ export default function Pharmacy() {
             name: medicine.name.trim(),
             batchNo: medicine.batchNo.trim(),
             packPrice: Number(medicine.packPrice),
+            gst: Number(medicine.gst),
+            packSize: Number(medicine.packSize),
             unitInStock: Number(medicine.unitInStock),
             expiryDate: medicine.expiryDate,
           }),
@@ -457,13 +540,14 @@ export default function Pharmacy() {
             item.name ||
             item.batchNo ||
             item.packPrice !== "" ||
+            item.gst !== 0 ||
             item.unitInStock !== "" ||
             item.expiryDate
         );
 
       if (!parsed.length) {
         throw new Error(
-          "No medicines found. Expected columns: Med Name, Batch, Pack(MRP), Units in Stock, Expiry."
+          "No medicines found. Expected columns: Med Name, Batch, Pack Price, GST (%), Pack Size, Units in Stock, Expiry."
         );
       }
 
@@ -474,6 +558,11 @@ export default function Pharmacy() {
           item.packPrice === "" ||
           !Number.isFinite(item.packPrice) ||
           item.packPrice < 0 ||
+          !Number.isFinite(item.gst) ||
+          item.gst < 0 ||
+          item.gst > 100 ||
+          !Number.isInteger(item.packSize) ||
+          item.packSize < 1 ||
           item.unitInStock === "" ||
           !Number.isInteger(item.unitInStock) ||
           item.unitInStock < 0 ||
@@ -482,7 +571,7 @@ export default function Pharmacy() {
 
       if (invalidRow) {
         throw new Error(
-          `Check medicine name, batch, pack MRP, units in stock and expiry date for "${itemName(invalidRow)}".`
+          `Check medicine name, batch, pack price, GST (0–100), pack size, packs in stock and expiry date for "${itemName(invalidRow)}".`
         );
       }
 
@@ -551,17 +640,34 @@ export default function Pharmacy() {
       .includes(search.toLowerCase())
   );
 
+  const totalPages = Math.max(1, Math.ceil(filteredMedicines.length / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedMedicines = filteredMedicines.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const totalStock = medicines.reduce(
     (total, item) => total + item.unitInStock,
     0
   );
 
-  // Pack MRP is not a unit selling price. This is only the inventory
-  // value using the available pack MRP field, not a sales valuation.
   const stockValue = medicines.reduce(
-    (total, item) => total + item.packPrice * item.unitInStock,
+    (total, item) => total + calculateFinalPrice(item.packPrice, item.gst) * item.unitInStock,
     0
   );
+
+  const previewGST = calculateGST(medicine.packPrice, medicine.gst);
+  const previewFinalPrice = calculateFinalPrice(medicine.packPrice, medicine.gst);
 
   return (
     <div className="pharmacy-page">
@@ -614,12 +720,12 @@ export default function Pharmacy() {
         </div>
 
         <div className="pharmacy-stat-card">
-          <span>Units in Stock</span>
+          <span>Packs in Stock</span>
           <strong>{totalStock.toLocaleString("en-IN")}</strong>
         </div>
 
         <div className="pharmacy-stat-card">
-          <span>Stock Value (Pack MRP × Units)</span>
+          <span>Stock Value (Final Pack Price × Packs)</span>
           <strong>{formatMoney(stockValue)}</strong>
         </div>
       </div>
@@ -632,7 +738,7 @@ export default function Pharmacy() {
               <p>
                 {editingMedicineId
                   ? "Update the medicine and stock details."
-                  : "Enter the medicine, batch, pack MRP and unit stock."}
+                  : "Enter the base price, GST percentage and pack size."}
               </p>
             </div>
 
@@ -653,7 +759,7 @@ export default function Pharmacy() {
                 Medicine Name *
                 <input
                   type="text"
-                  placeholder="e.g. Tablet Name"
+                  placeholder="e.g. ABC Tablet"
                   value={medicine.name}
                   onChange={(event) =>
                     updateField("name", event.target.value)
@@ -676,16 +782,46 @@ export default function Pharmacy() {
               </label>
 
               <label>
-                Pack Price / MRP (₹) *
+                Base Price (₹) *
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="e.g. 210"
+                  placeholder="e.g. 82.70"
                   value={medicine.packPrice}
                   onChange={(event) =>
                     updateField("packPrice", event.target.value)
                   }
+                  required
+                />
+                <small>GST will be added to this base price.</small>
+              </label>
+
+              <label>
+                GST (%) *
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  placeholder="e.g. 5"
+                  value={medicine.gst}
+                  onChange={(event) =>
+                    updateField("gst", event.target.value)
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                Pack Size (tablets/pieces per pack) *
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="e.g. 10"
+                  value={medicine.packSize}
+                  onChange={(event) => updateField("packSize", event.target.value)}
                   required
                 />
               </label>
@@ -696,7 +832,7 @@ export default function Pharmacy() {
                   type="number"
                   min="0"
                   step="1"
-                  placeholder="e.g. 80"
+                  placeholder="e.g. 19"
                   value={medicine.unitInStock}
                   onChange={(event) =>
                     updateField("unitInStock", event.target.value)
@@ -717,6 +853,24 @@ export default function Pharmacy() {
                 />
               </label>
             </div>
+
+            {medicine.packPrice !== "" &&
+              medicine.gst !== "" &&
+              Number.isFinite(Number(medicine.packPrice)) &&
+              Number.isFinite(Number(medicine.gst)) &&
+              Number(medicine.packPrice) >= 0 &&
+              Number(medicine.gst) >= 0 &&
+              Number(medicine.gst) <= 100 && (
+                <div className="pharmacy-gst-preview">
+                  <span>
+                    Base Price: {formatMoney(medicine.packPrice)}
+                  </span>
+                  <span>
+                    GST ({Number(medicine.gst)}%): {formatMoney(previewGST)}
+                  </span>
+                  <strong>Final Price: {formatMoney(previewFinalPrice)}</strong>
+                </div>
+              )}
 
             <div className="pharmacy-form-actions">
               <button
@@ -756,7 +910,10 @@ export default function Pharmacy() {
             type="search"
             placeholder="Search medicines..."
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
 
@@ -766,8 +923,12 @@ export default function Pharmacy() {
               <tr>
                 <th>Medicine Name</th>
                 <th>Batch No.</th>
-                <th>Pack Price (MRP)</th>
-                <th>Unit in Stock</th>
+                <th>Base Price</th>
+                <th>GST (%)</th>
+                <th>Pack Size</th>
+                <th>GST Amount</th>
+                <th>Final Price</th>
+               <th>Unit in Stock</th>
                 <th>Expiry Date</th>
                 <th>Action</th>
               </tr>
@@ -776,27 +937,33 @@ export default function Pharmacy() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="pharmacy-empty">
+                  <td colSpan="10" className="pharmacy-empty">
                     Loading medicines...
                   </td>
                 </tr>
               ) : filteredMedicines.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="pharmacy-empty">
+                  <td colSpan="10" className="pharmacy-empty">
                     {search
                       ? "No medicines match your search."
                       : "No medicines added yet. Add a medicine manually or import an Excel/CSV file."}
                   </td>
                 </tr>
               ) : (
-                filteredMedicines.map((item) => (
+                paginatedMedicines.map((item) => (
                   <tr key={item._id || item.id}>
                     <td>
                       <strong>{item.name}</strong>
                     </td>
                     <td>{item.batchNo || "-"}</td>
                     <td>{formatMoney(item.packPrice)}</td>
-                    <td>{item.unitInStock.toLocaleString("en-IN")} units</td>
+                    <td>{item.gst}%</td>
+                    <td>{item.packSize} pcs/pack</td>
+                   <td>
+                  {formatMoney(calculateGST(item.packPrice, item.gst))}
+                </td>
+                    <td>{formatMoney(calculateFinalPrice(item.packPrice, item.gst))}</td>
+                    <td>{item.unitInStock.toLocaleString("en-IN")} packs ({(item.unitInStock * item.packSize).toLocaleString("en-IN")} pcs)</td>
                     <td>{item.expiryDate || "-"}</td>
                     <td>
                       <div className="pharmacy-row-actions">
@@ -855,6 +1022,63 @@ export default function Pharmacy() {
             </tbody>
           </table>
         </div>
+
+        {!loading && filteredMedicines.length > 0 && (
+          <div className="pharmacy-pagination">
+            <div className="pharmacy-pagination-info">
+              Showing {startIndex + 1}–{Math.min(startIndex + ITEMS_PER_PAGE, filteredMedicines.length)} of {filteredMedicines.length} medicines
+            </div>
+
+            <div className="pharmacy-pagination-controls">
+              <button
+                type="button"
+                className="pharmacy-page-btn"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safeCurrentPage === 1}
+              >
+                Previous
+              </button>
+
+              {Array.from({ length: totalPages }, (_, index) => index + 1)
+                .filter((page) =>
+                  page === 1 ||
+                  page === totalPages ||
+                  Math.abs(page - safeCurrentPage) <= 1
+                )
+                .reduce((pages, page, index, visiblePages) => {
+                  if (index > 0 && page - visiblePages[index - 1] > 1) {
+                    pages.push("ellipsis-" + page);
+                  }
+                  pages.push(page);
+                  return pages;
+                }, [])
+                .map((page) =>
+                  typeof page === "string" ? (
+                    <span className="pharmacy-page-ellipsis" key={page}>…</span>
+                  ) : (
+                    <button
+                      type="button"
+                      key={page}
+                      className={`pharmacy-page-btn ${safeCurrentPage === page ? "active" : ""}`}
+                      onClick={() => setCurrentPage(page)}
+                      aria-current={safeCurrentPage === page ? "page" : undefined}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+              <button
+                type="button"
+                className="pharmacy-page-btn"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={safeCurrentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -162,38 +162,31 @@ const getOwnerBillingProfile = (owner) => ({
 });
 
 
+const calculateAmounts = (price, quantity, gstRate = 0) => {
+    const unitPrice = Number(price);
+    const qty = Number(quantity);
+    const rate = Number(gstRate);
 
+    if (
+        !Number.isFinite(unitPrice) ||
+        unitPrice < 0 ||
+        !Number.isInteger(qty) ||
+        qty < 1 ||
+        !Number.isFinite(rate) ||
+        rate < 0 ||
+        rate > 100
+    ) {
+        throw new Error("Invalid medicine price, quantity, or GST rate.");
+    }
 
+    const taxableAmount = roundMoney(unitPrice * qty);
+    const gstAmount = roundMoney((taxableAmount * rate) / 100);
 
-
-const calculateAmounts = (price, quantity) => {
-  const unitPrice = Number(price);
-  const qty = Number(quantity);
-
-  if (
-    price === undefined ||
-    price === null ||
-    price === "" ||
-    !Number.isFinite(unitPrice) ||
-    unitPrice < 0 ||
-    quantity === undefined ||
-    quantity === null ||
-    quantity === "" ||
-    !Number.isInteger(qty) ||
-    qty < 1
-  ) {
-    throw new Error(
-      `Invalid medicine price or quantity. Price: ${price}, Quantity: ${quantity}`
-    );
-  }
-
-  const totalAmount = Math.round(unitPrice * qty * 100) / 100;
-
-  return {
-    taxableAmount: totalAmount,
-    gstAmount: 0,
-    totalAmount,
-  };
+    return {
+        taxableAmount,
+        gstAmount,
+        totalAmount: roundMoney(taxableAmount + gstAmount),
+    };
 };
 
 
@@ -218,9 +211,6 @@ const getNextInvoiceNumber = async (ownerId, session) => {
     return `PH/${year}/${String(counter.sequence).padStart(3, "0")}`;
 };
 
-
-
-
 const prepareItems = async (items, ownerId, session) => {
     if (!Array.isArray(items) || items.length === 0) {
         throw new Error("Add at least one medicine to the invoice.");
@@ -229,18 +219,20 @@ const prepareItems = async (items, ownerId, session) => {
     const prepared = [];
 
     for (const item of items) {
-        const { medicineId, quantity } = item;
+        const { medicineId, quantity, unitType = "Pack" } = item;
 
         if (!isValidId(medicineId)) {
             throw new Error("Invalid medicine selected.");
         }
 
+        if (!["Pack", "Piece"].includes(unitType)) {
+            throw new Error("Select Pack or Piece for each medicine.");
+        }
+
         const qty = Number(quantity);
 
         if (!Number.isInteger(qty) || qty < 1) {
-            throw new Error(
-                "Medicine quantity must be a positive whole number."
-            );
+            throw new Error("Medicine quantity must be a positive whole number.");
         }
 
         const medicine = await PharmacyMedicine.findOne({
@@ -251,83 +243,137 @@ const prepareItems = async (items, ownerId, session) => {
             .lean();
 
         if (!medicine) {
-            throw new Error(
-                "A selected medicine was not found in your inventory."
-            );
+            throw new Error("A selected medicine was not found in your inventory.");
         }
 
-        // Read the actual fields from PharmacyMedicine model
-        const medicinePrice = Number(medicine.packPrice);
-        const availableStock = Number(medicine.unitInStock);
+        const packPrice = Number(medicine.packPrice);
+        const packSize = Number(medicine.packSize);
+        const packsInStock = Number(medicine.unitInStock);
+        const looseUnits = Number(medicine.looseUnits || 0);
+        const gstRate = Number(medicine.gst || 0);
 
-        if (!Number.isFinite(medicinePrice) || medicinePrice < 0) {
-            throw new Error(
-                `Invalid pack price for "${medicine.name}".`
-            );
+        if (
+            !Number.isFinite(packPrice) ||
+            packPrice < 0 ||
+            !Number.isInteger(packSize) ||
+            packSize < 1
+        ) {
+            throw new Error(`Invalid price or pack size for "${medicine.name}".`);
         }
 
         if (
-            !Number.isInteger(availableStock) ||
-            availableStock < 0
+            !Number.isInteger(packsInStock) ||
+            packsInStock < 0 ||
+            !Number.isInteger(looseUnits) ||
+            looseUnits < 0 ||
+            looseUnits >= packSize
         ) {
+            throw new Error(`Invalid stock for "${medicine.name}".`);
+        }
+
+        if (!Number.isFinite(gstRate) || gstRate < 0 || gstRate > 100) {
+            throw new Error(`Invalid GST rate for "${medicine.name}".`);
+        }
+
+        const availableUnits = packsInStock * packSize + looseUnits;
+        const unitsDeducted =
+            unitType === "Pack" ? qty * packSize : qty;
+
+        if (unitsDeducted > availableUnits) {
             throw new Error(
-                `Invalid stock for "${medicine.name}".`
+                `Insufficient stock for "${medicine.name}". Available: ${availableUnits} pieces (${packsInStock} packs and ${looseUnits} loose pieces).`
             );
         }
 
-        if (qty > availableStock) {
-            throw new Error(
-                `Insufficient stock for "${medicine.name}". Available: ${availableStock}, requested: ${qty}.`
-            );
-        }
+        const price =
+            unitType === "Pack"
+                ? packPrice
+                : roundMoney(packPrice / packSize);
 
-        const amounts = calculateAmounts(medicinePrice, qty);
+        const amounts = calculateAmounts(price, qty, gstRate);
 
         prepared.push({
             medicineId: medicine._id,
             medicineName: medicine.name,
-            price: medicinePrice,
+            unitType,
+            packSize,
+            unitsDeducted,
+            price,
             quantity: qty,
-            gstRate: 0,
+            gstRate,
             taxableAmount: amounts.taxableAmount,
-            gstAmount: 0,
+            gstAmount: amounts.gstAmount,
             totalAmount: amounts.totalAmount,
         });
     }
 
-    const total = roundMoney(
-        prepared.reduce(
-            (sum, item) => sum + item.totalAmount,
-            0
-        )
+    const subtotal = roundMoney(
+        prepared.reduce((sum, item) => sum + item.taxableAmount, 0)
     );
+
+    const gstAmount = roundMoney(
+        prepared.reduce((sum, item) => sum + item.gstAmount, 0)
+    );
+
+    const preRoundTotal = roundMoney(subtotal + gstAmount);
+    const total = Math.round(preRoundTotal);
+    const roundOff = roundMoney(total - preRoundTotal);
 
     return {
         items: prepared,
-        subtotal: total,
-        gstAmount: 0,
+        subtotal,
+        gstAmount,
+        roundOff,
         total,
     };
 };
 
-
-
-
 const deductStock = async (items, ownerId, session) => {
     for (const item of items) {
         const medicineId = item.medicineId?._id || item.medicineId;
-        const requestedQty = Number(item.quantity);
+        const unitsToDeduct = Number(item.unitsDeducted);
 
-        if (!isValidId(medicineId)) {
-            throw new Error(
-                `Invalid medicine ID for "${item.medicineName}".`
-            );
+        if (
+            !isValidId(medicineId) ||
+            !Number.isInteger(unitsToDeduct) ||
+            unitsToDeduct < 1
+        ) {
+            throw new Error(`Invalid stock deduction for "${item.medicineName}".`);
         }
 
-        if (!Number.isInteger(requestedQty) || requestedQty < 1) {
-            throw new Error(
-                `Invalid quantity for "${item.medicineName}".`
-            );
+        const medicine = await PharmacyMedicine.findOne({
+            _id: medicineId,
+            userId: ownerId,
+        }).session(session);
+
+        if (!medicine) {
+            throw new Error(`Medicine "${item.medicineName}" was not found in inventory.`);
+        }
+
+        const packSize = Number(medicine.packSize);
+        const availableUnits =
+            Number(medicine.unitInStock) * packSize +
+            Number(medicine.looseUnits || 0);
+
+        if (unitsToDeduct > availableUnits) {
+            throw new Error(`Insufficient stock for "${medicine.name}".`);
+        }
+
+        const remainingUnits = availableUnits - unitsToDeduct;
+
+        medicine.unitInStock = Math.floor(remainingUnits / packSize);
+        medicine.looseUnits = remainingUnits % packSize;
+
+        await medicine.save({ session });
+    }
+};
+
+const restoreStock = async (items, ownerId, session) => {
+    for (const item of items) {
+        const medicineId = item.medicineId?._id || item.medicineId;
+
+        if (!isValidId(medicineId)) {
+            throw new Error(`Invalid medicine ID for "${item.medicineName}".`);
         }
 
         const medicine = await PharmacyMedicine.findOne({
@@ -337,66 +383,37 @@ const deductStock = async (items, ownerId, session) => {
 
         if (!medicine) {
             throw new Error(
-                `Medicine "${item.medicineName}" was not found in your inventory.`
-            );
-        }
-
-        const availableStock = Number(medicine.unitInStock);
-
-        if (
-            !Number.isInteger(availableStock) ||
-            availableStock < requestedQty
-        ) {
-            throw new Error(
-                `Insufficient stock for "${medicine.name}". Available: ${availableStock}, requested: ${requestedQty}.`
-            );
-        }
-
-        medicine.unitInStock = availableStock - requestedQty;
-
-        await medicine.save({ session });
-    }
-};
-
-
-
-
-
-const restoreStock = async (items, ownerId, session) => {
-    for (const item of items) {
-        const medicineId = item.medicineId?._id || item.medicineId;
-        const quantity = Number(item.quantity);
-
-        if (!isValidId(medicineId)) {
-            throw new Error(
-                `Invalid medicine ID for "${item.medicineName}".`
-            );
-        }
-
-        if (!Number.isInteger(quantity) || quantity < 1) {
-            throw new Error(
-                `Invalid restore quantity for "${item.medicineName}".`
-            );
-        }
-
-        const result = await PharmacyMedicine.updateOne(
-            {
-                _id: medicineId,
-                userId: ownerId,
-            },
-            {
-                $inc: {
-                    unitInStock: quantity,
-                },
-            },
-            { session }
-        );
-
-        if (result.matchedCount !== 1) {
-            throw new Error(
                 `Cannot restore stock for "${item.medicineName}". The medicine may have been deleted.`
             );
         }
+
+        const packSize = Number(medicine.packSize);
+
+        // Purane invoices mein unitsDeducted nahi hoga;
+        // unhein purani pack-based quantity se restore karo.
+        const unitsToRestore =
+            Number(item.unitsDeducted) ||
+            Number(item.quantity) * Number(item.packSize || packSize);
+
+        if (
+            !Number.isInteger(packSize) ||
+            packSize < 1 ||
+            !Number.isInteger(unitsToRestore) ||
+            unitsToRestore < 1
+        ) {
+            throw new Error(`Invalid stock restore quantity for "${item.medicineName}".`);
+        }
+
+        const currentUnits =
+            Number(medicine.unitInStock) * packSize +
+            Number(medicine.looseUnits || 0);
+
+        const restoredUnits = currentUnits + unitsToRestore;
+
+        medicine.unitInStock = Math.floor(restoredUnits / packSize);
+        medicine.looseUnits = restoredUnits % packSize;
+
+        await medicine.save({ session });
     }
 };
 
@@ -491,6 +508,7 @@ exports.getInvoiceById = async (req, res) => {
 
 
 
+
 exports.createInvoice = async (req, res) => {
     const session = await mongoose.startSession();
 
@@ -508,12 +526,16 @@ exports.createInvoice = async (req, res) => {
             phone = "",
             email = "",
             address = "",
+            paymentMode = "",
             invoiceDate,
             items,
             notes = "",
             status = "Unpaid",
+            discountType = "Percentage",
+            discountValue = 0,
         } = req.body;
 
+        // Customer validation
         if (!String(customerName || "").trim()) {
             return res.status(400).json({
                 success: false,
@@ -521,6 +543,7 @@ exports.createInvoice = async (req, res) => {
             });
         }
 
+        // Invoice status validation
         if (!["Draft", "Paid", "Unpaid", "Cancelled"].includes(status)) {
             return res.status(400).json({
                 success: false,
@@ -528,6 +551,60 @@ exports.createInvoice = async (req, res) => {
             });
         }
 
+        // Payment mode validation
+        const allowedPaymentModes = [
+            "Cash",
+            "UPI",
+            "Card",
+            "Bank Transfer",
+            "Cheque",
+            "Other",
+        ];
+
+        const parsedPaymentMode = String(paymentMode || "").trim();
+
+        if (
+            parsedPaymentMode &&
+            !allowedPaymentModes.includes(parsedPaymentMode)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid payment mode.",
+            });
+        }
+
+        // Discount type validation
+        if (!["Percentage", "Fixed"].includes(discountType)) {
+            return res.status(400).json({
+                success: false,
+                message: "Discount type must be Percentage or Fixed.",
+            });
+        }
+
+        // Discount value validation
+        const parsedDiscountValue = Number(discountValue);
+
+        if (
+            !Number.isFinite(parsedDiscountValue) ||
+            parsedDiscountValue < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Discount value must be a valid non-negative number.",
+            });
+        }
+
+        if (
+            discountType === "Percentage" &&
+            parsedDiscountValue > 100
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Percentage discount cannot exceed 100%.",
+            });
+        }
+
+        // Invoice date validation
         const parsedDate = invoiceDate
             ? new Date(invoiceDate)
             : new Date();
@@ -542,29 +619,85 @@ exports.createInvoice = async (req, res) => {
         let createdInvoice;
 
         await session.withTransaction(async () => {
+            // Prepare invoice items and calculate subtotal + GST
             const prepared = await prepareItems(items, ownerId, session);
 
+            // Amount after GST, before discount
+            const amountBeforeDiscount =
+                Number(prepared.subtotal || 0) +
+                Number(prepared.gstAmount || 0);
+
+            // Calculate discount after GST
+            let discountAmount = 0;
+
+            if (discountType === "Percentage") {
+                discountAmount =
+                    (amountBeforeDiscount * parsedDiscountValue) / 100;
+            } else {
+                discountAmount = parsedDiscountValue;
+            }
+
+            // Discount cannot exceed the invoice amount
+            discountAmount = Math.min(
+                Math.max(0, discountAmount),
+                amountBeforeDiscount
+            );
+
+            // Round discount to two decimal places
+            discountAmount =
+                Math.round(
+                    (discountAmount + Number.EPSILON) * 100
+                ) / 100;
+
+            // Amount after discount
+            const amountAfterDiscount =
+                amountBeforeDiscount - discountAmount;
+
+            // Final total rounded to nearest rupee
+            const finalTotal = Math.round(amountAfterDiscount);
+
+            // Round-off difference
+            const roundOff =
+                Math.round(
+                    (finalTotal - amountAfterDiscount + Number.EPSILON) *
+                        100
+                ) / 100;
+
+            // Deduct stock inside the transaction
             await deductStock(prepared.items, ownerId, session);
 
+            // Generate invoice number
             const invoiceNumber = await getNextInvoiceNumber(
                 ownerId,
                 session
             );
 
+            // Save invoice
             const [invoice] = await PharmacyInvoice.create(
                 [
                     {
                         userId: ownerId,
                         invoiceNumber,
+
                         customerName: String(customerName).trim(),
                         phone: String(phone || "").trim(),
                         email: String(email || "").trim(),
                         address: String(address || "").trim(),
+                        paymentMode: parsedPaymentMode,
+
                         invoiceDate: parsedDate,
                         items: prepared.items,
-                        subtotal: prepared.total,
-                        gstAmount: 0,
-                        total: prepared.total,
+
+                        subtotal: prepared.subtotal,
+                        gstAmount: prepared.gstAmount,
+
+                        discountType,
+                        discountValue: parsedDiscountValue,
+                        discountAmount,
+
+                        roundOff,
+                        total: finalTotal,
+
                         notes: String(notes || ""),
                         status,
                     },
@@ -585,7 +718,8 @@ exports.createInvoice = async (req, res) => {
 
         return res.status(400).json({
             success: false,
-            message: error.message || "Failed to create pharmacy invoice.",
+            message:
+                error.message || "Failed to create pharmacy invoice.",
         });
     } finally {
         await session.endSession();
@@ -629,12 +763,16 @@ exports.updateInvoice = async (req, res) => {
                 phone,
                 email,
                 address,
+                paymentMode,
                 invoiceDate,
                 items,
                 notes,
                 status,
+                discountType,
+                discountValue,
             } = req.body;
 
+            // Customer validation
             if (
                 customerName !== undefined &&
                 !String(customerName || "").trim()
@@ -642,6 +780,7 @@ exports.updateInvoice = async (req, res) => {
                 throw new Error("Customer name is required.");
             }
 
+            // Status validation
             if (
                 status !== undefined &&
                 !["Draft", "Paid", "Unpaid", "Cancelled"].includes(status)
@@ -649,6 +788,30 @@ exports.updateInvoice = async (req, res) => {
                 throw new Error("Invalid invoice status.");
             }
 
+            // Payment mode validation
+            const allowedPaymentModes = [
+                "Cash",
+                "UPI",
+                "Card",
+                "Bank Transfer",
+                "Cheque",
+                "Other",
+            ];
+
+            if (paymentMode !== undefined) {
+                const parsedPaymentMode = String(paymentMode || "").trim();
+
+                if (
+                    parsedPaymentMode &&
+                    !allowedPaymentModes.includes(parsedPaymentMode)
+                ) {
+                    throw new Error("Invalid payment mode.");
+                }
+
+                invoice.paymentMode = parsedPaymentMode;
+            }
+
+            // Invoice date validation
             if (invoiceDate !== undefined) {
                 const parsedDate = new Date(invoiceDate);
 
@@ -659,6 +822,43 @@ exports.updateInvoice = async (req, res) => {
                 invoice.invoiceDate = parsedDate;
             }
 
+            // Discount type
+            const nextDiscountType =
+                discountType !== undefined
+                    ? discountType
+                    : invoice.discountType || "Percentage";
+
+            if (!["Percentage", "Fixed"].includes(nextDiscountType)) {
+                throw new Error(
+                    "Discount type must be Percentage or Fixed."
+                );
+            }
+
+            // Discount value
+            const nextDiscountValue =
+                discountValue !== undefined
+                    ? Number(discountValue)
+                    : Number(invoice.discountValue || 0);
+
+            if (
+                !Number.isFinite(nextDiscountValue) ||
+                nextDiscountValue < 0
+            ) {
+                throw new Error(
+                    "Discount value must be a valid non-negative number."
+                );
+            }
+
+            if (
+                nextDiscountType === "Percentage" &&
+                nextDiscountValue > 100
+            ) {
+                throw new Error(
+                    "Percentage discount cannot exceed 100%."
+                );
+            }
+
+            // Update medicine items and stock when items are supplied
             if (items !== undefined) {
                 await restoreStock(invoice.items, ownerId, session);
 
@@ -671,32 +871,79 @@ exports.updateInvoice = async (req, res) => {
                 await deductStock(prepared.items, ownerId, session);
 
                 invoice.items = prepared.items;
-                invoice.subtotal = prepared.total;
-                invoice.gstAmount = 0;
-                invoice.total = prepared.total;
-            } else {
-                // Existing invoice ko edit karte waqt bhi GST zero rakho.
-                invoice.gstAmount = 0;
+                invoice.subtotal = prepared.subtotal;
+                invoice.gstAmount = prepared.gstAmount;
             }
 
+            // Preserve subtotal and GST if only customer/payment/discount changes
+            const subtotal = Number(invoice.subtotal || 0);
+            const gstAmount = Number(invoice.gstAmount || 0);
+
+            if (
+                !Number.isFinite(subtotal) ||
+                !Number.isFinite(gstAmount) ||
+                subtotal < 0 ||
+                gstAmount < 0
+            ) {
+                throw new Error("Invalid invoice subtotal or GST amount.");
+            }
+
+            // Apply discount after GST
+            const amountBeforeDiscount = subtotal + gstAmount;
+
+            let calculatedDiscount =
+                nextDiscountType === "Percentage"
+                    ? (amountBeforeDiscount * nextDiscountValue) / 100
+                    : nextDiscountValue;
+
+            // Discount cannot exceed the invoice amount
+            calculatedDiscount = Math.min(
+                Math.max(0, calculatedDiscount),
+                amountBeforeDiscount
+            );
+
+            calculatedDiscount =
+                Math.round(
+                    (calculatedDiscount + Number.EPSILON) * 100
+                ) / 100;
+
+            const amountAfterDiscount =
+                amountBeforeDiscount - calculatedDiscount;
+
+            const finalTotal = Math.round(amountAfterDiscount);
+
+            const roundOff =
+                Math.round(
+                    (finalTotal - amountAfterDiscount + Number.EPSILON) *
+                        100
+                ) / 100;
+
+            // Save discount and final totals
+            invoice.discountType = nextDiscountType;
+            invoice.discountValue = nextDiscountValue;
+            invoice.discountAmount = calculatedDiscount;
+            invoice.roundOff = roundOff;
+            invoice.total = finalTotal;
+
+            // Update customer details
             if (customerName !== undefined) {
                 invoice.customerName = String(customerName).trim();
             }
 
             if (phone !== undefined) {
-                invoice.phone = String(phone).trim();
+                invoice.phone = String(phone || "").trim();
             }
 
             if (email !== undefined) {
-                invoice.email = String(email).trim();
+                invoice.email = String(email || "").trim();
             }
 
             if (address !== undefined) {
-                invoice.address = String(address).trim();
+                invoice.address = String(address || "").trim();
             }
 
             if (notes !== undefined) {
-                invoice.notes = String(notes);
+                invoice.notes = String(notes || "");
             }
 
             if (status !== undefined) {
@@ -893,9 +1140,9 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             // Business logo and details
             const logoX = left;
-            const logoY = 46;
-            const logoSize = 52;
-            const headerX = logoBuffer ? left + 68 : left;
+            const logoY = 40;
+            const logoSize = 68;
+            const headerX = logoBuffer ? left + 78 : left;
             const headerWidth = right - headerX;
 
             if (logoBuffer) {
@@ -924,7 +1171,6 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             let headerY = 75;
 
-            // GSTIN removed from business details
             const businessLines = [
                 profile.address,
                 profile.phone ? `Phone: ${profile.phone}` : "",
@@ -939,7 +1185,6 @@ const generateInvoicePDF = async (invoice, owner) => {
                 headerY += 13;
             }
 
-            // Header divider
             let y = Math.max(headerY + 16, 135);
             drawLine(y, "#173766", 1.4);
             y += 24;
@@ -998,14 +1243,28 @@ const generateInvoicePDF = async (invoice, owner) => {
                 { width: 250 }
             );
 
-            y = Math.max(customerY, detailsY + 75) + 20;
+            doc.text(
+                `Payment Mode: ${invoice.paymentMode || "Not specified"}`,
+                300,
+                invoiceDetailsY + 15,
+                { width: 250 }
+            );
 
-            // Medicine table without GST column
+            y =
+                Math.max(
+                    customerY,
+                    invoiceDetailsY + 35,
+                    detailsY + 75
+                ) + 20;
+
             const col = {
                 number: left,
-                medicine: left + 35,
-                qty: left + 330,
-                amount: left + 415,
+                medicine: left + 28,
+                unit: left + 205,
+                qty: left + 250,
+                rate: left + 292,
+                taxable: left + 345,
+                amount: left + 425,
             };
 
             const tableHeaderHeight = 30;
@@ -1015,90 +1274,205 @@ const generateInvoicePDF = async (invoice, owner) => {
 
             doc.fillColor("#FFFFFF")
                 .font("Helvetica-Bold")
-                .fontSize(9);
+                .fontSize(7);
 
-            doc.text("#", col.number + 10, y + 10, { width: 20 });
+            doc.text("#", col.number + 5, y + 10, {
+                width: 18,
+            });
 
-            doc.text(
-                "DESCRIPTION OF MEDICINE",
-                col.medicine,
-                y + 10,
-                { width: 250, ellipsis: true }
-            );
+            doc.text("MEDICINE", col.medicine, y + 10, {
+                width: 120,
+            });
+
+            doc.text("UNIT", col.unit, y + 10, {
+                width: 38,
+            });
 
             doc.text("QTY", col.qty, y + 10, {
-                width: 40,
+                width: 28,
                 align: "right",
             });
 
-            doc.text("AMOUNT", col.amount, y + 10, {
-                width: 90,
+            doc.text("RATE", col.rate, y + 10, {
+                width: 48,
                 align: "right",
             });
 
-            y += tableHeaderHeight + 10;
+            doc.text("TAXABLE", col.taxable, y + 10, {
+                width: 65,
+                align: "right",
+            });
+
+            doc.text("TOTAL", col.amount, y + 10, {
+                width: 65,
+                align: "right",
+            });
+
+            y += tableHeaderHeight + 8;
 
             const items = Array.isArray(invoice.items) ? invoice.items : [];
 
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
 
-                // Start a new page before the row reaches the footer.
-                if (y > 690) {
+                if (y > 680) {
                     doc.addPage();
                     y = 50;
                 }
 
                 const medicineName = item.medicineName || "Medicine";
+                const unitType = item.unitType || "Pack";
                 const quantity = Number(item.quantity || 0);
-                const amount = Number(
-                    item.totalAmount ??
-                    (Number(item.price || 0) * quantity)
+                const price = Number(item.price || 0);
+                const taxableAmount = Number(item.taxableAmount || 0);
+                const gstAmount = Number(item.gstAmount || 0);
+
+                const totalAmount = Number(
+                    item.totalAmount ?? taxableAmount + gstAmount
                 );
 
                 doc.fillColor("#222222")
                     .font("Helvetica")
-                    .fontSize(9);
+                    .fontSize(7);
 
-                doc.text(String(i + 1), col.number + 10, y, {
-                    width: 20,
+                doc.text(String(i + 1), col.number + 5, y, {
+                    width: 18,
                 });
 
                 doc.text(medicineName, col.medicine, y, {
-                    width: 245,
-                    height: 30,
+                    width: 120,
+                    height: 28,
                     ellipsis: true,
                 });
 
+                doc.text(unitType, col.unit, y, {
+                    width: 38,
+                });
+
                 doc.text(String(quantity), col.qty, y, {
-                    width: 40,
+                    width: 28,
                     align: "right",
                 });
 
-                doc.text(money(amount), col.amount, y, {
-                    width: 90,
+                doc.text(money(price), col.rate, y, {
+                    width: 48,
+                    align: "right",
+                });
+
+                doc.text(money(taxableAmount), col.taxable, y, {
+                    width: 65,
+                    align: "right",
+                });
+
+                doc.text(money(totalAmount), col.amount, y, {
+                    width: 65,
                     align: "right",
                 });
 
                 y += 29;
             }
 
+            y += 15;
+
+            if (y > 650) {
+                doc.addPage();
+                y = 50;
+            }
+
+            // Invoice summary
+            const summaryX = 330;
+            const summaryWidth = 220;
+            const labelWidth = 110;
+            const valueWidth = 110;
+
+            const discountType = invoice.discountType || "Percentage";
+            const discountValue = Number(invoice.discountValue || 0);
+            const discountAmount = Number(invoice.discountAmount || 0);
+            const roundOff = Number(invoice.roundOff || 0);
+            const subtotal = Number(invoice.subtotal || 0);
+            const gstAmount = Number(invoice.gstAmount || 0);
+
+            doc.font("Helvetica")
+                .fontSize(9)
+                .fillColor("#444444");
+
+            // Subtotal
+            doc.text("Subtotal", summaryX, y, {
+                width: labelWidth,
+            });
+
+            doc.text(money(subtotal), summaryX + labelWidth, y, {
+                width: valueWidth,
+                align: "right",
+            });
+
             y += 18;
 
-            // Grand Total only; GST and subtotal rows removed
-            doc.roundedRect(325, y - 2, 225, 40, 7)
+            // GST total stays in summary only
+            doc.fillColor("#444444")
+                .text("GST", summaryX, y, {
+                    width: labelWidth,
+                });
+
+            doc.text(money(gstAmount), summaryX + labelWidth, y, {
+                width: valueWidth,
+                align: "right",
+            });
+
+            y += 18;
+
+            // Discount: same color as other summary rows
+            const discountLabel =
+                discountType === "Percentage"
+                    ? `Discount (${discountValue}%)`
+                    : `Discount (${money(discountValue)})`;
+
+            doc.fillColor("#444444")
+                .text(discountLabel, summaryX, y, {
+                    width: labelWidth,
+                });
+
+            doc.text(
+                discountAmount > 0
+                    ? `- ${money(discountAmount)}`
+                    : money(0),
+                summaryX + labelWidth,
+                y,
+                {
+                    width: valueWidth,
+                    align: "right",
+                }
+            );
+
+            y += 18;
+
+            // Round off
+            doc.fillColor("#444444")
+                .text("Round Off", summaryX, y, {
+                    width: labelWidth,
+                });
+
+            doc.text(money(roundOff), summaryX + labelWidth, y, {
+                width: valueWidth,
+                align: "right",
+            });
+
+            y += 23;
+
+            // Grand total
+            doc.roundedRect(summaryX, y, summaryWidth, 40, 7)
                 .fill("#172033");
 
             doc.fillColor("#FFFFFF")
                 .font("Helvetica-Bold")
                 .fontSize(11)
-                .text("Grand Total", 337, y + 11, {
+                .text("Grand Total", summaryX + 10, y + 12, {
                     width: 90,
                 });
 
             doc.fontSize(12)
-                .text(money(invoice.total), 425, y + 10, {
-                    width: 113,
+                .text(money(invoice.total), summaryX + 100, y + 11, {
+                    width: 110,
                     align: "right",
                 });
 
@@ -1129,19 +1503,32 @@ const generateInvoicePDF = async (invoice, owner) => {
             }
 
             // Footer
-            const footerY = Math.min(Math.max(y + 25, 750), 775);
+            if (y > 740) {
+                doc.addPage();
+                y = 50;
+            }
 
-            doc.fillColor("#64748B")
-                .font("Helvetica")
-                .fontSize(8)
-                .text("Thank you for your business.", left, footerY, {
+            // Footer divider line
+                const footerY = Math.min(Math.max(y + 25, 750), 775);
+
+                doc.moveTo(left, footerY - 12)
+                    .lineTo(right, footerY - 12)
+                    .strokeColor("#D9E0E8")
+                    .lineWidth(0.8)
+                    .stroke();
+
+                // Footer text - bold
+                doc.fillColor("#64748B")
+                    .font("Helvetica-Bold")
+                    .fontSize(8)
+                    .text("Thank you for your business.", left, footerY, {
+                        width: pageWidth / 2,
+                    });
+
+                doc.text("Powered by SaleVitals", left + pageWidth / 2, footerY, {
                     width: pageWidth / 2,
+                    align: "right",
                 });
-
-            doc.text("Powered by SaleVitals", left + pageWidth / 2, footerY, {
-                width: pageWidth / 2,
-                align: "right",
-            });
 
             doc.end();
         } catch (error) {

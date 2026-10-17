@@ -101,6 +101,7 @@ const getValue = (body, aliases) => {
   return key === undefined ? undefined : body[key];
 };
 
+
 const normalizeMedicine = (body = {}) => {
   const rawName = getValue(body, [
     "name",
@@ -119,10 +120,31 @@ const normalizeMedicine = (body = {}) => {
 
   const rawPackPrice = getValue(body, [
     "packPrice",
+    "Base Price",
+    "BasePrice",
     "Pack(MRP)",
     "Pack MRP",
     "Pack Price",
     "MRP",
+    "Price",
+  ]);
+
+  const rawGST = getValue(body, [
+    "gst",
+    "GST (%)",
+    "GST %",
+    "GST Percentage",
+    "GST Rate",
+    "Tax Rate",
+    "Tax",
+  ]);
+
+  const rawPackSize = getValue(body, [
+    "packSize",
+    "Pack Size",
+    "Pieces Per Pack",
+    "Tablets Per Pack",
+    "Units Per Pack",
   ]);
 
   const rawStock = getValue(body, [
@@ -142,8 +164,30 @@ const normalizeMedicine = (body = {}) => {
 
   const name = String(rawName ?? "").trim();
   const batchNo = String(rawBatch ?? "").trim();
-  const packPrice = Number(rawPackPrice);
+
+  const priceText =
+    typeof rawPackPrice === "string"
+      ? rawPackPrice.replace(/,/g, "").trim()
+      : rawPackPrice;
+
+  const packPrice = Number(priceText);
   const unitInStock = Number(rawStock);
+
+  const gstText =
+    rawGST === undefined || rawGST === null
+      ? ""
+      : String(rawGST).replace(/%/g, "").trim();
+
+  const gst = gstText === "" ? 0 : Number(gstText);
+
+  const packSizeText =
+    rawPackSize === undefined ||
+    rawPackSize === null ||
+    String(rawPackSize).trim() === ""
+      ? "10"
+      : String(rawPackSize).trim();
+
+  const packSize = Number(packSizeText);
 
   if (!name) {
     return { error: "Medicine name is required." };
@@ -154,13 +198,25 @@ const normalizeMedicine = (body = {}) => {
   }
 
   if (
-    rawPackPrice === "" ||
-    rawPackPrice === undefined ||
-    rawPackPrice === null ||
+    priceText === "" ||
+    priceText === undefined ||
+    priceText === null ||
     !Number.isFinite(packPrice) ||
     packPrice < 0
   ) {
-    return { error: "Enter a valid pack MRP." };
+    return { error: "Enter a valid base price." };
+  }
+
+  if (!Number.isFinite(gst) || gst < 0 || gst > 100) {
+    return {
+      error: "GST must be a valid percentage between 0 and 100.",
+    };
+  }
+
+  if (!Number.isInteger(packSize) || packSize < 1) {
+    return {
+      error: "Pack size must be a whole number greater than zero.",
+    };
   }
 
   if (
@@ -178,28 +234,38 @@ const normalizeMedicine = (body = {}) => {
   const expiryText = String(rawExpiry ?? "").trim();
   let expiryDate;
 
-  // Handles ISO dates and common spreadsheet formats such as Aug-2024.
   if (/^\d{4}-\d{2}-\d{2}$/.test(expiryText)) {
     const [year, month, day] = expiryText.split("-").map(Number);
-    expiryDate = new Date(Date.UTC(year, month - 1, day));
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      expiryDate = parsed;
+    }
   } else if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(expiryText)) {
     const parsed = new Date(`${expiryText} UTC`);
+
     if (!Number.isNaN(parsed.getTime())) {
       expiryDate = parsed;
     }
   } else if (/^[A-Za-z]{3}-\d{4}$/.test(expiryText)) {
     const parsed = new Date(`01-${expiryText} UTC`);
+
     if (!Number.isNaN(parsed.getTime())) {
       expiryDate = parsed;
     }
-  } else {
+  } else if (expiryText) {
     const parsed = new Date(expiryText);
+
     if (!Number.isNaN(parsed.getTime())) {
       expiryDate = parsed;
     }
   }
 
-  if (!expiryText || !expiryDate || Number.isNaN(expiryDate.getTime())) {
+  if (!expiryDate || Number.isNaN(expiryDate.getTime())) {
     return {
       error: "A valid expiry date is required. Use YYYY-MM-DD or MMM-YYYY.",
     };
@@ -210,11 +276,14 @@ const normalizeMedicine = (body = {}) => {
       name,
       batchNo,
       packPrice,
+      gst,
+      packSize,
       unitInStock,
       expiryDate,
     },
   };
 };
+
 
 exports.getMedicines = async (req, res) => {
   try {
@@ -232,7 +301,13 @@ exports.getMedicines = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({ success: true, medicines });
+    return res.json({
+      success: true,
+      medicines: medicines.map((medicine) => ({
+        ...medicine,
+        gst: Number(medicine.gst) || 0,
+      })),
+    });
   } catch (error) {
     console.error("GET PHARMACY MEDICINES ERROR:", error);
 
@@ -426,9 +501,15 @@ exports.importMedicines = async (req, res) => {
       if (normalized.error) {
         errors.push({
           row: index + 2,
-          name: getValue(item, ["name", "Med Name", "Medicine Name"]) || "",
+          name:
+            getValue(item, [
+              "name",
+              "Med Name",
+              "Medicine Name",
+            ]) || "",
           message: normalized.error,
         });
+
         return;
       }
 

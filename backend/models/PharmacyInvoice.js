@@ -13,6 +13,30 @@ const pharmacyInvoiceItemSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
+        unitType: {
+            type: String,
+            enum: ["Pack", "Piece"],
+            default: "Pack",
+            required: true,
+        },
+        packSize: {
+            type: Number,
+            required: true,
+            min: 1,
+            validate: {
+                validator: Number.isInteger,
+                message: "Pack size must be a whole number.",
+            },
+        },
+        unitsDeducted: {
+            type: Number,
+            required: true,
+            min: 1,
+            validate: {
+                validator: Number.isInteger,
+                message: "Units deducted must be a whole number.",
+            },
+        },
         price: {
             type: Number,
             required: true,
@@ -60,35 +84,50 @@ const pharmacyInvoiceSchema = new mongoose.Schema(
             required: true,
             index: true,
         },
+
         invoiceNumber: {
             type: String,
             required: true,
         },
+
         customerName: {
             type: String,
             required: true,
             trim: true,
         },
+
         phone: {
             type: String,
             default: "",
             trim: true,
         },
+
         email: {
             type: String,
             default: "",
             trim: true,
         },
+
         address: {
             type: String,
             default: "",
             trim: true,
         },
+
+        // Payment mode selected while creating the invoice
+        paymentMode: {
+            type: String,
+            default: "",
+            trim: true,
+            maxlength: 50,
+        },
+
         invoiceDate: {
             type: Date,
             required: true,
             default: Date.now,
         },
+
         items: {
             type: [pharmacyInvoiceItemSchema],
             required: true,
@@ -97,25 +136,55 @@ const pharmacyInvoiceSchema = new mongoose.Schema(
                 message: "At least one medicine is required.",
             },
         },
+
         subtotal: {
             type: Number,
             required: true,
             min: 0,
         },
+
         gstAmount: {
             type: Number,
             required: true,
             min: 0,
         },
+
+        // Invoice-level discount
+        discountType: {
+            type: String,
+            enum: ["Percentage", "Fixed"],
+            default: "Percentage",
+            required: true,
+        },
+
+        discountValue: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        discountAmount: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        roundOff: {
+            type: Number,
+            default: 0,
+        },
+
         total: {
             type: Number,
             required: true,
             min: 0,
         },
+
         notes: {
             type: String,
             default: "",
         },
+
         status: {
             type: String,
             enum: ["Draft", "Paid", "Unpaid", "Cancelled"],

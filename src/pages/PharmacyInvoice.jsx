@@ -77,13 +77,24 @@ const newInvoice = () => ({
   invoiceDate: today(),
   notes: "",
   paymentMode: "",
+  discountType: "percentage",
+  discountValue: "0",
   status: "Unpaid",
-  items: [{ medicineId: "", quantity: "1" }],
+  items: [{ medicineId: "", quantity: "1", unitType: "Pack" }],
 });
 
-const lineAmounts = (price, quantity) => ({
-  total: Math.round((Number(price || 0) * Number(quantity || 0) + Number.EPSILON) * 100) / 100,
-});
+const roundMoney = (value) =>
+  Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+
+const lineAmounts = (price, quantity, gstRate = 0) => {
+  const taxableAmount = roundMoney(Number(price || 0) * Number(quantity || 0));
+  const gstAmount = roundMoney(taxableAmount * Number(gstRate || 0) / 100);
+  return {
+    taxableAmount,
+    gstAmount,
+    total: roundMoney(taxableAmount + gstAmount),
+  };
+};
 
 export default function PharmacyInvoice() {
   const [view, setView] = useState("list");
@@ -162,12 +173,11 @@ const loadAll = async () => {
         id: String(item._id || item.id || ""),
         name: item.name || item.medicineName || "",
         batchNo: item.batchNo || item.batchNumber || "",
-        price: Number(
-          item.price ?? item.packPrice ?? item.mrp ?? item.unitPrice ?? 0
-        ),
-        quantity: Number(
-          item.quantity ?? item.unitInStock ?? item.stock ?? 0
-        ),
+        price: Number(item.packPrice ?? item.price ?? item.mrp ?? item.unitPrice ?? 0),
+        quantity: Number(item.unitInStock ?? item.quantity ?? item.stock ?? 0),
+        looseUnits: Number(item.looseUnits || 0),
+        packSize: Number(item.packSize || 1),
+        gst: Number(item.gst || 0),
         expiryDate: item.expiryDate || item.expiry || "",
       }))
     );
@@ -190,17 +200,67 @@ const loadAll = async () => {
   const businessEmail = profileValue(profile, ["email", "businessEmail"]);
   const businessLogo = profileValue(profile, ["clinicLogo", "logo", "businessLogo", "profileImage"]);
 
-  const calculatedItems = useMemo(() => form.items.map((line) => {
-    const medicine = medicines.find(
-  (item) => String(item._id || item.id) === String(line.medicineId)
-);
-    const amounts = lineAmounts(medicine?.price || 0, line.quantity);
-    return { ...line, medicine, ...amounts };
-  }), [form.items, medicines]);
+const calculatedItems = useMemo(
+  () =>
+    form.items.map((line) => {
+      const medicine = medicines.find(
+        (item) => String(item._id || item.id) === String(line.medicineId)
+      );
 
-  const totals = useMemo(() => ({
-    total: Math.round(calculatedItems.reduce((sum, item) => sum + item.total, 0) * 100) / 100,
-  }), [calculatedItems]);
+      const packPrice = Number(medicine?.packPrice ?? medicine?.price ?? 0);
+      const packSize = Math.max(1, Number(medicine?.packSize) || 1);
+      const gstRate = Number(medicine?.gst ?? 0);
+
+      const unitPrice =
+        line.unitType === "Piece"
+          ? packPrice / packSize
+          : packPrice;
+
+      const quantity = Number(line.quantity) || 0;
+      const taxableAmount =
+        Math.round(unitPrice * quantity * 100) / 100;
+      const gstAmount =
+        Math.round(taxableAmount * gstRate) / 100;
+      const total =
+        Math.round((taxableAmount + gstAmount) * 100) / 100;
+
+      return {
+        ...line,
+        medicine,
+        packSize,
+        unitPrice,
+        gstRate,
+        taxableAmount,
+        gstAmount,
+        total,
+      };
+    }),
+  [form.items, medicines]
+);
+
+  const totals = useMemo(() => {
+    const subtotal = roundMoney(calculatedItems.reduce((sum, item) => sum + item.taxableAmount, 0));
+    const gstAmount = roundMoney(calculatedItems.reduce((sum, item) => sum + item.gstAmount, 0));
+    const preDiscountTotal = roundMoney(subtotal + gstAmount);
+    const rawDiscountValue = Math.max(0, Number(form.discountValue) || 0);
+    const discountAmount = roundMoney(
+      form.discountType === "fixed"
+        ? Math.min(rawDiscountValue, preDiscountTotal)
+        : Math.min(preDiscountTotal, preDiscountTotal * Math.min(rawDiscountValue, 100) / 100)
+    );
+    const discountedPreRoundTotal = roundMoney(preDiscountTotal - discountAmount);
+    const total = Math.max(0, Math.round(discountedPreRoundTotal));
+    return {
+      subtotal,
+      gstAmount,
+      preDiscountTotal,
+      discountType: form.discountType || "percentage",
+      discountValue: rawDiscountValue,
+      discountAmount,
+      roundOff: roundMoney(total - discountedPreRoundTotal),
+      total,
+    };
+  }, [calculatedItems, form.discountType, form.discountValue]);
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -213,7 +273,7 @@ const loadAll = async () => {
 
   const addItem = () => setForm((prev) => ({
     ...prev,
-    items: [...prev.items, { medicineId: "", quantity: "1" }],
+    items: [...prev.items, { medicineId: "", quantity: "1", unitType: "Pack" }],
   }));
 
   const removeItem = (index) => setForm((prev) => ({
@@ -290,6 +350,7 @@ const chooseMedicine = (index, medicine) => {
       batchNo: medicine.batchNo || medicine.batchNumber || "",
       price,
       quantity: "1",
+      unitType: items[index].unitType || "Pack",
       availableStock: stock,
       expiryDate: medicine.expiryDate || medicine.expiry || "",
     };
@@ -320,23 +381,28 @@ const chooseMedicine = (index, medicine) => {
   };
 
   const editInvoice = (invoice) => {
-    setError("");
-    setSuccess("");
-    setShowPreview(false);
     setForm({
-      ...newInvoice(),
-      ...invoice,
-      _id: invoice._id || invoice.id || "",
-      invoiceDate: invoice.invoiceDate ? new Date(invoice.invoiceDate).toISOString().slice(0, 10) : today(),
-      phone: invoice.phone || "",
-      email: invoice.email || "",
-      address: invoice.address || "",
-      items: (invoice.items || []).map((item) => ({
+    ...newInvoice(),
+    ...invoice,
+    _id: invoice._id || invoice.id || "",
+    invoiceDate: invoice.invoiceDate
+        ? new Date(invoice.invoiceDate).toISOString().slice(0, 10)
+        : today(),
+    phone: invoice.phone || "",
+    email: invoice.email || "",
+    address: invoice.address || "",
+    paymentMode: invoice.paymentMode || "",
+    discountType:
+        String(invoice.discountType || "Percentage").toLowerCase() === "fixed"
+            ? "fixed"
+            : "percentage",
+    discountValue: String(invoice.discountValue ?? 0),
+    items: (invoice.items || []).map((item) => ({
         medicineId: String(item.medicineId?._id || item.medicineId || ""),
         quantity: String(item.quantity || 1),
-
-      })),
-    });
+        unitType: item.unitType || "Pack",
+    })),
+});
     setCustomerSearch(invoice.customerName || "");
     setView("create");
   };
@@ -359,13 +425,15 @@ const chooseMedicine = (index, medicine) => {
         setError("Quantity must be a whole number greater than zero.");
         return;
       }
-      const stockAvailable = item.medicine.quantity + (
-        form._id ? Number((invoices.find((inv) => String(inv._id) === String(form._id))?.items || [])
-          .filter((old) => String(old.medicineId?._id || old.medicineId) === item.medicineId)
-          .reduce((sum, old) => sum + Number(old.quantity || 0), 0)) : 0
-      );
-      if (Number(item.quantity) > stockAvailable) {
-        setError(`Insufficient stock for ${item.medicine.name}. Available: ${stockAvailable}.`);
+      const packSize = Math.max(1, Number(item.medicine.packSize || 1));
+      const availableUnits = Number(item.medicine.quantity || 0) * packSize + Number(item.medicine.looseUnits || 0);
+      const oldInvoice = form._id ? invoices.find((inv) => String(inv._id || inv.id) === String(form._id)) : null;
+      const previouslyDeductedUnits = (oldInvoice?.items || [])
+        .filter((old) => String(old.medicineId?._id || old.medicineId) === item.medicineId)
+        .reduce((sum, old) => sum + Number(old.unitsDeducted || (Number(old.quantity || 0) * Number(old.packSize || packSize))), 0);
+      const requestedUnits = Number(item.quantity) * (item.unitType === "Piece" ? 1 : packSize);
+      if (requestedUnits > availableUnits + previouslyDeductedUnits) {
+        setError(`Insufficient stock for ${item.medicine.name}. Available: ${availableUnits + previouslyDeductedUnits} pieces.`);
         return;
       }
     }
@@ -377,14 +445,19 @@ const chooseMedicine = (index, medicine) => {
         phone: form.phone || "",
         email: form.email || "",
         address: form.address || "",
+        paymentMode: form.paymentMode || "",
         invoiceDate: form.invoiceDate,
         notes: form.notes || "",
+        discountType:
+            totals.discountType === "fixed" ? "Fixed" : "Percentage",
+        discountValue: totals.discountValue,
+        discountAmount: totals.discountAmount,
         items: calculatedItems.map((item) => ({
-          medicineId: item.medicineId,
-          quantity: Number(item.quantity),
-
+            medicineId: item.medicineId,
+            quantity: Number(item.quantity),
+            unitType: item.unitType || "Pack",
         })),
-      };
+    };
       const isEditing = Boolean(form._id);
       const data = await api(
         isEditing ? `/api/pharmacy-invoices/${encodeURIComponent(form._id)}` : "/api/pharmacy-invoices",
@@ -514,14 +587,18 @@ const chooseMedicine = (index, medicine) => {
       </div>
       <div className="invoice-document-table-wrap">
         <table className="invoice-document-table">
-          <thead><tr><th>#</th><th>DESCRIPTION OF MEDICINE</th><th>QTY</th><th>UNIT PRICE</th><th>AMOUNT</th></tr></thead>
+          <thead><tr><th>#</th><th>MEDICINE</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>TAXABLE</th><th>GST %</th><th>GST</th><th>TOTAL</th></tr></thead>
           <tbody>
             {lines.map((item, index) => (
               <tr key={`${item.medicineId || item.medicineName || "item"}-${index}`}>
                 <td>{index + 1}</td>
                 <td>{item.medicine?.name || item.medicineName || "Medicine"}</td>
+                <td>{item.unitType || "Pack"}</td>
                 <td>{Number(item.quantity) || 0}</td>
-                <td>{money(item.medicine?.price ?? item.price ?? 0)}</td>
+                <td>{money(item.unitPrice ?? item.price ?? item.medicine?.price ?? 0)}</td>
+                <td>{money(item.taxableAmount ?? item.totalAmount ?? item.total ?? 0)}</td>
+                <td>{Number(item.gstRate ?? item.medicine?.gst ?? 0)}%</td>
+                <td>{money(item.gstAmount || 0)}</td>
                 <td>{money(item.total ?? item.totalAmount ?? 0)}</td>
               </tr>
             ))}
@@ -533,7 +610,11 @@ const chooseMedicine = (index, medicine) => {
           {invoiceData.notes && <><span>NOTES</span><p>{invoiceData.notes}</p></>}
         </div>
         <div className="invoice-document-total-box">
-          <div className="grand"><span>Grand Total</span><strong>{money(summary.total ?? summary.grandTotal ?? 0)}</strong></div>
+          <div><span>Subtotal</span><strong>{money(summary.subtotal ?? invoiceData.subtotal ?? 0)}</strong></div>
+          <div><span>GST</span><strong>{money(summary.gstAmount ?? invoiceData.gstAmount ?? 0)}</strong></div>
+          <div><span>Discount{(summary.discountType ?? invoiceData.discountType) === "fixed" ? "" : ` (${Number(summary.discountValue ?? invoiceData.discountValue ?? 0)}%)`}</span><strong>− {money(summary.discountAmount ?? invoiceData.discountAmount ?? 0)}</strong></div>
+          <div><span>Round Off</span><strong>{money(summary.roundOff ?? invoiceData.roundOff ?? 0)}</strong></div>
+          <div className="grand"><span>Grand Total</span><strong>{money(summary.total ?? summary.grandTotal ?? invoiceData.total ?? 0)}</strong></div>
         </div>
       </div>
       <div className="invoice-document-footer">
@@ -743,8 +824,9 @@ const chooseMedicine = (index, medicine) => {
           <strong>{medicine.name}</strong>
           <span>
             Batch: {medicine.batchNo || "-"} ·
-            {" "}{money(medicine.price)} ·
-            {" "}Stock: {medicine.quantity}
+            {" "}{money(medicine.price)} / pack ·
+            {" "}GST: {Number(medicine.gst || 0)}% ·
+            {" "}Stock: {medicine.quantity} packs + {medicine.looseUnits} pieces
           </span>
         </button>
       ))
@@ -757,17 +839,46 @@ const chooseMedicine = (index, medicine) => {
 )}
 
 </div>
-{item.medicine && <small>Expiry: {item.medicine.expiryDate ? formatDate(item.medicine.expiryDate) : "—"} · Available: {item.medicine.quantity}</small>}</div>
-                      <div className="pharmacy-line-field"><label>Unit Price</label><input className="pharmacy-price-readonly" readOnly value={item.medicine ? money(item.medicine.price) : ""} placeholder="Auto-filled" /></div>
+{item.medicine && <small>Expiry: {item.medicine.expiryDate ? formatDate(item.medicine.expiryDate) : "—"} · Pack size: {item.medicine.packSize} · GST: {item.gstRate}% · Stock: {item.medicine.quantity} packs + {item.medicine.looseUnits} loose pieces</small>}</div>
+                      <div className="pharmacy-line-field"><label>Sale Unit</label><select value={item.unitType || "Pack"} onChange={(e) => updateItem(index, "unitType", e.target.value)} disabled={!item.medicine}><option value="Pack">Pack</option><option value="Piece">Piece</option></select></div>
+                      <div className="pharmacy-line-field"><label>Unit Price</label><input className="pharmacy-price-readonly" readOnly value={item.medicine ? money(item.unitPrice) : ""} placeholder="Auto-filled" /></div>
                       <div className="pharmacy-line-field"><label>Quantity</label><input type="number" min="1" step="1" required value={item.quantity} onChange={(e) => updateItem(index, "quantity", e.target.value)} /></div>
-                      <div className="pharmacy-line-field pharmacy-line-amount-field"><label>Amount</label><strong className="pharmacy-line-total">{money(item.total)}</strong></div>
+                      <div className="pharmacy-line-field pharmacy-line-amount-field"><label>Amount incl. GST</label><strong className="pharmacy-line-total">{money(item.total)}</strong><small>GST {item.gstRate}% · {money(item.gstAmount)}</small></div>
                       <button type="button" className="invoice-remove-item" onClick={() => removeItem(index)} disabled={form.items.length === 1} aria-label="Remove medicine">×</button>
                     </div>
                   ))}
                 </div>
+                <div className="pharmacy-bill-discount">
+                  <div className="pharmacy-bill-discount-intro">
+                    <span className="pharmacy-discount-icon">%</span>
+                    <div>
+                      <strong>Bill Discount</strong>
+                      <p>Discount applies to the full invoice amount (subtotal + GST).</p>
+                    </div>
+                  </div>
+                  <div className="pharmacy-bill-discount-field">
+                    <label htmlFor="pharmacy-discount-type">Discount Type</label>
+                    <select id="pharmacy-discount-type" value={form.discountType || "percentage"} onChange={(e) => updateField("discountType", e.target.value)}>
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed amount (₹)</option>
+                    </select>
+                  </div>
+                  <div className="pharmacy-bill-discount-field">
+                    <label htmlFor="pharmacy-discount-value">Discount Value</label>
+                    <input id="pharmacy-discount-value" type="number" min="0" step="0.01" max={form.discountType === "percentage" ? "100" : undefined} value={form.discountValue ?? "0"} onChange={(e) => updateField("discountValue", e.target.value)} />
+                  </div>
+                  <div className="pharmacy-bill-discount-amount">
+                    <span>Discount Amount</span>
+                    <strong>− {money(totals.discountAmount)}</strong>
+                  </div>
+                </div>
                 <div className="invoice-bottom-area">
                   <div className="invoice-notes"><label>Notes for customer</label><textarea rows="4" value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Add a note..." /></div>
                   <div className="invoice-calculation">
+                    <div><span>Subtotal</span><strong>{money(totals.subtotal)}</strong></div>
+                    <div><span>GST</span><strong>{money(totals.gstAmount)}</strong></div>
+                    <div><span>Discount</span><strong>− {money(totals.discountAmount)}</strong></div>
+                    <div><span>Round Off</span><strong>{money(totals.roundOff)}</strong></div>
                     <div className="invoice-grand-total"><span>Grand Total</span><strong>{money(totals.total)}</strong></div>
                   </div>
                 </div>
@@ -814,6 +925,10 @@ const chooseMedicine = (index, medicine) => {
                 <div><span>Invoice Date</span><strong>{formatDate(form.invoiceDate)}</strong></div>
                 <div><span>Customer</span><strong>{form.customerName || "Not selected"}</strong></div>
                 <div><span>Medicine lines</span><strong>{calculatedItems.length}</strong></div>
+                <div><span>Subtotal</span><strong>{money(totals.subtotal)}</strong></div>
+                <div><span>GST</span><strong>{money(totals.gstAmount)}</strong></div>
+                <div><span>Discount</span><strong>− {money(totals.discountAmount)}</strong></div>
+                <div><span>Round Off</span><strong>{money(totals.roundOff)}</strong></div>
                 <div><span>Total</span><strong>{money(totals.total)}</strong></div>
               </div>
             </aside>

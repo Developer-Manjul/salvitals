@@ -9,54 +9,66 @@ const pharmacyMedicineSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-
-    // Medicine Name
     name: {
       type: String,
       required: true,
       trim: true,
     },
-
-    // Batch Number
     batchNo: {
       type: String,
       required: true,
       trim: true,
     },
-
-    // Pack MRP
     packPrice: {
       type: Number,
       required: true,
       min: 0,
     },
-
-    // Individual units currently in stock
+    gst: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    packSize: {
+      type: Number,
+      required: true,
+      default: 10,
+      min: 1,
+      validate: {
+        validator: Number.isInteger,
+        message: "Pack size must be a whole number.",
+      },
+    },
     unitInStock: {
       type: Number,
       required: true,
       min: 0,
       validate: {
         validator: Number.isInteger,
-        message: "Units in stock must be a whole number.",
+        message: "Stock must be a whole number of packs.",
       },
     },
 
-    // Expiry Date
+    looseUnits: {
+    type: Number,
+    default: 0,
+    min: 0,
+    validate: {
+      validator: Number.isInteger,
+      message: "Loose units must be a whole number.",
+    },
+  },
     expiryDate: {
       type: Date,
       required: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-pharmacyMedicineSchema.index({
-  userId: 1,
-  createdAt: -1,
-});
+pharmacyMedicineSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model(
   "PharmacyMedicine",
