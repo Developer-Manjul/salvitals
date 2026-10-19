@@ -486,6 +486,7 @@ const apiOrigin = "https://salevitals.com";
   transform: none;
 }
 
+
 @media (max-width: 520px) {
   #launcher {
     right: 14px;
@@ -496,22 +497,29 @@ const apiOrigin = "https://salevitals.com";
   }
 
   #panel {
-    right: 10px;
-    bottom: 82px;
-    width: calc(100vw - 20px);
-    height: calc(100vh - 105px);
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    width: calc(100% - 16px);
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+    max-width: none;
     max-height: none;
-    border-radius: 19px;
+    min-height: 0;
+    border-radius: 18px;
+    overflow: hidden;
   }
 
   .head {
-    min-height: 74px;
-    padding: 13px 14px;
+    min-height: 66px;
+    padding: 10px 12px;
   }
 
   .avatar {
-    width: 43px;
-    height: 43px;
+    width: 40px;
+    height: 40px;
   }
 
   .name {
@@ -524,17 +532,44 @@ const apiOrigin = "https://salevitals.com";
   }
 
   .body {
-    padding: 13px;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+  }
+
+  .foot {
+    flex-shrink: 0;
+    padding: 8px 10px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .input-row {
+    gap: 8px;
+  }
+
+  .foot input {
+    min-width: 0;
+    height: 46px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+
+  .send {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
 
   .bubble {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .powered {
     font-size: 10px;
   }
 }
+
 </style>
 
 <button
@@ -1382,6 +1417,50 @@ const apiOrigin = "https://salevitals.com";
       );
   }
 
+  
+  // iPhone Safari: keep chat visible when keyboard opens
+  var viewport = window.visualViewport;
+
+  function syncMobileViewport() {
+    if (!panel || !window.matchMedia("(max-width: 520px)").matches) {
+      return;
+    }
+
+    if (!state.open) {
+      return;
+    }
+
+    if (viewport) {
+      var visibleHeight = viewport.height;
+      var visibleTop = viewport.offsetTop;
+
+      panel.style.top = Math.max(visibleTop + 8, 8) + "px";
+      panel.style.bottom = "auto";
+      panel.style.height = Math.max(visibleHeight - 16, 180) + "px";
+    } else {
+      panel.style.top = "8px";
+      panel.style.bottom = "auto";
+      panel.style.height = Math.max(window.innerHeight - 16, 180) + "px";
+    }
+  }
+
+  if (viewport) {
+    viewport.addEventListener("resize", syncMobileViewport);
+    viewport.addEventListener("scroll", syncMobileViewport);
+  }
+
+  window.addEventListener("resize", syncMobileViewport);
+
+  input.addEventListener("focus", function () {
+    setTimeout(syncMobileViewport, 100);
+    setTimeout(syncMobileViewport, 350);
+  });
+
+  input.addEventListener("blur", function () {
+    setTimeout(syncMobileViewport, 100);
+  });
+
+
   launcher.onclick =
     async function () {
       state.open = true;
@@ -1389,6 +1468,8 @@ const apiOrigin = "https://salevitals.com";
       panel.classList.add(
         "open"
       );
+
+      syncMobileViewport();
 
       if (!state.started) {
         await start();
@@ -1412,6 +1493,9 @@ const apiOrigin = "https://salevitals.com";
       panel.classList.remove(
         "open"
       );
+      panel.style.top = "";
+panel.style.bottom = "";
+panel.style.height = "";
     };
 
   send.onclick =
