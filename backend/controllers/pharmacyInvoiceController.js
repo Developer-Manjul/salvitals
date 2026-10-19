@@ -556,11 +556,12 @@ exports.createInvoice = async (req, res) => {
             "Cash",
             "UPI",
             "Card",
+            "Credit Card",
+            "Debit Card",
             "Bank Transfer",
             "Cheque",
             "Other",
         ];
-
         const parsedPaymentMode = String(paymentMode || "").trim();
 
         if (
@@ -793,6 +794,8 @@ exports.updateInvoice = async (req, res) => {
                 "Cash",
                 "UPI",
                 "Card",
+                "Credit Card",
+                "Debit Card",
                 "Bank Transfer",
                 "Cheque",
                 "Other",

@@ -86,6 +86,9 @@ const SETTINGS_PERMISSION_MAP = {
   "Lead Sources": ["leads.view"],
   "Lead Stages": ["leads.view"],
   Services: ["services.view"],
+
+    "Pharmacy": ["pharmacy.view", "pharmacy.create"],
+
   WhatsApp: ["whatsapp.view", "whatsapp.use"],
 
   "WhatsApp Lead Notifications": ["leads.view"],

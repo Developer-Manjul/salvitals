@@ -675,12 +675,28 @@ function FollowUpDetails({
         .followup-note-composer-actions button { min-height:34px; padding:0 13px; border:1px solid #d8e3f0; border-radius:8px; background:#fff; color:#40516a; font-size:12px; cursor:pointer; }
         .followup-note-composer-actions button.primary { border-color:#2563eb; background:#2563eb; color:#fff; }
         .followup-note-composer-actions button:disabled { opacity:.55; cursor:not-allowed; }
-        .followup-detail-timeline { padding:16px; }
-        .followup-timeline-item { display:flex; gap:12px; position:relative; padding:0 0 18px; }
-        .followup-timeline-item:last-child { padding-bottom:0; }
+        .followup-detail-timeline { padding:0 16px; }
+        .followup-timeline-item { display:flex; gap:12px; position:relative; padding:15px 0; border-bottom:1px solid #e8edf4; }
+        .followup-timeline-item:last-child { padding-bottom:15px; border-bottom:0; }
         .followup-timeline-dot { width:9px; height:9px; margin-top:4px; border:1px solid #2563eb; background:#edf5ff; border-radius:50%; flex:0 0 9px; }
         .followup-timeline-item strong { color:#172033; font-size:11px; font-weight:700; }
         .followup-timeline-item p { margin:6px 0 0; color:#8190a5; font-size:10px; }
+        .followup-activity-head { align-items:center; flex-wrap:wrap; }
+        .followup-activity-filters { display:flex; align-items:center; gap:5px; }
+        .followup-activity-filters span { display:inline-flex; align-items:center; justify-content:center; min-height:28px; padding:0 10px; border-radius:8px; color:#64748b; font-size:10px; white-space:nowrap; }
+        .followup-activity-filters span.active { background:#edf4ff; color:#2563eb; font-weight:700; }
+        .followup-activity-timeline { padding-top:2px; padding-bottom:2px; }
+        .followup-activity-event { gap:12px; }
+        .followup-timeline-icon { position:relative; z-index:1; width:23px; height:23px; flex:0 0 23px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#edf4ff; color:#2563eb; margin-top:0; }
+        .followup-timeline-icon.note { background:#edf4ff; font-size:16px; }
+        .followup-timeline-icon.created { font-weight:700; font-size:16px; }
+        .followup-activity-content { flex:1; min-width:0; }
+        .followup-activity-content p { margin:7px 0 0; color:#40516a; font-size:11px; line-height:1.55; overflow-wrap:anywhere; }
+        .followup-activity-content small { display:block; margin-top:7px; color:#8190a5; font-size:10px; }
+        .followup-activity-badges { display:flex; gap:6px; margin-top:8px; }
+        .followup-activity-badges span { display:inline-flex; padding:4px 7px; border:1px solid #dbe7fb; border-radius:5px; background:#f8fbff; color:#315ea8; font-size:9px; font-weight:600; }
+        .followup-activity-content .followup-activity-note-text { white-space:pre-wrap; }
+        .followup-activity-event-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
         .followup-status-body { padding:14px 15px 15px; }
         .followup-status-body label { display:block; margin:0 0 7px; color:#52627a; font-size:10px; }
         .followup-status-body select { width:100%; height:36px; padding:0 10px; border:1px solid #d8e3f0; border-radius:8px; color:#34445c; background:#fff; font-size:11px; outline:none; }
@@ -767,30 +783,64 @@ function FollowUpDetails({
             </div>
           </section>
 
-          <section className="followup-detail-card">
-            <div className="followup-detail-card-head"><div><h2>Conversation & notes</h2><p>Notes associated with this lead and follow-up.</p></div></div>
-            <div className="followup-detail-note-primary"><span>Follow-up note</span><p>{item?.note || "No note was added for this follow-up."}</p></div>
-            {item?.firstNote && <div className="followup-detail-note"><span>First lead note</span><p>{item.firstNote}</p></div>}
-            <div className="followup-detail-notes-list">
-              <div className="followup-detail-notes-title">Previous notes</div>
-              {notes.length ? notes.map((note, index) => (
-                <div className="followup-detail-note" key={note?._id || note?.id || `note-${index}`}>
-                  <div className="followup-detail-note-head">
-                    <span style={{fontSize:11,color:"#8190a5"}}>{note?.userName || "User"}</span>
-                    <button type="button" className="followup-note-edit-btn" onClick={() => openEditNote(note,index)} disabled={savingNoteEdit || !leadId} title="Edit note"><span aria-hidden="true">✎</span> Edit</button>
-                  </div>
-                  <p>{note?.text || note?.note || "—"}</p>
-                  <small>{formatDateTime(note?.updatedAt || note?.createdAt)}</small>
-                </div>
-              )) : <div className="followup-detail-note"><p>No previous notes available for this lead.</p></div>}
+          <section className="followup-detail-card followup-activity-card">
+            <div className="followup-detail-card-head followup-activity-head">
+              <div><h2>Activity timeline</h2><p>Notes and important events for this follow-up.</p></div>
+              <div className="followup-activity-filters" aria-label="Activity types">
+                <span className="active">All</span><span>Notes</span><span>Calls</span><span>WhatsApp</span>
+              </div>
             </div>
-          </section>
+            <div className="followup-detail-timeline followup-activity-timeline">
+              <div className="followup-timeline-item followup-activity-event">
+                <span className="followup-timeline-icon"><Icon name="calendar" size={14}/></span>
+                <div className="followup-activity-content">
+                  <strong>Follow-up scheduled</strong>
+                  <div className="followup-activity-badges"><span>{formatDate(scheduledDate)}</span><span>{formatTime(scheduledDate)}</span></div>
+                  <p>Follow-up scheduled for {formatDateTime(scheduledDate)}</p>
+                  <small>{ownerName} · Created {formatDateTime(createdAt)}</small>
+                </div>
+              </div>
 
-          <section className="followup-detail-card">
-            <div className="followup-detail-card-head"><div><h2>Follow-up timeline</h2><p>Important events for this follow-up.</p></div></div>
-            <div className="followup-detail-timeline">
-              <div className="followup-timeline-item"><span className="followup-timeline-dot"/><div><strong>Follow-up scheduled</strong><p>{formatDateTime(createdAt)}</p></div></div>
-              <div className="followup-timeline-item current"><span className="followup-timeline-dot"/><div><strong>Current status: {followUpStatusLabel(status)}</strong><p>Scheduled for {formatDateTime(scheduledDate)}</p></div></div>
+              {item?.note && (
+                <div className="followup-timeline-item followup-activity-event">
+                  <span className="followup-timeline-icon note"><span aria-hidden="true">▱</span></span>
+                  <div className="followup-activity-content">
+                    <strong>Follow-up note added</strong>
+                    <p className="followup-activity-note-text">{item.note}</p>
+                    <small>{ownerName} · {formatDateTime(createdAt)}</small>
+                  </div>
+                </div>
+              )}
+
+              {notes.length ? notes.map((note, index) => (
+                <div className="followup-timeline-item followup-activity-event" key={note?._id || note?.id || `note-${index}`}>
+                  <span className="followup-timeline-icon note"><span aria-hidden="true">▱</span></span>
+                  <div className="followup-activity-content">
+                    <div className="followup-activity-event-heading">
+                      <strong>Note added</strong>
+                      <button type="button" className="followup-note-edit-btn" onClick={() => openEditNote(note,index)} disabled={savingNoteEdit || !leadId} title="Edit note"><span aria-hidden="true">✎</span> Edit</button>
+                    </div>
+                    <p className="followup-activity-note-text">{note?.text || note?.note || "—"}</p>
+                    <small>{note?.userName || "User"} · Created {formatDateTime(note?.updatedAt || note?.createdAt)}</small>
+                  </div>
+                </div>
+              )) : null}
+
+              {item?.firstNote && (
+                <div className="followup-timeline-item followup-activity-event">
+                  <span className="followup-timeline-icon note"><span aria-hidden="true">▱</span></span>
+                  <div className="followup-activity-content"><strong>Original lead note</strong><p className="followup-activity-note-text">{item.firstNote}</p></div>
+                </div>
+              )}
+
+              <div className="followup-timeline-item followup-activity-event">
+                <span className="followup-timeline-icon created"><span aria-hidden="true">+</span></span>
+                <div className="followup-activity-content">
+                  <strong>Current status: {followUpStatusLabel(status)}</strong>
+                  <p>Scheduled for {formatDateTime(scheduledDate)}</p>
+                  <small>{ownerName}</small>
+                </div>
+              </div>
             </div>
           </section>
        
