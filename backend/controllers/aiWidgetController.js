@@ -1421,38 +1421,35 @@ const apiOrigin = "https://salevitals.com";
   // iPhone Safari: keep chat visible when keyboard opens
   var viewport = window.visualViewport;
 
-  function syncMobileViewport() {
+ function syncMobileViewport() {
     if (!panel || !window.matchMedia("(max-width: 520px)").matches) {
-      return;
+        return;
     }
 
     if (!state.open) {
-      return;
+        return;
     }
 
     if (viewport) {
-      var visibleHeight = viewport.height;
-      var visibleTop = viewport.offsetTop;
+        var visibleHeight = viewport.height;
+        var visibleTop = viewport.offsetTop;
 
-      var keyboardOpen = window.innerHeight - visibleHeight > 150;
-
-      panel.style.top = Math.max(visibleTop + 6, 6) + "px";
-      panel.style.bottom = "auto";
-      panel.style.height = Math.max(visibleHeight - 12, 180) + "px";
-
-      if (keyboardOpen) {
-          panel.style.borderRadius = "16px 16px 0 0";
-          panel.style.zIndex = "2147483000";
-      } else {
-          panel.style.borderRadius = "";
-          panel.style.zIndex = "";
-      }
-
-      if (launcher) {
-    launcher.style.visibility = keyboardOpen ? "hidden" : "";
-    launcher.style.pointerEvents = keyboardOpen ? "none" : "";
+        panel.style.position = "fixed";
+        panel.style.top = Math.max(visibleTop + 6, 6) + "px";
+        panel.style.bottom = "auto";
+        panel.style.height = Math.max(visibleHeight - 12, 180) + "px";
+        panel.style.maxHeight = "none";
+        panel.style.visibility = "visible";
+        panel.style.zIndex = "2147483000";
+    } else {
+        panel.style.position = "fixed";
+        panel.style.top = "8px";
+        panel.style.bottom = "auto";
+        panel.style.height = Math.max(window.innerHeight - 16, 180) + "px";
+        panel.style.visibility = "visible";
+        panel.style.zIndex = "2147483000";
+    }
 }
-  }
 
   if (viewport) {
     viewport.addEventListener("resize", syncMobileViewport);
@@ -1496,17 +1493,19 @@ const apiOrigin = "https://salevitals.com";
       );
     };
 
-  close.onclick =
-    function () {
-      state.open = false;
+  close.onclick = function () {
+    state.open = false;
 
-      panel.classList.remove(
-        "open"
-      );
-      panel.style.top = "";
-panel.style.bottom = "";
-panel.style.height = "";
-    };
+    panel.classList.remove("open");
+
+    panel.style.position = "";
+    panel.style.top = "";
+    panel.style.bottom = "";
+    panel.style.height = "";
+    panel.style.maxHeight = "";
+    panel.style.visibility = "";
+    panel.style.zIndex = "";
+};
 
   send.onclick =
     sendMessage;
