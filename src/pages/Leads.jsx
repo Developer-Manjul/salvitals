@@ -1704,6 +1704,77 @@ useEffect(() => {
         );
       }
     };
+  
+  
+  
+const exportAllLeads = () => {
+  if (!Array.isArray(leads) || leads.length === 0) {
+    alert("Export karne ke liye koi lead available nahi hai.");
+    return;
+  }
+
+  const columns = [
+    ["Lead Name", (lead) => getLeadName(lead)],
+    ["Phone", (lead) => getLeadPhone(lead)],
+    ["Email", (lead) => lead.email],
+    ["Lead Source", (lead) => getLeadSource(lead, configuredSourceOptions)],
+    ["Service", (lead) => lead.service],
+    ["Owner", (lead) => getLeadOwner(lead, isHealthcare, user)],
+    ["Stage", (lead) => lead.stage || "New"],
+    ["Preferred Doctor", (lead) => lead.preferredDoctor],
+    ["Notes", (lead) => lead.firstNote],
+    ["Landing Page", (lead) => lead.landingPage],
+    ["Page URL", (lead) => lead.pageUrl],
+    ["UTM Source", (lead) => lead.utmSource],
+    ["UTM Medium", (lead) => lead.utmMedium],
+    ["UTM Campaign", (lead) => lead.utmCampaign],
+    ["UTM Term", (lead) => lead.utmTerm],
+    ["UTM Content", (lead) => lead.utmContent],
+    ["IP Address", (lead) => lead.ipAddress],
+    ["Created Date", (lead) => formatDate(lead.createdAt)],
+  ];
+
+  const escapeCsv = (value) => {
+    let text = String(value ?? "").replace(/\r\n/g, "\n");
+
+    // Prevent Excel from treating exported text as a formula.
+    if (/^[\s]*[=+\-@]/.test(text)) {
+      text = "'" + text;
+    }
+
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const csvRows = [
+    columns.map(([heading]) => escapeCsv(heading)).join(","),
+    ...leads.map((lead) =>
+      columns
+        .map(([, getValue]) => escapeCsv(getValue(lead)))
+        .join(",")
+    ),
+  ];
+
+  // UTF-8 BOM helps Excel display Indian names correctly.
+  const csvContent = "\uFEFF" + csvRows.join("\r\n");
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `SaleVitals_All_Leads_${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 
   const countByCategory = (category) =>
     leads.reduce((count, lead) => count + (getLeadCategory(lead?.stage) === category ? 1 : 0), 0);
@@ -1746,11 +1817,13 @@ useEffect(() => {
         <div className="lead-header-actions">
 
           <button
-            type="button"
-            className="dash-btn"
-          >
-            Export
-          </button>
+  type="button"
+  className="dash-btn"
+  onClick={exportAllLeads}
+  disabled={loadingLeads || leads.length === 0}
+>
+  Export
+</button>
 
           <button
             type="button"
