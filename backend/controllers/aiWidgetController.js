@@ -1434,14 +1434,24 @@ const apiOrigin = "https://salevitals.com";
       var visibleHeight = viewport.height;
       var visibleTop = viewport.offsetTop;
 
-      panel.style.top = Math.max(visibleTop + 8, 8) + "px";
+      var keyboardOpen = window.innerHeight - visibleHeight > 150;
+
+      panel.style.top = Math.max(visibleTop + 6, 6) + "px";
       panel.style.bottom = "auto";
-      panel.style.height = Math.max(visibleHeight - 16, 180) + "px";
-    } else {
-      panel.style.top = "8px";
-      panel.style.bottom = "auto";
-      panel.style.height = Math.max(window.innerHeight - 16, 180) + "px";
-    }
+      panel.style.height = Math.max(visibleHeight - 12, 180) + "px";
+
+      if (keyboardOpen) {
+          panel.style.borderRadius = "16px 16px 0 0";
+          panel.style.zIndex = "2147483000";
+      } else {
+          panel.style.borderRadius = "";
+          panel.style.zIndex = "";
+      }
+
+      if (launcher) {
+    launcher.style.visibility = keyboardOpen ? "hidden" : "";
+    launcher.style.pointerEvents = keyboardOpen ? "none" : "";
+}
   }
 
   if (viewport) {
