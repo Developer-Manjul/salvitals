@@ -488,12 +488,16 @@ const apiOrigin = "https://salevitals.com";
 
 
 @media (max-width: 520px) {
-  #launcher {
+   #launcher {
     right: 14px;
     bottom: 14px;
     width: 58px;
     height: 58px;
     border-radius: 17px;
+  }
+
+  #launcher.chat-open {
+    display: none !important;
   }
 
   #panel {
@@ -1418,38 +1422,33 @@ const apiOrigin = "https://salevitals.com";
   }
 
   
-  // iPhone Safari: keep chat visible when keyboard opens
+ 
+  // iPhone Safari: handle visual viewport when keyboard opens
   var viewport = window.visualViewport;
 
- function syncMobileViewport() {
+  function syncMobileViewport() {
     if (!panel || !window.matchMedia("(max-width: 520px)").matches) {
-        return;
+      return;
     }
 
     if (!state.open) {
-        return;
+      return;
     }
 
-    if (viewport) {
-        var visibleHeight = viewport.height;
-        var visibleTop = viewport.offsetTop;
+    var visibleTop = viewport ? viewport.offsetTop : 0;
+    var visibleHeight = viewport
+      ? viewport.height
+      : window.innerHeight;
 
-        panel.style.position = "fixed";
-        panel.style.top = Math.max(visibleTop + 6, 6) + "px";
-        panel.style.bottom = "auto";
-        panel.style.height = Math.max(visibleHeight - 12, 180) + "px";
-        panel.style.maxHeight = "none";
-        panel.style.visibility = "visible";
-        panel.style.zIndex = "2147483000";
-    } else {
-        panel.style.position = "fixed";
-        panel.style.top = "8px";
-        panel.style.bottom = "auto";
-        panel.style.height = Math.max(window.innerHeight - 16, 180) + "px";
-        panel.style.visibility = "visible";
-        panel.style.zIndex = "2147483000";
-    }
-}
+    panel.style.position = "fixed";
+    panel.style.top = Math.max(visibleTop + 6, 6) + "px";
+    panel.style.bottom = "auto";
+   panel.style.height = Math.max(visibleHeight - 12, 240) + "px";
+    panel.style.maxHeight = "none";
+    panel.style.boxSizing = "border-box";
+    panel.style.visibility = "visible";
+    panel.style.zIndex = "2147483000";
+  }
 
   if (viewport) {
     viewport.addEventListener("resize", syncMobileViewport);
@@ -1459,53 +1458,63 @@ const apiOrigin = "https://salevitals.com";
   window.addEventListener("resize", syncMobileViewport);
 
   input.addEventListener("focus", function () {
-    setTimeout(syncMobileViewport, 100);
-    setTimeout(syncMobileViewport, 350);
+    requestAnimationFrame(syncMobileViewport);
+    setTimeout(syncMobileViewport, 150);
+    setTimeout(syncMobileViewport, 400);
+    setTimeout(syncMobileViewport, 700);
   });
 
   input.addEventListener("blur", function () {
-    setTimeout(syncMobileViewport, 100);
+    setTimeout(syncMobileViewport, 150);
+    setTimeout(syncMobileViewport, 400);
   });
 
 
-  launcher.onclick =
-    async function () {
-      state.open = true;
 
-      panel.classList.add(
-        "open"
-      );
+  
+launcher.onclick = async function () {
+  state.open = true;
 
-      syncMobileViewport();
+  launcher.classList.add("chat-open");
+  panel.classList.add("open");
 
-      if (!state.started) {
-        await start();
-      } else {
-        applyBranding();
-        render();
-      }
+  syncMobileViewport();
 
-      setTimeout(
-        function () {
-          input.focus();
-        },
-        100
-      );
-    };
+  if (!state.started) {
+    await start();
+  } else {
+    applyBranding();
+    render();
+  }
 
-  close.onclick = function () {
-    state.open = false;
+  setTimeout(syncMobileViewport, 100);
+  setTimeout(syncMobileViewport, 350);
+  setTimeout(syncMobileViewport, 700);
 
-    panel.classList.remove("open");
-
-    panel.style.position = "";
-    panel.style.top = "";
-    panel.style.bottom = "";
-    panel.style.height = "";
-    panel.style.maxHeight = "";
-    panel.style.visibility = "";
-    panel.style.zIndex = "";
+  // Keep keyboard opening behavior unchanged for now.
+  setTimeout(function () {
+    input.focus();
+    syncMobileViewport();
+  }, 100);
 };
+
+close.onclick = function () {
+  state.open = false;
+
+  panel.classList.remove("open");
+  launcher.classList.remove("chat-open");
+
+  panel.style.position = "";
+  panel.style.top = "";
+  panel.style.bottom = "";
+  panel.style.left = "";
+  panel.style.right = "";
+  panel.style.height = "";
+  panel.style.maxHeight = "";
+  panel.style.visibility = "";
+  panel.style.zIndex = "";
+};
+
 
   send.onclick =
     sendMessage;
