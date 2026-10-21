@@ -205,6 +205,8 @@ const Cart = () => {
 
   const [error, setError] =
     useState("");
+  
+  const [enableAutoPay, setEnableAutoPay] = useState(false);
 
   const [billingLoading, setBillingLoading] =
     useState(true);
@@ -460,6 +462,96 @@ const Cart = () => {
     ) &&
     !isCurrentPlan;
 
+  
+  const handleAutoPaySubscription = async (token, apiBase) => {
+  const response = await fetch(
+    `${apiBase}/api/billing/autopay/subscribe`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        planId,
+        period: selectedMonths,
+        selectedAddons,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.message || "Unable to create AutoPay subscription"
+    );
+  }
+
+  if (!data.subscriptionId || !data.keyId) {
+    throw new Error("AutoPay subscription details are missing.");
+  }
+
+  const razorpayLoaded = await loadRazorpayScript();
+
+  if (!razorpayLoaded) {
+    throw new Error("Unable to load Razorpay.");
+  }
+
+  const razorpay = new window.Razorpay({
+    key: data.keyId,
+    subscription_id: data.subscriptionId,
+    name: "SaleVitals",
+    description: `${data.planName} AutoPay - ${data.periodMonths} month(s)`,
+    handler: async (paymentResponse) => {
+      try {
+        const verifyResponse = await fetch(
+          `${apiBase}/api/billing/autopay/verify`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              razorpay_payment_id: paymentResponse.razorpay_payment_id,
+              razorpay_subscription_id: paymentResponse.razorpay_subscription_id,
+              razorpay_signature: paymentResponse.razorpay_signature,
+            }),
+          }
+        );
+
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyResponse.ok || !verifyData.success) {
+          throw new Error(
+            verifyData.message || "AutoPay authorization verification failed."
+          );
+        }
+
+        goTo("/dashboard");
+      } catch (error) {
+        setError(error.message || "AutoPay verification failed.");
+      }
+    },
+    modal: {
+      ondismiss: () => {
+        setError("AutoPay authorization was cancelled.");
+      },
+    },
+    theme: {
+      color: "#236c73",
+    },
+  });
+
+  razorpay.on("payment.failed", (response) => {
+    setError(
+      response?.error?.description || "AutoPay authorization failed."
+    );
+  });
+
+  razorpay.open();
+};
   const handleSubscriptionPayment =
     async () => {
       try {
@@ -492,6 +584,13 @@ const Cart = () => {
         }
 
         setLoading(true);
+
+        if (enableAutoPay) {
+  const apiBase = getApiBaseUrl();
+
+  await handleAutoPaySubscription(token, apiBase);
+  return;
+}
 
         const apiBase =
           getApiBaseUrl();
@@ -1152,6 +1251,88 @@ const Cart = () => {
       {error && (
         <div className="payment-error">{error}</div>
       )}
+      
+             
+            
+      {checkoutType !== "addon" && (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            margin: "18px 0",
+            padding: "12px 14px",
+            border: "1px solid #dbe3ed",
+            borderRadius: "10px",
+            background: "#fff",
+            cursor: "pointer",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "#17313a",
+            }}
+          >
+            Enable AutoPay
+          </span>
+
+          <span
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              width: "42px",
+              height: "24px",
+              flexShrink: 0,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={enableAutoPay}
+              onChange={(e) => setEnableAutoPay(e.target.checked)}
+              aria-label="Enable AutoPay"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                margin: 0,
+                opacity: 0,
+                cursor: "pointer",
+                zIndex: 2,
+              }}
+            />
+
+            <span
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "20px",
+                background: enableAutoPay ? "#00656A" : "#d5dce2",
+                transition: "background 0.2s ease",
+              }}
+            />
+
+            <span
+              style={{
+                position: "absolute",
+                top: "3px",
+                left: enableAutoPay ? "21px" : "3px",
+                width: "18px",
+                height: "18px",
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                transition: "left 0.2s ease",
+                pointerEvents: "none",
+              }}
+            />
+          </span>
+        </label>
+      )}
+            
 
       <button
         type="button"
@@ -1673,6 +1854,84 @@ const Cart = () => {
                   {error}
                 </div>
               )}
+
+              {checkoutType !== "addon" && (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  margin: "18px 0",
+                  padding: "12px 14px",
+                  border: "1px solid #dbe3ed",
+                  borderRadius: "10px",
+                  background: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: "#17313a",
+                  }}
+                >
+                  Enable AutoPay
+                </span>
+
+                <span
+                  style={{
+                    position: "relative",
+                    display: "inline-flex",
+                    width: "42px",
+                    height: "24px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={enableAutoPay}
+                    onChange={(e) => setEnableAutoPay(e.target.checked)}
+                    aria-label="Enable AutoPay"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      margin: 0,
+                      opacity: 0,
+                      cursor: "pointer",
+                      zIndex: 2,
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "20px",
+                      background: enableAutoPay ? "#00656A" : "#d5dce2",
+                      transition: "background 0.2s ease",
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "3px",
+                      left: enableAutoPay ? "21px" : "3px",
+                      width: "18px",
+                      height: "18px",
+                      borderRadius: "50%",
+                      background: "#fff",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      transition: "left 0.2s ease",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </span>
+              </label>
+)}
 
               <button
                 type="button"

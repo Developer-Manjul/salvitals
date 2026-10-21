@@ -181,6 +181,30 @@ const orderSchema = new mongoose.Schema(
             default: "",
         },
 
+                // AutoPay / recurring billing
+        isAutoRenewal: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+
+        razorpaySubscriptionId: {
+            type: String,
+            trim: true,
+            default: "",
+            index: true,
+        },
+
+        billingPeriodStart: {
+            type: Date,
+            default: null,
+        },
+
+        billingPeriodEnd: {
+            type: Date,
+            default: null,
+        },
+
         invoiceEmailSentAt: {
             type: Date,
             default: null,

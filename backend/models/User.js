@@ -312,6 +312,48 @@ const userSchema = new mongoose.Schema(
                 type: Boolean,
                 default: false,
             },
+
+                        // Razorpay AutoPay
+            autoRenew: {
+                type: Boolean,
+                default: false,
+            },
+
+            razorpaySubscriptionId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            razorpayPlanId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+
+            autoRenewStatus: {
+                type: String,
+                enum: [
+                    "disabled",
+                    "pending",
+                    "authenticated",
+                    "active",
+                    "halted",
+                    "cancelled",
+                ],
+                default: "disabled",
+            },
+
+            autoRenewAuthorizedAt: {
+                type: Date,
+                default: null,
+            },
+
+            lastRenewalPaymentId: {
+                type: String,
+                trim: true,
+                default: "",
+            },
         },
 
         addons: {

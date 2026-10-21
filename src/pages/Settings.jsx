@@ -1657,6 +1657,14 @@ function PlanBillingContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState("plan");
+  const [autoPay, setAutoPay] = useState({
+  enabled: false,
+  status: "disabled",
+  subscriptionId: "",
+  nextBillingAt: null,
+  expiresAt: null,
+});
+const [autoPayLoading, setAutoPayLoading] = useState(false);
   const [addonQuantity, setAddonQuantity] = useState({
     contacts: 1,
     ai_chat: 1,
@@ -1688,9 +1696,200 @@ function PlanBillingContent() {
     }
   };
 
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(true), {
+        once: true,
+      });
+      existingScript.addEventListener("error", () => resolve(false), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+  
+
+const handleSettingsAutoPay = async () => {
+  try {
+    setError("");
+
+    const subscription = billing?.subscription;
+
+    if (!subscription?.planId || !subscription?.expiresAt) {
+      throw new Error("Current plan details are not available.");
+    }
+
+    if (autoPayLoading) return;
+
+    setAutoPayLoading(true);
+
+    const token = getToken();
+    const apiBase = getApiBaseUrl();
+
+    const response = await fetch(
+      `${apiBase}/api/billing/autopay/subscribe`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planId: subscription.planId,
+          period: subscription.billingCycle === "monthly" ? 1 : 12,
+          selectedAddons: [],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Unable to create AutoPay subscription.");
+    }
+
+    if (!data.subscriptionId || !data.keyId) {
+      throw new Error("AutoPay subscription details are missing.");
+    }
+
+    const loaded = await loadRazorpayScript();
+
+    if (!loaded) {
+      throw new Error("Unable to load Razorpay checkout.");
+    }
+
+    const razorpay = new window.Razorpay({
+      key: data.keyId,
+      subscription_id: data.subscriptionId,
+      name: "SaleVitals",
+      description: `${data.planName} AutoPay authorization`,
+      handler: async (paymentResponse) => {
+        try {
+          const verifyResponse = await fetch(
+            `${apiBase}/api/billing/autopay/verify`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                razorpay_subscription_id:
+                  paymentResponse.razorpay_subscription_id,
+                razorpay_signature: paymentResponse.razorpay_signature,
+              }),
+            }
+          );
+
+          const verifyData = await verifyResponse.json();
+
+          if (!verifyResponse.ok || !verifyData.success) {
+            throw new Error(
+              verifyData.message || "AutoPay authorization verification failed."
+            );
+          }
+
+          setAutoPay((previous) => ({
+            ...previous,
+            enabled: false,
+            status: "authenticated",
+            subscriptionId: data.subscriptionId,
+          }));
+
+          setError(
+            "Authorization verified, but automatic renewals are not active yet. Please do not assume AutoPay is enabled."
+          );
+        } catch (err) {
+          setError(err.message || "AutoPay verification failed.");
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          setError("AutoPay authorization was cancelled.");
+        },
+      },
+      theme: {
+        color: "#00656A",
+      },
+    });
+
+    razorpay.on("payment.failed", (event) => {
+      setError(
+        event?.error?.description || "AutoPay authorization failed."
+      );
+    });
+
+    razorpay.open();
+  } catch (err) {
+    setError(err.message || "Unable to start AutoPay.");
+  } finally {
+    setAutoPayLoading(false);
+  }
+};
+
+
+  console.log("Billing API response:", billing);
   useEffect(() => {
     loadBilling();
   }, []);
+
+  useEffect(() => {
+  const loadAutoPayStatus = async () => {
+    try {
+      setAutoPayLoading(true);
+
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/billing/autopay/status`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to load AutoPay status.");
+      }
+
+      setAutoPay({
+        enabled: Boolean(data.autoPay?.enabled),
+        status: data.autoPay?.status || "disabled",
+        subscriptionId: data.autoPay?.subscriptionId || "",
+        nextBillingAt: data.autoPay?.nextBillingAt || null,
+        expiresAt: data.autoPay?.expiresAt || null,
+      });
+    } catch (err) {
+      console.error("Unable to load AutoPay status:", err.message);
+    } finally {
+      setAutoPayLoading(false);
+    }
+  };
+
+  loadAutoPayStatus();
+}, []);
 
   const formatCycle = (cycle) => {
     if (!cycle) return "1 month";
@@ -1991,7 +2190,86 @@ function PlanBillingContent() {
                 {isActive && <p>{formatCycle(billing?.subscription?.billingCycle)} plan</p>}
               </div>
               {isActive && <span className="plan-billing-status">Active</span>}
+
+              
             </div>
+
+            {isActive && (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      marginTop: "18px",
+      padding: "12px 14px",
+      border: "1px solid #dbe3ed",
+      borderRadius: "10px",
+      background: "#fff",
+    }}
+  >
+    <span style={{ fontSize: "14px", fontWeight: 600, color: "#17313a" }}>
+      Enable AutoPay
+    </span>
+
+    <span
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        width: "42px",
+        height: "24px",
+        flexShrink: 0,
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={autoPay.enabled}
+       disabled={autoPayLoading}
+        onChange={() => {
+            if (autoPay.enabled) {
+              return;
+            }
+
+            handleSettingsAutoPay();
+          }}
+        aria-label="Enable AutoPay"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          margin: 0,
+          opacity: 0,
+          cursor: "pointer",
+          zIndex: 2,
+        }}
+      />
+
+      <span
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "20px",
+          background: autoPay.enabled ? "#00656A" : "#d5dce2",
+        }}
+      />
+
+      <span
+        style={{
+          position: "absolute",
+          top: "3px",
+          left: autoPay.enabled ? "21px" : "3px",
+          width: "18px",
+          height: "18px",
+          borderRadius: "50%",
+          background: "#fff",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+          pointerEvents: "none",
+        }}
+      />
+    </span>
+  </div>
+)}
 
             {isActive ? (
               <>

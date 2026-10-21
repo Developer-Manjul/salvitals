@@ -50,6 +50,11 @@ app.use(
 app.use(
     express.json({
         limit: "10mb",
+        verify: (req, res, buf) => {
+            if (req.originalUrl === "/api/payment/autopay/webhook") {
+                req.rawBody = Buffer.from(buf);
+            }
+        },
     })
 );
 

@@ -8,7 +8,17 @@ const {
     getPaymentStatus,
 } = require("../controllers/paymentController");
 
+const {
+    getAutoPayStatus,
+    handleAutoPayWebhook,
+} = require("../controllers/autoPayController");
+
 const router = express.Router();
+
+router.post(
+    "/autopay/webhook",
+    handleAutoPayWebhook
+);
 
 router.get(
     "/test",
@@ -33,6 +43,11 @@ router.get(
             next
         );
     }
+);
+
+router.get(
+    "/autopay/status",
+    getAutoPayStatus
 );
 
 router.post(
