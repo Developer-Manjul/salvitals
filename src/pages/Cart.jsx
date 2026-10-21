@@ -357,26 +357,44 @@ const enableAutoPay = true;
           ? 699
           : 180;
 
+  const selectedAddonsSubtotal = selectedAddons.reduce((sum, item) => {
+    const addon = ADDONS[item.id];
+    return sum + (addon ? addon.price * Number(item.quantity || 1) : 0);
+  }, 0);
+
   const subscriptionSubtotal =
     isCustomPlan
       ? null
-      : discountedSubscriptionPrice +
-        setupCharge;
+      : discountedSubscriptionPrice + setupCharge + selectedAddonsSubtotal;
 
   const subscriptionTax =
     isCustomPlan
       ? null
       : currency === "INR"
-        ? Math.round(
-            subscriptionSubtotal * 0.18
-          )
+        ? Math.round(subscriptionSubtotal * 0.18)
         : 0;
 
   const subscriptionTotal =
     isCustomPlan
       ? null
-      : subscriptionSubtotal +
-        subscriptionTax;
+      : subscriptionSubtotal + subscriptionTax;
+
+  const toggleAddon = (addonId, checked) => {
+    setSelectedAddons((current) => {
+      if (checked) {
+        if (current.some((item) => item.id === addonId)) return current;
+        return [...current, { id: addonId, quantity: 1 }];
+      }
+      return current.filter((item) => item.id !== addonId);
+    });
+  };
+
+  const updateAddonQuantity = (addonId, quantity) => {
+    const safeQuantity = Math.min(10, Math.max(1, Number(quantity) || 1));
+    setSelectedAddons((current) => current.map((item) =>
+      item.id === addonId ? { ...item, quantity: safeQuantity } : item
+    ));
+  };
 
   const addonSubtotal =
     checkoutType === "addon"
@@ -585,24 +603,27 @@ const handleSubscriptionPayment = async () => {
 
     // STEP 1: Create first-payment order.
     // Backend calculates plan + one-time setup fee + GST.
-    const response = await fetch(
-      `${apiBase}/api/payment/create-order`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          planId,
-          currency,
-          period: selectedMonths,
-          country,
-          orderType: "subscription",
-          selectedAddons,
-        }),
-      }
-    );
+const response = await fetch(
+  `${apiBase}/api/payment/create-order`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      planId,
+      currency,
+      period: selectedMonths,
+      country,
+      orderType: "subscription",
+      selectedAddons: selectedAddons.map((item) => ({
+        addonType: item.id,
+        quantity: Number(item.quantity || 1),
+      })),
+    }),
+  }
+);
 
     const data = await response.json();
 
@@ -1373,7 +1394,29 @@ const handleSubscriptionPayment = async () => {
         </div>
       </header>
 
-      <main className="cart-main">
+      <main className="cart-main" style={{ width: "min(1240px, calc(100% - 48px))", maxWidth: "1240px", margin: "0 auto" }}>
+        <style>{`
+          .cart-subscription-layout { display: grid !important; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.9fr) !important; align-items: start; gap: 22px !important; }
+          .period-grid-compact { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 10px !important; }
+          .compact-period-option { min-height: 116px !important; padding: 12px 10px !important; }
+          .compact-period-option .period-info strong { display: block; font-size: 13px; line-height: 1.25; white-space: nowrap; }
+          .compact-period-option .period-info small { display: block; font-size: 10px; line-height: 1.3; margin-top: 5px; }
+          .compact-period-option .radio-circle { flex: 0 0 15px; }
+          .compact-period-option .period-price { font-size: 12px; line-height: 1.25; }
+          .compact-period-option .period-price strong { font-size: 13px; white-space: nowrap; }
+          @media (max-width: 1050px) {
+            .cart-subscription-layout { grid-template-columns: minmax(0, 1.35fr) minmax(270px, 0.9fr) !important; gap: 16px !important; }
+            .period-grid-compact { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          }
+          @media (max-width: 720px) {
+            .cart-subscription-layout { grid-template-columns: minmax(0, 1fr) !important; }
+            .period-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          }
+          @media (max-width: 420px) {
+            .cart-main { width: calc(100% - 24px) !important; }
+            .compact-period-option { min-height: 108px !important; padding: 10px 8px !important; }
+          }
+        `}</style>
         <div className="cart-top-row">
           <div>
             <div className="cart-eyebrow">
@@ -1398,7 +1441,7 @@ const handleSubscriptionPayment = async () => {
           </button>
         </div>
 
-        <div className="cart-layout">
+        <div className="cart-layout cart-subscription-layout">
           <section className="cart-plan-card">
             <div className="selected-plan-header">
               <div className="plan-icon">
@@ -1429,7 +1472,7 @@ const handleSubscriptionPayment = async () => {
                 </h3>
               </div>
 
-              <button
+              {/* <button
                 type="button"
                 className="change-plan-btn"
                 onClick={() =>
@@ -1438,7 +1481,7 @@ const handleSubscriptionPayment = async () => {
               >
                 Change plan
                 <span>⌄</span>
-              </button>
+              </button> */}
             </div>
 
             {isCurrentPlan && (
@@ -1470,7 +1513,15 @@ const handleSubscriptionPayment = async () => {
               period
             </div>
 
-            <div className="period-list">
+            <div
+              className="period-list period-grid-compact"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gap: "12px",
+                alignItems: "stretch",
+              }}
+            >
               {periods.map(
                 (period) => {
                   let original =
@@ -1508,27 +1559,45 @@ const handleSubscriptionPayment = async () => {
                         period.months
                       }
                       className={
-                        `period-option ${
+                        `period-option compact-period-option ${
                           selectedMonths ===
                           period.months
                             ? "active"
                             : ""
                         }`
                       }
+                      style={{
+                        minWidth: 0,
+                        minHeight: "126px",
+                        padding: "14px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "stretch",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        textAlign: "left",
+                        borderRadius: "12px",
+                        border: selectedMonths === period.months
+                          ? "1.5px solid #087E8B"
+                          : "1px solid #D5DFEB",
+                        background: selectedMonths === period.months
+                          ? "#EFFAFA"
+                          : "#FFFFFF",
+                        boxSizing: "border-box",
+                      }}
                       onClick={() =>
                         setSelectedMonths(
                           period.months
                         )
                       }
                     >
-                      <span className="radio-circle">
-                        {selectedMonths ===
-                          period.months && (
-                          <span className="radio-dot" />
-                        )}
-                      </span>
-
-                      <span className="period-info">
+                      <span style={{ display: "flex", alignItems: "center", gap: "7px", width: "100%" }}>
+                        <span className="radio-circle">
+                          {selectedMonths === period.months && (
+                            <span className="radio-dot" />
+                          )}
+                        </span>
+                        <span className="period-info" style={{ minWidth: 0, flex: 1 }}>
                         <strong>
                           {
                             period.months
@@ -1546,9 +1615,10 @@ const handleSubscriptionPayment = async () => {
                             ? `${period.discount}% discount`
                             : "Standard billing"}
                         </small>
+                        </span>
                       </span>
 
-                      <span className="period-price">
+                      <span className="period-price" style={{ width: "100%", textAlign: "left", marginTop: "auto" }}>
                         {period.discount >
                         0 ? (
                           <>
@@ -1664,6 +1734,108 @@ const handleSubscriptionPayment = async () => {
                 {planName} plan
               </strong>
             </div>
+
+            <div style={{ marginTop: "18px", paddingTop: "18px", borderTop: "1px solid #E2E8F0" }}>
+              <div style={{ marginBottom: "12px" }}>
+                <h3 style={{ margin: 0, fontSize: "20px", color: "#102A43" }}>Add-ons (optional)</h3>
+                <p style={{ margin: "5px 0 0", color: "#64748B", fontSize: "13px", lineHeight: 1.5 }}>
+                  Turn on the extras you need. Selected add-ons are added to your order summary.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gap: "9px" }}>
+                {Object.values(ADDONS).map((addon) => {
+                  const selected = selectedAddons.find((item) => item.id === addon.id);
+                  const addonFeatures = {
+                    whatsapp_leads: [
+                      "Receive leads from Website, Facebook, Instagram and AI Chat",
+                      "Get instant WhatsApp alerts during your configured time window",
+                      "600 additional leads per pack",
+                    ],
+                    contacts: [
+                      "Store and manage more patient/customer contacts",
+                      "Organise and segment your contacts easily",
+                      "1,000 additional contacts per pack",
+                    ],
+                    ai_chat: [
+                      "Add 3,000 AI chatbot conversations per pack",
+                      "Automate website engagement and common queries",
+                      "Help capture and respond to more leads",
+                    ],
+                    pharmacy_invoice: [
+                      "Create and manage pharmacy invoices inside your CRM",
+                      "Keep medicine billing records organised",
+                      "Unlimited invoices while active",
+                    ],
+                  }[addon.id] || [];
+
+                  return (
+                    <div key={addon.id} style={{
+                      border: selected ? "1px solid #8BCBD0" : "1px solid #E0E7EF",
+                      background: selected ? "#F2FBFB" : "#FFFFFF",
+                      borderRadius: "11px",
+                      padding: "13px 15px",
+                      boxShadow: selected ? "0 3px 12px rgba(8,126,139,.08)" : "none",
+                      transition: "all .18s ease",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(selected)}
+                          aria-label={`Toggle ${addon.name}`}
+                          onClick={() => toggleAddon(addon.id, !selected)}
+                          style={{
+                            width: "42px", height: "24px", padding: "3px",
+                            border: 0, borderRadius: "20px", flexShrink: 0,
+                            background: selected ? "#087E8B" : "#CBD5E1",
+                            cursor: "pointer", display: "flex",
+                            justifyContent: selected ? "flex-end" : "flex-start",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#FFFFFF", boxShadow: "0 1px 3px #0002" }} />
+                        </button>
+
+                        <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+                          <strong style={{ display: "block", fontSize: "14px", color: "#102A43" }}>{addon.name}</strong>
+                          <span style={{ display: "block", marginTop: "4px", fontSize: "12px", color: "#64748B", lineHeight: 1.45 }}>
+                            {addon.id === "whatsapp_leads" && "Get new lead alerts on WhatsApp during your configured time window."}
+                            {addon.id === "contacts" && "Increase the number of contacts you can store and manage in your CRM."}
+                            {addon.id === "ai_chat" && "Add more AI chatbot conversations for automated website engagement."}
+                            {addon.id === "pharmacy_invoice" && "Create and manage pharmacy invoices directly inside your CRM."}
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign: "right", minWidth: "100px" }}>
+                          <strong style={{ display: "block", fontSize: "14px", color: "#102A43" }}>{formatPrice(addon.price)}</strong>
+                          <small style={{ color: "#64748B", fontSize: "11px" }}>{addon.id === "contacts" || addon.id === "ai_chat" ? "/ pack" : "/ month"}</small>
+                        </div>
+
+                        {selected && addon.id !== "pharmacy_invoice" && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", border: "1px solid #D5DFEB", borderRadius: "8px", padding: "3px 5px", background: "#FFFFFF" }}>
+                            <button type="button" aria-label={`Decrease ${addon.name} quantity`} onClick={() => updateAddonQuantity(addon.id, selected.quantity - 1)} disabled={selected.quantity <= 1} style={{ border: 0, background: "transparent", color: selected.quantity <= 1 ? "#CBD5E1" : "#087E8B", cursor: selected.quantity <= 1 ? "not-allowed" : "pointer", fontSize: "18px", padding: "0 4px" }}>−</button>
+                            <span style={{ minWidth: "18px", textAlign: "center", fontSize: "13px", fontWeight: 700 }}>{selected.quantity}</span>
+                            <button type="button" aria-label={`Increase ${addon.name} quantity`} onClick={() => updateAddonQuantity(addon.id, selected.quantity + 1)} disabled={selected.quantity >= 10} style={{ border: 0, background: "transparent", color: selected.quantity >= 10 ? "#CBD5E1" : "#087E8B", cursor: selected.quantity >= 10 ? "not-allowed" : "pointer", fontSize: "18px", padding: "0 4px" }}>+</button>
+                          </div>
+                        )}
+                        {selected && (
+                          <strong style={{ minWidth: "78px", textAlign: "right", fontSize: "13px", color: "#087E8B" }}>
+                            {formatPrice(addon.price * (addon.id === "pharmacy_invoice" ? 1 : selected.quantity))}
+                          </strong>
+                        )}
+                      </div>
+
+                      {selected && (
+                        <ul style={{ margin: "10px 0 0 54px", paddingLeft: "15px", display: "grid", gap: "4px", color: "#475569", fontSize: "12px", lineHeight: 1.45 }}>
+                          {addonFeatures.map((feature) => <li key={feature}>{feature}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </section>
 
           <aside className="cart-sidebar">
@@ -1774,6 +1946,22 @@ const handleSubscriptionPayment = async () => {
                       )}
                 </strong>
               </div>
+
+              {selectedAddons.length > 0 && (
+                <>
+                  <div className="summary-divider" />
+                  {selectedAddons.map((item) => {
+                    const addon = ADDONS[item.id];
+                    if (!addon) return null;
+                    return (
+                      <div className="summary-row" key={item.id}>
+                        <span>{addon.name} × {item.quantity}</span>
+                        <strong>{formatPrice(addon.price * item.quantity)}</strong>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
 
               <div className="summary-divider" />
 

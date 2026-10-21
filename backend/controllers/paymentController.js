@@ -505,9 +505,69 @@ async function activateSubscription(
         setupFeePaid,
     };
 
-   const purchasedAddons = Array.isArray(order.addons)
-    ? order.addons
-    : [];
+  
+    // Activate add-ons purchased with the subscription.
+    const purchasedAddons = Array.isArray(order.addons)
+        ? order.addons
+        : [];
+
+    if (
+        purchasedAddons.length > 0 &&
+        order.addonActivationStatus !== "activated"
+    ) {
+        const now = new Date();
+
+        for (const purchased of purchasedAddons) {
+            const type = purchased.addonType;
+            const config = ADDONS[type];
+
+            if (!config || !user.addons?.[type]) {
+                throw new Error(`Invalid add-on: ${type}`);
+            }
+
+            const addon = user.addons[type];
+            const isPharmacy = type === "pharmacy_invoice";
+
+            const existingExpiry = addon.expiresAt
+                ? new Date(addon.expiresAt)
+                : null;
+
+            const existingActive =
+                addon.enabled &&
+                existingExpiry &&
+                existingExpiry.getTime() > now.getTime();
+
+            const startsAt = existingActive
+                ? addon.startsAt || now
+                : now;
+
+            const expiresAt = existingActive
+                ? addMonths(existingExpiry, 1)
+                : addMonths(now, 1);
+
+            addon.enabled = true;
+            addon.quota = isPharmacy
+                ? 0
+                : Number(existingActive ? addon.quota || 0 : 0) +
+                  Number(purchased.quota || 0);
+            addon.used = existingActive
+                ? Number(addon.used || 0)
+                : 0;
+            addon.months = 1;
+            addon.unitPrice = Number(
+                purchased.unitPrice || config.unitPrice
+            );
+            addon.startsAt = startsAt;
+            addon.expiresAt = expiresAt;
+            addon.orderId = order._id;
+            addon.razorpayOrderId = order.razorpayOrderId || "";
+            addon.paymentId = order.razorpayPaymentId || "";
+        }
+
+        order.addonActivationStatus = "activated";
+        await order.save();
+    }
+
 
     await user.save();
 
@@ -1435,6 +1495,7 @@ exports.createOrder =
             }
 
             const allowedAddonTypes = [
+                "whatsapp_leads",
                 "contacts",
                 "ai_chat",
                 "pharmacy_invoice",
@@ -1614,6 +1675,7 @@ exports.createOrder =
                                 ? "s"
                                 : ""
                         }`,
+                    addons: calculatedAddons,
                     paymentStatus:
                         "pending",
                     razorpayOrderId:
