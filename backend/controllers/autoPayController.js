@@ -239,6 +239,8 @@ async function getOrCreateAutoPayPlan({
     return savedPlan;
 }
 
+
+
 exports.createAutoPaySubscription = async (req, res) => {
     try {
         if (process.env.AUTOPAY_ENABLED !== "true") {
@@ -280,9 +282,41 @@ exports.createAutoPaySubscription = async (req, res) => {
             });
         }
 
-        const { planId, period = 1 } = req.body;
+        const { planId, period = 1, orderId } = req.body || {};
         const normalizedPlan = String(planId || "").toLowerCase();
         const months = Number(period);
+
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid paid order ID is required before AutoPay setup.",
+            });
+        }
+
+        // Verify that the first purchase was paid and belongs to this user.
+        const paidOrder = await Order.findOne({
+            _id: orderId,
+            userId: user._id,
+            orderType: "subscription",
+            paymentStatus: "paid",
+        });
+
+        if (!paidOrder) {
+            return res.status(400).json({
+                success: false,
+                message: "A verified first subscription payment is required.",
+            });
+        }
+
+        if (
+            normalizePlanId(paidOrder.planId) !== normalizedPlan ||
+            Number(paidOrder.period) !== months
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "The paid order does not match the selected plan or period.",
+            });
+        }
 
         const prices = {
             starter: { name: "Starter", inr: 1953 },
@@ -301,11 +335,12 @@ exports.createAutoPaySubscription = async (req, res) => {
 
         if (
             !prices[normalizedPlan] ||
-            !Object.prototype.hasOwnProperty.call(discounts, months)
+            !Object.prototype.hasOwnProperty.call(discounts, months) ||
+            months > 12
         ) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid plan or billing period.",
+                message: "Invalid plan or AutoPay billing period.",
             });
         }
 
@@ -321,7 +356,6 @@ exports.createAutoPaySubscription = async (req, res) => {
             Number.isFinite(existingExpiry.getTime()) &&
             existingExpiry.getTime() > Date.now();
 
-        // Block creating another subscription if AutoPay is already active.
         const existingAutoPayStatus = subscription.autoRenewStatus;
         const hasExistingSubscription = Boolean(
             subscription.razorpaySubscriptionId
@@ -329,15 +363,20 @@ exports.createAutoPaySubscription = async (req, res) => {
 
         if (
             hasExistingSubscription &&
-            subscription.autoRenew === true &&
-            ["authenticated", "active"].includes(existingAutoPayStatus)
+            (
+                subscription.autoRenew === true ||
+                ["pending", "authenticated", "active"].includes(
+                    existingAutoPayStatus
+                )
+            )
         ) {
             return res.status(409).json({
                 success: false,
-                message: "AutoPay is already enabled for this account.",
+                message: "An AutoPay subscription already exists for this account.",
             });
         }
 
+        // Calculate the recurring plan amount; exclude the one-time setup fee.
         const monthlyPlanPrice = prices[normalizedPlan].inr;
 
         const discountedPlanAmount =
@@ -348,7 +387,6 @@ exports.createAutoPaySubscription = async (req, res) => {
                     100
             ) / 100;
 
-        // Calculate saved, active add-ons from the user's account.
         const addonPrices = {
             contacts: 500,
             ai_chat: 500,
@@ -365,13 +403,8 @@ exports.createAutoPaySubscription = async (req, res) => {
         for (const [addonType, addonPrice] of Object.entries(addonPrices)) {
             const addon = userAddons[addonType];
 
-            if (!addon || addon.enabled !== true) {
-                continue;
-            }
-
-            if (addon.status && addon.status !== "active") {
-                continue;
-            }
+            if (!addon || addon.enabled !== true) continue;
+            if (addon.status && addon.status !== "active") continue;
 
             const expiry = addon.expiresAt
                 ? new Date(addon.expiresAt).getTime()
@@ -388,9 +421,9 @@ exports.createAutoPaySubscription = async (req, res) => {
 
             const rawQuantity = Number(
                 addon.quantity ??
-                    addon.quantityPurchased ??
-                    addon.packs ??
-                    1
+                addon.quantityPurchased ??
+                addon.packs ??
+                1
             );
 
             if (
@@ -409,7 +442,6 @@ exports.createAutoPaySubscription = async (req, res) => {
             const monthlyAmount = addonPrice * quantity;
 
             addonsMonthly += monthlyAmount;
-
             includedAddons.push({
                 addonType,
                 quantity,
@@ -417,7 +449,6 @@ exports.createAutoPaySubscription = async (req, res) => {
             });
         }
 
-        // Apply discount to plan only; add-ons are charged per month.
         const recurringSubtotal =
             Math.round(
                 (discountedPlanAmount + addonsMonthly * months) * 100
@@ -444,74 +475,46 @@ exports.createAutoPaySubscription = async (req, res) => {
             periodMonths: months,
         });
 
-        // Existing active customers should start after their current plan expires.
-        const startAt = activePlan
-            ? Math.floor(existingExpiry.getTime() / 1000)
-            : undefined;
+        // Schedule after the already-paid plan's expiry.
+        // Do not create an immediate recurring charge for a new purchase.
+        const paidExpiry = paidOrder.billingPeriodEnd
+            ? new Date(paidOrder.billingPeriodEnd)
+            : subscription.expiresAt
+                ? new Date(subscription.expiresAt)
+                : null;
 
-        console.log("AUTOPAY DATE DEBUG:", {
-            activePlan: Boolean(activePlan),
-            expiresAt: subscription.expiresAt,
-            existingExpiryISO: existingExpiry?.toISOString() || null,
-            startAtUnix: startAt || null,
-            startAtDate: startAt
-                ? new Date(startAt * 1000).toISOString()
-                : null,
-            periodMonths: months,
-        });
+        if (
+            !paidExpiry ||
+            !Number.isFinite(paidExpiry.getTime()) ||
+            paidExpiry.getTime() <= Date.now()
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "The paid plan expiry could not be verified. AutoPay was not created.",
+            });
+        }
 
-        // Approximately 120 months of billing cycles.
+        const startAt = Math.floor(paidExpiry.getTime() / 1000);
         const totalCount = Math.floor(120 / months);
-
-        console.log("AUTOPAY SCHEDULE:", {
-            currentPlanExpiry: existingExpiry?.toISOString() || null,
-            startAt: startAt
-                ? new Date(startAt * 1000).toISOString()
-                : null,
-            totalCount,
-            months,
-            planId: savedPlan.planId,
-            recurringAmount,
-        });
 
         const razorpaySubscription = await razorpay.subscriptions.create({
             plan_id: savedPlan.planId,
             total_count: totalCount,
             customer_notify: true,
-            ...(startAt ? { start_at: startAt } : {}),
+            start_at: startAt,
             notes: {
                 userId: String(user._id),
+                orderId: String(paidOrder._id),
                 planId: normalizedPlan,
                 periodMonths: String(months),
                 includedAddons: JSON.stringify(includedAddons),
                 subtotal: String(recurringSubtotal),
                 tax: String(recurringTax),
                 total: String(recurringAmount),
+                setupFeeIncluded: "false",
             },
         });
 
-        console.log("RAZORPAY CREATED SUBSCRIPTION:", {
-            id: razorpaySubscription.id,
-            status: razorpaySubscription.status,
-            start_at: razorpaySubscription.start_at
-                ? new Date(
-                      razorpaySubscription.start_at * 1000
-                  ).toISOString()
-                : null,
-            charge_at: razorpaySubscription.charge_at
-                ? new Date(
-                      razorpaySubscription.charge_at * 1000
-                  ).toISOString()
-                : null,
-            end_at: razorpaySubscription.end_at
-                ? new Date(
-                      razorpaySubscription.end_at * 1000
-                  ).toISOString()
-                : null,
-            total_count: razorpaySubscription.total_count,
-        });
-
-        // Save pending authorization without changing current plan expiry.
         subscription.autoRenew = false;
         subscription.autoRenewStatus = "pending";
         subscription.razorpaySubscriptionId = razorpaySubscription.id;
@@ -531,15 +534,13 @@ exports.createAutoPaySubscription = async (req, res) => {
             tax: recurringTax,
             recurringAmount,
             currency: "INR",
-            startAt: startAt || null,
-            message:
-                "Subscription created. Customer authorization is still required.",
+            startAt,
+            message: "AutoPay subscription created for the verified plan expiry.",
         });
     } catch (error) {
         console.error("AUTOPAY SUBSCRIPTION ERROR:", {
             message: error?.message,
             statusCode: error?.statusCode,
-            error: error?.error,
             description: error?.description,
             response: error?.response?.data,
             stack: error?.stack,
@@ -556,6 +557,7 @@ exports.createAutoPaySubscription = async (req, res) => {
         });
     }
 };
+
 
 
 
@@ -795,12 +797,13 @@ exports.handleAutoPayWebhook = async (req, res) => {
                 });
 
                 if (user) {
-                    if (event === "subscription.activated") {
+                  if (event === "subscription.activated") {
                         user.subscription.autoRenewStatus = "active";
-                        // Do not enable renewals until a successful charge
-                        // has been processed by subscription.charged.
+                        user.subscription.autoRenew = true;
                     } else if (event === "subscription.authenticated") {
                         user.subscription.autoRenewStatus = "authenticated";
+                        // Authorization alone does not mean renewal billing is active.
+                        user.subscription.autoRenew = false;
                     } else if (event === "subscription.halted") {
                         user.subscription.autoRenewStatus = "halted";
                         user.subscription.autoRenew = false;
@@ -844,6 +847,7 @@ exports.handleAutoPayWebhook = async (req, res) => {
         });
     }
 };
+
 
 
 
@@ -904,9 +908,20 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
+        if (!process.env.RAZORPAY_KEY_SECRET) {
+            console.error("RAZORPAY_KEY_SECRET is missing.");
+
+            return res.status(503).json({
+                success: false,
+                message: "Payment verification is not configured.",
+            });
+        }
+
         const expectedSignature = crypto
             .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-            .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+            .update(
+                `${razorpay_payment_id}|${razorpay_subscription_id}`
+            )
             .digest("hex");
 
         const received = Buffer.from(razorpay_signature, "hex");
@@ -922,6 +937,8 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
+        // Signature verified. Keep billing activation tied to
+        // Razorpay subscription lifecycle events/webhook.
         user.subscription.autoRenewStatus = "authenticated";
         user.subscription.autoRenewAuthorizedAt = new Date();
         user.subscription.lastRenewalPaymentId = razorpay_payment_id;
@@ -930,10 +947,14 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Authorization verified. Renewal activation is not yet complete.",
+            message: "AutoPay authorization verified successfully.",
+            autoRenewStatus: user.subscription.autoRenewStatus,
         });
     } catch (error) {
-        console.error("AUTOPAY AUTH VERIFICATION ERROR:", error.message);
+        console.error(
+            "AUTOPAY AUTH VERIFICATION ERROR:",
+            error.message
+        );
 
         return res.status(500).json({
             success: false,
@@ -941,3 +962,4 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
         });
     }
 };
+

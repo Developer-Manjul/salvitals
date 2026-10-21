@@ -98,104 +98,71 @@ export default function Pricing() {
     loadBilling();
   }, []);
 
-  const choosePlan = (id) => {
-    const plan = PLANS[id];
+  
+const choosePlan = (id) => {
+  const plan = PLANS[id];
 
-    if (!plan) {
-      return;
-    }
+  if (!plan) return;
 
-    if (
-      id ===
-      billing?.currentPlanId
-    ) {
-      return;
-    }
+  if (id === billing?.currentPlanId) return;
 
-    const planInfo =
-      billing?.plans?.find(
-        (item) =>
-          item.id === id
-      );
+  const planInfo = billing?.plans?.find(
+    (item) => item.id === id
+  );
 
-    if (
-      billing?.currentPlanId &&
-      planInfo &&
-      planInfo.available === false
-    ) {
-      return;
-    }
+  if (
+    billing?.currentPlanId &&
+    planInfo &&
+    planInfo.available === false
+  ) {
+    return;
+  }
 
-    const selectedPrice =
-      currency === "INR"
-        ? plan.inr
-        : plan.usd;
+  const selectedPrice =
+    currency === "INR" ? plan.inr : plan.usd;
 
-    const selectedPlan = {
-      ...plan,
-      planId: id,
-      planName: plan.name,
-      price: selectedPrice,
-      monthly: selectedPrice,
-      currency,
-      billing: "monthly",
-      quantity: 1,
-    };
-
-    localStorage.setItem(
-      "selectedPlan",
-      JSON.stringify(
-        selectedPlan
-      )
-    );
-
-    saveSelectedPlan({
-      planId: id,
-      months: 1,
-      currency,
-    });
-
-    const token =
-      getAuthToken();
-
-    if (!token) {
-      localStorage.setItem(
-        "redirectAfterRegister",
-        "/cart"
-      );
-
-      localStorage.setItem(
-        "redirectAfterLogin",
-        "/cart"
-      );
-
-      window.history.pushState(
-        {},
-        "",
-        "/create-account"
-      );
-
-      window.dispatchEvent(
-        new PopStateEvent(
-          "popstate"
-        )
-      );
-
-      return;
-    }
-
-    window.history.pushState(
-      {},
-      "",
-      `/cart?plan=${id}`
-    );
-
-    window.dispatchEvent(
-      new PopStateEvent(
-        "popstate"
-      )
-    );
+  const selectedPlan = {
+    ...plan,
+    planId: id,
+    planName: plan.name,
+    price: selectedPrice,
+    monthly: selectedPrice,
+    currency,
+    billing: "monthly",
+    quantity: 1,
   };
+
+  localStorage.setItem(
+    "selectedPlan",
+    JSON.stringify(selectedPlan)
+  );
+
+  saveSelectedPlan({
+    planId: id,
+    months: 1,
+    currency,
+  });
+
+  const token = getAuthToken();
+
+  if (!token) {
+    // Login/registration ke baad isi plan par wapas aao.
+    const redirectPath = `/cart?plan=${encodeURIComponent(id)}`;
+
+    localStorage.setItem("redirectAfterRegister", redirectPath);
+    localStorage.setItem("redirectAfterLogin", redirectPath);
+
+    window.location.assign(
+      `/signin?redirect=${encodeURIComponent(redirectPath)}`
+    );
+
+    return;
+  }
+
+  // Logged-in user checkout par ja sakta hai.
+  window.location.assign(`/cart?plan=${encodeURIComponent(id)}`);
+};
+
 
  const isCurrentPlan = () => false;
 

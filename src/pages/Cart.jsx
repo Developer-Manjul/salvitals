@@ -206,8 +206,7 @@ const Cart = () => {
   const [error, setError] =
     useState("");
   
-  const [enableAutoPay, setEnableAutoPay] = useState(false);
-
+const enableAutoPay = true;
   const [billingLoading, setBillingLoading] =
     useState(true);
 
@@ -552,213 +551,192 @@ const Cart = () => {
 
   razorpay.open();
 };
-  const handleSubscriptionPayment =
-    async () => {
-      try {
-        setError("");
+  
 
-        if (isCustomPlan) {
-          setError(
-            "Please contact our sales team for a custom plan."
-          );
-          return;
-        }
 
-        const token = getToken();
+const handleSubscriptionPayment = async () => {
+  try {
+    setError("");
 
-        if (!token) {
-          setError(
-            "Please sign in before payment"
-          );
+    if (isCustomPlan) {
+      setError("Please contact our sales team for a custom plan.");
+      return;
+    }
 
-          setTimeout(() => {
-            goTo(
-              `/signin?redirect=${encodeURIComponent(
-                window.location.pathname +
-                  window.location.search
-              )}`
-            );
-          }, 1000);
+    const token = getToken();
 
-          return;
-        }
+    if (!token) {
+      setError("Please sign in before payment");
 
-        setLoading(true);
+      setTimeout(() => {
+        goTo(
+          `/signin?redirect=${encodeURIComponent(
+            window.location.pathname + window.location.search
+          )}`
+        );
+      }, 1000);
 
-        if (enableAutoPay) {
-  const apiBase = getApiBaseUrl();
+      return;
+    }
 
-  await handleAutoPaySubscription(token, apiBase);
-  return;
-}
+    setLoading(true);
 
-        const apiBase =
-          getApiBaseUrl();
+    const apiBase = getApiBaseUrl();
 
-        const response =
-          await fetch(
-            `${apiBase}/api/payment/create-order`,
+    // STEP 1: Create first-payment order.
+    // Backend calculates plan + one-time setup fee + GST.
+    const response = await fetch(
+      `${apiBase}/api/payment/create-order`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planId,
+          currency,
+          period: selectedMonths,
+          country,
+          orderType: "subscription",
+          selectedAddons,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success || !data.order?.id) {
+      throw new Error(
+        data.message || "Unable to create payment order"
+      );
+    }
+
+    const order = data.order;
+
+    if (!order.dbOrderId) {
+      throw new Error("Order reference is missing. Please contact support.");
+    }
+
+    const razorpayLoaded = await loadRazorpayScript();
+
+    if (!razorpayLoaded) {
+      throw new Error("Unable to load Razorpay.");
+    }
+
+    const razorpay = new window.Razorpay({
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: order.amount,
+      currency: order.currency,
+      name: "SaleVitals",
+      description: `${planName} Plan - ${selectedMonths} month${
+        selectedMonths > 1 ? "s" : ""
+      }`,
+      order_id: order.id,
+
+      handler: async (paymentResponse) => {
+        try {
+          // STEP 2: Verify first payment on backend.
+          const verifyResponse = await fetch(
+            `${apiBase}/api/payment/verify`,
             {
               method: "POST",
               headers: {
-                "Content-Type":
-                  "application/json",
-                Authorization:
-                  `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
               },
-             body: JSON.stringify({
-              planId,
-              currency,
-              period: selectedMonths,
-              country,
-              orderType: "subscription",
-              selectedAddons: selectedAddons,
-            }),
+              body: JSON.stringify({
+                razorpay_order_id:
+                  paymentResponse.razorpay_order_id,
+                razorpay_payment_id:
+                  paymentResponse.razorpay_payment_id,
+                razorpay_signature:
+                  paymentResponse.razorpay_signature,
+              }),
             }
           );
 
-        const data =
-          await response.json();
+          const verifyData = await verifyResponse.json();
 
-        if (
-          !response.ok ||
-          !data.success
-        ) {
-          throw new Error(
-            data.message ||
-              "Unable to create payment order"
-          );
-        }
-
-        const razorpayLoaded =
-          await loadRazorpayScript();
-
-        if (!razorpayLoaded) {
-          throw new Error(
-            "Unable to load Razorpay"
-          );
-        }
-
-        const order =
-          data.order;
-
-        const options = {
-          key:
-            import.meta.env
-              .VITE_RAZORPAY_KEY_ID,
-
-          amount:
-            order.amount,
-
-          currency:
-            order.currency,
-
-          name:
-            "SaleVitals",
-
-          description:
-            `${planName} Plan - ${selectedMonths} month${
-              selectedMonths > 1
-                ? "s"
-                : ""
-            }`,
-
-          order_id:
-            order.id,
-
-          handler:
-            async (
-              paymentResponse
-            ) => {
-              try {
-                const verifyResponse =
-                  await fetch(
-                    `${apiBase}/api/payment/verify`,
-                    {
-                      method:
-                        "POST",
-                      headers: {
-                        "Content-Type":
-                          "application/json",
-                        Authorization:
-                          `Bearer ${token}`,
-                      },
-                      body:
-                        JSON.stringify(
-                          {
-                            razorpay_order_id:
-                              paymentResponse.razorpay_order_id,
-                            razorpay_payment_id:
-                              paymentResponse.razorpay_payment_id,
-                            razorpay_signature:
-                              paymentResponse.razorpay_signature,
-                          }
-                        ),
-                    }
-                  );
-
-                const verifyData =
-                  await verifyResponse.json();
-
-                if (
-                  !verifyResponse.ok ||
-                  !verifyData.success
-                ) {
-                  throw new Error(
-                    verifyData.message ||
-                      "Payment verification failed"
-                  );
-                }
-
-                localStorage.removeItem(
-                  "selectedPlan"
-                );
-
-                goTo(
-                  "/dashboard"
-                );
-              } catch (
-                verifyError
-              ) {
-                setError(
-                  verifyError.message ||
-                    "Payment verification failed"
-                );
-              }
-            },
-
-          theme: {
-            color:
-              "#236c73",
-          },
-        };
-
-        const razorpay =
-          new window.Razorpay(
-            options
-          );
-
-        razorpay.on(
-          "payment.failed",
-          (response) => {
-            setError(
-              response?.error
-                ?.description ||
-                "Payment failed"
+          if (!verifyResponse.ok || !verifyData.success) {
+            throw new Error(
+              verifyData.message ||
+                "Payment verification failed. Please contact support before retrying."
             );
+          }
+
+          // STEP 3: Request AutoPay setup against the PAID database order.
+          // Backend must schedule recurring billing after plan expiry.
+         const autoPayResponse = await fetch(
+          `${apiBase}/api/billing/autopay/subscribe`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              planId,
+              period: selectedMonths,
+              orderId: order.dbOrderId,
+            }),
           }
         );
 
-        razorpay.open();
-      } catch (paymentError) {
-        setError(
-          paymentError.message ||
-            "Unable to start payment"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+        const autoPayData = await autoPayResponse.json();
+
+        if (
+          !autoPayResponse.ok ||
+          !autoPayData.success
+        ) {
+          setError(
+            "Your payment was successful, but AutoPay setup could not be completed. Please contact support. Do not pay again."
+          );
+          return;
+        }
+
+        localStorage.removeItem("selectedPlan");
+        goTo("/dashboard");
+        } catch (error) {
+          setError(
+            error.message ||
+              "Payment was processed, but confirmation needs attention. Please contact support before retrying."
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+
+      modal: {
+        ondismiss: () => {
+          setError("Payment checkout was closed.");
+          setLoading(false);
+        },
+      },
+
+      theme: {
+        color: "#236c73",
+      },
+    });
+
+    razorpay.on("payment.failed", (paymentError) => {
+      setError(
+        paymentError?.error?.description || "Payment failed."
+      );
+      setLoading(false);
+    });
+
+    razorpay.open();
+  } catch (paymentError) {
+    setError(
+      paymentError.message || "Unable to start payment."
+    );
+    setLoading(false);
+  }
+};
+
+
+
 
   const handleAddonPayment =
     async () => {
@@ -1254,7 +1232,7 @@ const Cart = () => {
       
              
             
-      {checkoutType !== "addon" && (
+      {false && checkoutType !== "addon" && (
         <label
           style={{
             display: "flex",
@@ -1855,7 +1833,7 @@ const Cart = () => {
                 </div>
               )}
 
-              {checkoutType !== "addon" && (
+              {false && checkoutType !== "addon" && (
               <label
                 style={{
                   display: "flex",
