@@ -424,6 +424,23 @@ exports.subscribePageToLeadgen = (
     }
   );
 
+
+exports.subscribePageToMessages = (
+  pageId,
+  pageAccessToken
+) =>
+  graphRequest(
+    `/${encodeURIComponent(pageId)}/subscribed_apps`,
+    {
+      method: "POST",
+      params: {
+        subscribed_fields: "messages",
+        access_token: pageAccessToken,
+      },
+    }
+  );
+
+
 exports.getPageLeadgenSubscription =
   (
     pageId,

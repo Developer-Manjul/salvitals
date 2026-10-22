@@ -644,39 +644,32 @@ exports.pages = async (
     });
 };
 
-exports.selectPage = async (
-    req,
-    res
-) => {
-    const userId =
-        requireUser(req, res);
+
+exports.selectPage = async (req, res) => {
+    const userId = requireUser(req, res);
 
     if (!userId) {
         return;
     }
 
     try {
-        const state =
-            await MetaOAuthState.findOne({
-                userId,
-                expiresAt: {
-                    $gt: new Date(),
-                },
-            }).sort({
-                createdAt: -1,
-            });
+        const state = await MetaOAuthState.findOne({
+            userId,
+            expiresAt: {
+                $gt: new Date(),
+            },
+        }).sort({
+            createdAt: -1,
+        });
 
-        const requestedPageId =
-            String(
-                req.body?.pageId || ""
-            );
+        const requestedPageId = String(
+            req.body?.pageId || ""
+        );
 
-        const page =
-            state?.pages?.find(
-                (item) =>
-                    String(item.id) ===
-                    requestedPageId
-            );
+        const page = state?.pages?.find(
+            (item) =>
+                String(item.id) === requestedPageId
+        );
 
         if (!state || !page) {
             return res.status(404).json({
@@ -686,26 +679,25 @@ exports.selectPage = async (
             });
         }
 
-        const pageAccessToken =
-            decrypt(
-                page.accessToken
-            );
+        const pageAccessToken = decrypt(
+            page.accessToken
+        );
 
         let pageDetails = null;
 
         try {
-            pageDetails =
-                await meta.getPageDetails(
-                    page.id,
-                    pageAccessToken
-                );
+            pageDetails = await meta.getPageDetails(
+                page.id,
+                pageAccessToken
+            );
         } catch (error) {
             console.error(
                 "META INSTAGRAM DETECTION ERROR:",
-                error.message
+                error.metaError || error.message
             );
         }
 
+        // 1. Subscribe to Lead Ads webhooks
         try {
             const subscription =
                 await meta.subscribePageToLeadgen(
@@ -735,6 +727,32 @@ exports.selectPage = async (
             });
         }
 
+        // 2. Subscribe to Instagram messaging webhooks
+        if (page.instagramAccountId) {
+            try {
+                const messageSubscription =
+                    await meta.subscribePageToMessages(
+                        page.id,
+                        pageAccessToken
+                    );
+
+                console.log(
+                    "META MESSAGES SUBSCRIPTION SUCCESS:",
+                    page.id,
+                    messageSubscription
+                );
+            } catch (messageSubscriptionError) {
+                // Keep the existing Page connection working
+                // even if messaging subscription fails.
+                console.error(
+                    "META MESSAGES SUBSCRIPTION ERROR:",
+                    messageSubscriptionError.metaError ||
+                        messageSubscriptionError.message
+                );
+            }
+        }
+
+        // 3. Save the Meta integration
         const integration =
             await MetaIntegration.findOneAndUpdate(
                 {
@@ -744,8 +762,7 @@ exports.selectPage = async (
                 {
                     userId,
                     pageId: page.id,
-                    pageName:
-                        page.name,
+                    pageName: page.name,
 
                     instagramAccountId:
                         page.instagramAccountId,
@@ -772,8 +789,7 @@ exports.selectPage = async (
                         state.tokenExpiresAt,
 
                     isActive: true,
-                    connectedAt:
-                        new Date(),
+                    connectedAt: new Date(),
                 },
                 {
                     upsert: true,
@@ -797,26 +813,23 @@ exports.selectPage = async (
 
         return res.json({
             success: true,
-
-            integration:
-                publicIntegration(
-                    integration
-                ),
+            integration: publicIntegration(
+                integration
+            ),
         });
     } catch (error) {
         console.error(
             "META PAGE SELECT ERROR:",
-            error.response?.data ||
-                error.message
+            error.response?.data || error.message
         );
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to connect Meta Page",
+            message: "Unable to connect Meta Page",
         });
     }
 };
+
 
 exports.disconnect = async (
     req,
@@ -1517,7 +1530,7 @@ exports.receiveWebhook = async (
             if (webhookObject === "instagram") {
                 return;
             }
-        
+
         }
 
         for (
@@ -1945,6 +1958,101 @@ exports.debugLeadgenSubscription =
         }
     };
 
+
+exports.resubscribeMessages = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    try {
+        const integrations = await MetaIntegration.find({
+            userId,
+            isActive: true,
+            instagramAccountId: {
+                $exists: true,
+                $nin: ["", null],
+            },
+        });
+
+        if (!integrations.length) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    "No active Instagram integrations found",
+            });
+        }
+
+        const results = [];
+
+        for (const integration of integrations) {
+            try {
+                const accessToken = decrypt(
+                    integration.accessTokenEncrypted
+                );
+
+                const subscription =
+                    await meta.subscribePageToMessages(
+                        integration.pageId,
+                        accessToken
+                    );
+
+                results.push({
+                    pageId: integration.pageId,
+                    pageName: integration.pageName,
+                    success: true,
+                    subscription,
+                });
+
+                console.log(
+                    "META MESSAGES RESUBSCRIPTION SUCCESS:",
+                    integration.pageId,
+                    subscription
+                );
+            } catch (error) {
+                results.push({
+                    pageId: integration.pageId,
+                    pageName: integration.pageName,
+                    success: false,
+                    error:
+                        error.metaError || error.message,
+                });
+
+                console.error(
+                    "META MESSAGES RESUBSCRIPTION ERROR:",
+                    integration.pageId,
+                    error.metaError || error.message
+                );
+            }
+        }
+
+        const successCount = results.filter(
+            (item) => item.success
+        ).length;
+
+        return res.json({
+            success: successCount > 0,
+            message:
+                `${successCount} of ${results.length} Instagram integrations subscribed successfully`,
+            results,
+        });
+    } catch (error) {
+        console.error(
+            "META RESUBSCRIBE MESSAGES ERROR:",
+            error.metaError || error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Unable to resubscribe Instagram messaging",
+            error: error.metaError || error.message,
+        });
+    }
+};
+
+
 exports.debugMetaPermissions =
     async (req, res) => {
         const userId =
@@ -2154,4 +2262,4 @@ exports.debugMetaPermissions =
         }
     };
 
- 
+

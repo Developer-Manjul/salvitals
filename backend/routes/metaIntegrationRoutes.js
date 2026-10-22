@@ -30,6 +30,12 @@ router.post(
   controller.selectPage
 );
 
+
+router.post(
+  "/resubscribe-messages",
+  controller.resubscribeMessages
+);
+
 router.post(
   "/disconnect",
   controller.disconnect
