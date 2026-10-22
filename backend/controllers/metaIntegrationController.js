@@ -13,6 +13,9 @@ const meta = require("../services/metaService");
 const { processNewLead } = require("../services/leadProcessingService");
 const Invoice = require("../models/Invoice");
 
+const MetaConversation = require("../models/MetaConversation");
+const MetaMessage = require("../models/MetaMessage");
+
 function getUserId(req) {
     const authorization = req.headers.authorization || "";
 
@@ -1065,6 +1068,8 @@ exports.receiveWebhook = async (
     req,
     res
 ) => {
+
+    console.log("META WEBHOOK RECEIVED:", JSON.stringify(req.body));
     res.sendStatus(200);
 
     try {
@@ -1287,6 +1292,152 @@ exports.receiveWebhook = async (
             console.log(
                 "========================================"
             );
+
+            return;
+        }
+
+                // FACEBOOK / INSTAGRAM MESSAGING WEBHOOK
+        if (
+            webhookObject === "page" ||
+            webhookObject === "instagram"
+        ) {
+            for (const entry of req.body?.entry || []) {
+                const accountId = String(entry.id || "").trim();
+
+                if (!accountId) continue;
+
+                const isInstagram =
+                    webhookObject === "instagram";
+
+                const integrations = await MetaIntegration.find({
+                    isActive: true,
+                    ...(isInstagram
+                        ? { instagramAccountId: accountId }
+                        : { pageId: accountId }),
+                });
+
+                if (integrations.length !== 1) {
+                    console.log(
+                        "META MESSAGING INTEGRATION NOT UNIQUE:",
+                        webhookObject,
+                        accountId
+                    );
+                    continue;
+                }
+
+                const integration = integrations[0];
+
+                for (const event of entry.messaging || []) {
+                    const message = event.message || {};
+
+                    // Ignore delivery/read-only events and unsupported events.
+                    if (!message.mid) continue;
+
+                    const isEcho = message.is_echo === true;
+
+                    const senderId = String(
+                        (isEcho ? event.recipient?.id : event.sender?.id) || ""
+                    ).trim();
+
+                    const recipientId = String(
+                        (isEcho ? event.sender?.id : event.recipient?.id) || ""
+                    ).trim();
+
+                    if (!senderId || !recipientId) continue;
+
+                    const direction = isEcho ? "outbound" : "inbound";
+                    const participantId = isEcho ? recipientId : senderId;
+
+                    const text = String(message.text || "").trim();
+
+                    const attachments = (
+                        Array.isArray(message.attachments)
+                            ? message.attachments
+                            : []
+                    ).map((attachment) => ({
+                        type: String(attachment.type || "file"),
+                        url: String(attachment.payload?.url || ""),
+                        name: "",
+                    }));
+
+                    const messageType = text
+                        ? "text"
+                        : attachments[0]?.type === "image"
+                          ? "image"
+                          : attachments[0]?.type === "video"
+                            ? "video"
+                            : attachments[0]?.type === "audio"
+                              ? "audio"
+                              : attachments.length
+                                ? "file"
+                                : "other";
+
+                    const sentAt = event.timestamp
+                        ? new Date(Number(event.timestamp))
+                        : new Date();
+
+                    const conversation = await MetaConversation.findOneAndUpdate(
+                        {
+                            userId: integration.userId,
+                            platform: isInstagram ? "instagram" : "facebook",
+                            pageId: integration.pageId,
+                            externalConversationId: participantId,
+                        },
+                        {
+                            $set: {
+                                instagramAccountId:
+                                    integration.instagramAccountId || "",
+                                participantId,
+                                lastMessageText:
+                                    text || (attachments.length ? "Attachment" : ""),
+                                lastMessageAt: sentAt,
+                                lastMessageDirection: direction,
+                            },
+                            ...(direction === "inbound"
+                                ? { $inc: { unreadCount: 1 } }
+                                : {}),
+                            $setOnInsert: {
+                                userId: integration.userId,
+                                platform: isInstagram ? "instagram" : "facebook",
+                                pageId: integration.pageId,
+                                externalConversationId: participantId,
+                                status: "open",
+                            },
+                        },
+                        {
+                            new: true,
+                            upsert: true,
+                            setDefaultsOnInsert: true,
+                        }
+                    );
+
+                    // Do not store the same Meta message twice.
+                    await MetaMessage.updateOne(
+                        {
+                            userId: integration.userId,
+                            externalMessageId: String(message.mid),
+                        },
+                        {
+                            $setOnInsert: {
+                                userId: integration.userId,
+                                conversationId: conversation._id,
+                                platform: isInstagram ? "instagram" : "facebook",
+                                externalMessageId: String(message.mid),
+                                senderId,
+                                recipientId,
+                                direction,
+                                messageType,
+                                text,
+                                attachments,
+                                sentAt,
+                                deliveryStatus:
+                                    direction === "inbound" ? "received" : "sent",
+                            },
+                        },
+                        { upsert: true }
+                    );
+                }
+            }
 
             return;
         }

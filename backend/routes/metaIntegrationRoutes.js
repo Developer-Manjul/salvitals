@@ -1,6 +1,7 @@
 const express = require("express");
 
 const controller = require("../controllers/metaIntegrationController");
+const inboxController = require("../controllers/metaInboxController");
 
 const router = express.Router();
 
@@ -61,6 +62,17 @@ router.post(
   controller.receiveWebhook
 );
 
+
+
+router.get(
+  "/inbox",
+  inboxController.getConversations
+);
+
+router.get(
+  "/inbox/:id/messages",
+  inboxController.getConversationMessages
+);
 
 
 

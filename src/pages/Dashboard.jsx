@@ -15,6 +15,8 @@ import PharmacyInvoice from "./PharmacyInvoice";
 import AIAssistant from "./AIAssistant";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 
+import MetaInbox from "./MetaInbox";
+
 const navGroups = [
   {
     label: "Acquire",
@@ -22,6 +24,7 @@ const navGroups = [
       ["Leads", "users"],
       ["Follow-ups", "calendar"],
       ["Ai Chat", "chat"],
+     ["Social Inbox", "message"],
     ],
   },
   {
@@ -60,6 +63,7 @@ const NAV_PERMISSIONS = {
   Leads: "leads.view",
   "Follow-ups": "followups.view",
   Chat: "ai.view",
+  "Social Inbox": "inbox.view",
   Contacts: "contacts.view",
   Calendar: "calendar.view",
   "AI Assistant": "ai.view",
@@ -1842,6 +1846,10 @@ export default function Dashboard() {
         />
       );
     }
+
+    if (active === "Social Inbox") {
+  return <MetaInbox key="social-inbox" />;
+}
 
     if (active === "AI Assistant") {
       return (
