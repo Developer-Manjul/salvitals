@@ -1303,6 +1303,12 @@ exports.receiveWebhook = async (
         ) {
             for (const entry of req.body?.entry || []) {
                 const accountId = String(entry.id || "").trim();
+                console.log("META INBOX DEBUG:", {
+                    webhookObject,
+                    entryId: entry.id,
+                    changeFields: (entry.changes || []).map(change => change.field),
+                    messagingEvents: (entry.messaging || []).length,
+                });
 
                 if (!accountId) continue;
 
