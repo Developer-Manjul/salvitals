@@ -12,6 +12,9 @@ const REQUIRED_PERMISSIONS = [
   "pages_show_list",
   "pages_read_engagement",
   "ads_management",
+  "instagram_basic",
+  "instagram_manage_messages",
+  "pages_messaging",
 ];
 
 function isConfigured() {

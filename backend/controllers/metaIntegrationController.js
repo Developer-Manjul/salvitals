@@ -1959,6 +1959,7 @@ exports.debugLeadgenSubscription =
     };
 
 
+
 exports.resubscribeMessages = async (req, res) => {
     const userId = requireUser(req, res);
 
@@ -1979,8 +1980,7 @@ exports.resubscribeMessages = async (req, res) => {
         if (!integrations.length) {
             return res.status(404).json({
                 success: false,
-                message:
-                    "No active Instagram integrations found",
+                message: "No active Instagram integrations found",
             });
         }
 
@@ -1988,40 +1988,48 @@ exports.resubscribeMessages = async (req, res) => {
 
         for (const integration of integrations) {
             try {
+                if (!integration.accessTokenEncrypted) {
+                    throw new Error("Encrypted access token is missing");
+                }
+
                 const accessToken = decrypt(
                     integration.accessTokenEncrypted
                 );
 
+                if (!integration.instagramAccountId) {
+                    throw new Error("Instagram account ID is missing");
+                }
+
                 const subscription =
                     await meta.subscribePageToMessages(
-                        integration.pageId,
+                        integration.instagramAccountId,
                         accessToken
                     );
 
                 results.push({
+                    instagramAccountId: integration.instagramAccountId,
+                    username: integration.instagramUsername || "",
                     pageId: integration.pageId,
-                    pageName: integration.pageName,
                     success: true,
                     subscription,
                 });
 
                 console.log(
-                    "META MESSAGES RESUBSCRIPTION SUCCESS:",
-                    integration.pageId,
+                    "META INSTAGRAM MESSAGES RESUBSCRIPTION SUCCESS:",
+                    integration.instagramAccountId,
                     subscription
                 );
             } catch (error) {
                 results.push({
+                    instagramAccountId: integration.instagramAccountId,
                     pageId: integration.pageId,
-                    pageName: integration.pageName,
                     success: false,
-                    error:
-                        error.metaError || error.message,
+                    error: error.metaError || error.message,
                 });
 
                 console.error(
-                    "META MESSAGES RESUBSCRIPTION ERROR:",
-                    integration.pageId,
+                    "META INSTAGRAM MESSAGES RESUBSCRIPTION ERROR:",
+                    integration.instagramAccountId,
                     error.metaError || error.message
                 );
             }
@@ -2031,10 +2039,9 @@ exports.resubscribeMessages = async (req, res) => {
             (item) => item.success
         ).length;
 
-        return res.json({
+        return res.status(successCount > 0 ? 200 : 502).json({
             success: successCount > 0,
-            message:
-                `${successCount} of ${results.length} Instagram integrations subscribed successfully`,
+            message: `${successCount} of ${results.length} Instagram integrations subscribed successfully`,
             results,
         });
     } catch (error) {
@@ -2045,12 +2052,12 @@ exports.resubscribeMessages = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to resubscribe Instagram messaging",
+            message: "Unable to resubscribe Instagram messaging",
             error: error.metaError || error.message,
         });
     }
 };
+
 
 
 exports.debugMetaPermissions =
