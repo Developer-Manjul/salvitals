@@ -2001,11 +2001,10 @@ exports.resubscribeMessages = async (req, res) => {
                 }
 
                 const subscription =
-                    await meta.subscribePageToMessages(
-                       integration.pageId,
-                       integration.pageId,
-                        accessToken
-                    );
+                await meta.subscribePageToMessages(
+                    integration.pageId,
+                    accessToken
+                );
 
                 results.push({
                     instagramAccountId: integration.instagramAccountId,
