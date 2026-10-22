@@ -1296,24 +1296,49 @@ exports.receiveWebhook = async (
             return;
         }
 
-                // FACEBOOK / INSTAGRAM MESSAGING WEBHOOK
+               // FACEBOOK / INSTAGRAM MESSAGING WEBHOOK
         if (
             webhookObject === "page" ||
             webhookObject === "instagram"
         ) {
             for (const entry of req.body?.entry || []) {
+                const isInstagram = webhookObject === "instagram";
                 const accountId = String(entry.id || "").trim();
-                console.log("META INBOX DEBUG:", {
-                    webhookObject,
-                    entryId: entry.id,
-                    changeFields: (entry.changes || []).map(change => change.field),
-                    messagingEvents: (entry.messaging || []).length,
-                });
 
-                if (!accountId) continue;
+                const events = [
+                    ...(Array.isArray(entry.messaging)
+                        ? entry.messaging
+                        : []),
+                ];
 
-                const isInstagram =
-                    webhookObject === "instagram";
+                for (const change of entry.changes || []) {
+                    if (
+                        change.field !== "messages" ||
+                        !change.value?.message
+                    ) {
+                        continue;
+                    }
+
+                    events.push({
+                        sender: change.value.sender,
+                        recipient: change.value.recipient,
+                        timestamp: change.value.timestamp,
+                        message: change.value.message,
+                    });
+                }
+
+                if (!events.length) {
+                    continue;
+                }
+
+                if (!accountId || accountId === "0") {
+                    console.log(
+                        "META SAMPLE/INVALID ACCOUNT EVENT IGNORED:",
+                        webhookObject,
+                        accountId
+                    );
+                    continue;
+                }
 
                 const integrations = await MetaIntegration.find({
                     isActive: true,
@@ -1326,34 +1351,42 @@ exports.receiveWebhook = async (
                     console.log(
                         "META MESSAGING INTEGRATION NOT UNIQUE:",
                         webhookObject,
-                        accountId
+                        accountId,
+                        "MATCHES:",
+                        integrations.length
                     );
                     continue;
                 }
 
                 const integration = integrations[0];
 
-                for (const event of entry.messaging || []) {
+                for (const event of events) {
                     const message = event.message || {};
 
-                    // Ignore delivery/read-only events and unsupported events.
-                    if (!message.mid) continue;
+                    if (!message.mid) {
+                        continue;
+                    }
 
                     const isEcho = message.is_echo === true;
 
                     const senderId = String(
-                        (isEcho ? event.recipient?.id : event.sender?.id) || ""
+                        (isEcho
+                            ? event.recipient?.id
+                            : event.sender?.id) || ""
                     ).trim();
 
                     const recipientId = String(
-                        (isEcho ? event.sender?.id : event.recipient?.id) || ""
+                        (isEcho
+                            ? event.sender?.id
+                            : event.recipient?.id) || ""
                     ).trim();
 
-                    if (!senderId || !recipientId) continue;
+                    if (!senderId || !recipientId) {
+                        continue;
+                    }
 
                     const direction = isEcho ? "outbound" : "inbound";
                     const participantId = isEcho ? recipientId : senderId;
-
                     const text = String(message.text || "").trim();
 
                     const attachments = (
@@ -1366,6 +1399,10 @@ exports.receiveWebhook = async (
                         name: "",
                     }));
 
+                    if (!text && !attachments.length) {
+                        continue;
+                    }
+
                     const messageType = text
                         ? "text"
                         : attachments[0]?.type === "image"
@@ -1374,9 +1411,7 @@ exports.receiveWebhook = async (
                             ? "video"
                             : attachments[0]?.type === "audio"
                               ? "audio"
-                              : attachments.length
-                                ? "file"
-                                : "other";
+                              : "file";
 
                     const sentAt = event.timestamp
                         ? new Date(Number(event.timestamp))
@@ -1390,18 +1425,6 @@ exports.receiveWebhook = async (
                             externalConversationId: participantId,
                         },
                         {
-                            $set: {
-                                instagramAccountId:
-                                    integration.instagramAccountId || "",
-                                participantId,
-                                lastMessageText:
-                                    text || (attachments.length ? "Attachment" : ""),
-                                lastMessageAt: sentAt,
-                                lastMessageDirection: direction,
-                            },
-                            ...(direction === "inbound"
-                                ? { $inc: { unreadCount: 1 } }
-                                : {}),
                             $setOnInsert: {
                                 userId: integration.userId,
                                 platform: isInstagram ? "instagram" : "facebook",
@@ -1417,35 +1440,84 @@ exports.receiveWebhook = async (
                         }
                     );
 
-                    // Do not store the same Meta message twice.
-                    await MetaMessage.updateOne(
-                        {
-                            userId: integration.userId,
-                            externalMessageId: String(message.mid),
-                        },
-                        {
-                            $setOnInsert: {
+                    let messageResult;
+
+                    try {
+                        messageResult = await MetaMessage.updateOne(
+                            {
                                 userId: integration.userId,
-                                conversationId: conversation._id,
-                                platform: isInstagram ? "instagram" : "facebook",
                                 externalMessageId: String(message.mid),
-                                senderId,
-                                recipientId,
-                                direction,
-                                messageType,
-                                text,
-                                attachments,
-                                sentAt,
-                                deliveryStatus:
-                                    direction === "inbound" ? "received" : "sent",
                             },
-                        },
-                        { upsert: true }
+                            {
+                                $setOnInsert: {
+                                    userId: integration.userId,
+                                    conversationId: conversation._id,
+                                    platform: isInstagram
+                                        ? "instagram"
+                                        : "facebook",
+                                    externalMessageId: String(message.mid),
+                                    senderId,
+                                    recipientId,
+                                    direction,
+                                    messageType,
+                                    text,
+                                    attachments,
+                                    sentAt,
+                                    deliveryStatus: direction === "inbound"
+                                        ? "received"
+                                        : "sent",
+                                },
+                            },
+                            { upsert: true }
+                        );
+                    } catch (error) {
+                        if (error.code === 11000) {
+                            continue;
+                        }
+
+                        throw error;
+                    }
+
+                    const isNewMessage =
+                        messageResult.upsertedCount === 1 ||
+                        Boolean(messageResult.upsertedId);
+
+                    if (!isNewMessage) {
+                        continue;
+                    }
+
+                    await MetaConversation.updateOne(
+                        { _id: conversation._id },
+                        {
+                            $set: {
+                                instagramAccountId:
+                                    integration.instagramAccountId || "",
+                                participantId,
+                                lastMessageText:
+                                    text ||
+                                    (attachments.length ? "Attachment" : ""),
+                                lastMessageAt: sentAt,
+                                lastMessageDirection: direction,
+                            },
+                            ...(direction === "inbound"
+                                ? { $inc: { unreadCount: 1 } }
+                                : {}),
+                        }
                     );
+
+                    console.log("META INBOX MESSAGE SAVED:", {
+                        platform: isInstagram ? "instagram" : "facebook",
+                        messageId: String(message.mid),
+                        direction,
+                        userId: String(integration.userId),
+                    });
                 }
             }
 
-            return;
+            if (webhookObject === "instagram") {
+                return;
+            }
+        
         }
 
         for (
