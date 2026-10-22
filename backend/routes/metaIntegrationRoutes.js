@@ -36,6 +36,11 @@ router.post(
   controller.resubscribeMessages
 );
 
+router.get(
+  "/debug/message-subscriptions",
+  controller.verifyMessageSubscriptions
+);
+
 router.post(
   "/disconnect",
   controller.disconnect

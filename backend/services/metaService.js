@@ -443,6 +443,21 @@ exports.subscribePageToMessages = (
     }
   );
 
+exports.getPageMessageSubscriptions = (
+    pageId,
+    pageAccessToken
+) =>
+    graphRequest(
+        `/${encodeURIComponent(pageId)}/subscribed_apps`,
+        {
+            method: "GET",
+            params: {
+                access_token: pageAccessToken,
+            },
+        }
+    );
+
+
 
 exports.getPageLeadgenSubscription =
   (

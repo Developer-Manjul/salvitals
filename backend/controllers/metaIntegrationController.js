@@ -2059,6 +2059,58 @@ exports.resubscribeMessages = async (req, res) => {
 };
 
 
+exports.verifyMessageSubscriptions = async (req, res) => {
+    const userId = requireUser(req, res);
+
+    if (!userId) {
+        return;
+    }
+
+    try {
+        const integration = await MetaIntegration.findOne({
+            userId,
+            isActive: true,
+            instagramAccountId: {
+                $exists: true,
+                $nin: ["", null],
+            },
+        });
+
+        if (!integration?.accessTokenEncrypted) {
+            return res.status(404).json({
+                success: false,
+                message: "Active Instagram integration or token not found",
+            });
+        }
+
+        const accessToken = decrypt(
+            integration.accessTokenEncrypted
+        );
+
+        const result = await meta.getPageMessageSubscriptions(
+            integration.pageId,
+            accessToken
+        );
+
+        return res.json({
+            success: true,
+            pageId: integration.pageId,
+            instagramAccountId: integration.instagramAccountId,
+            subscriptions: result,
+        });
+    } catch (error) {
+        console.error(
+            "META MESSAGE SUBSCRIPTION VERIFY ERROR:",
+            error.metaError || error.message
+        );
+
+        return res.status(502).json({
+            success: false,
+            error: error.metaError || error.message,
+        });
+    }
+};
+
 
 exports.debugMetaPermissions =
     async (req, res) => {
