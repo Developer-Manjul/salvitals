@@ -2002,7 +2002,8 @@ exports.resubscribeMessages = async (req, res) => {
 
                 const subscription =
                     await meta.subscribePageToMessages(
-                        integration.instagramAccountId,
+                       integration.pageId,
+                       integration.pageId,
                         accessToken
                     );
 
