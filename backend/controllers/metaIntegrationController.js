@@ -1087,8 +1087,19 @@ exports.receiveWebhook = async (
     res
 ) => {
 
-    console.log("META WEBHOOK RECEIVED:", JSON.stringify(req.body));
-    res.sendStatus(200);
+    console.log("META WEBHOOK RECEIVED:", JSON.stringify({
+    object: req.body?.object,
+    entries: (req.body?.entry || []).map(entry => ({
+        id: entry.id,
+        messagingCount: entry.messaging?.length || 0,
+        changes: (entry.changes || []).map(change => ({
+            field: change.field,
+            hasMessage: !!change.value?.message,
+            hasSender: !!change.value?.sender,
+            hasRecipient: !!change.value?.recipient
+        }))
+    }))
+}));
 
     try {
         const webhookObject =
