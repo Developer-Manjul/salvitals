@@ -209,6 +209,8 @@ const Cart = () => {
 const enableAutoPay = true;
   const [billingLoading, setBillingLoading] =
     useState(true);
+  
+  const [voucherCode, setVoucherCode] = useState("");
 
   const [billing, setBilling] =
     useState(null);
@@ -362,22 +364,32 @@ const enableAutoPay = true;
     return sum + (addon ? addon.price * Number(item.quantity || 1) : 0);
   }, 0);
 
-  const subscriptionSubtotal =
-    isCustomPlan
-      ? null
-      : discountedSubscriptionPrice + setupCharge + selectedAddonsSubtotal;
+  
+const [voucherApplied, setVoucherApplied] = useState(false);
+const [voucherMessage, setVoucherMessage] = useState("");
 
-  const subscriptionTax =
-    isCustomPlan
-      ? null
-      : currency === "INR"
-        ? Math.round(subscriptionSubtotal * 0.18)
-        : 0;
+const voucherDiscount =
+  voucherApplied && currency === "INR"
+    ? Math.min(500, Math.max(0, discountedSubscriptionPrice || 0))
+    : 0;
 
-  const subscriptionTotal =
-    isCustomPlan
-      ? null
-      : subscriptionSubtotal + subscriptionTax;
+const subscriptionSubtotal =
+  isCustomPlan
+    ? null
+    : discountedSubscriptionPrice - voucherDiscount + setupCharge + selectedAddonsSubtotal;
+
+const subscriptionTax =
+  isCustomPlan
+    ? null
+    : currency === "INR"
+      ? Math.round(subscriptionSubtotal * 0.18)
+      : 0;
+
+const subscriptionTotal =
+  isCustomPlan
+    ? null
+    : subscriptionSubtotal + subscriptionTax;
+
 
   const toggleAddon = (addonId, checked) => {
     setSelectedAddons((current) => {
@@ -621,6 +633,7 @@ const response = await fetch(
         addonType: item.id,
         quantity: Number(item.quantity || 1),
       })),
+      voucherCode: voucherApplied ? voucherCode.trim().toUpperCase() : "",
     }),
   }
 );
@@ -1964,6 +1977,79 @@ const response = await fetch(
               )}
 
               <div className="summary-divider" />
+
+              
+                  <div
+                    style={{
+                      margin: "16px 0",
+                      padding: "14px",
+                      border: "1px solid #dbe3ed",
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <strong style={{ display: "block", marginBottom: "10px" }}>
+                      Have a voucher code?
+                    </strong>
+
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        value={voucherCode}
+                        onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                        placeholder="Enter voucher code"
+                        disabled={loading}
+                        style={{
+                          minWidth: 0,
+                          flex: 1,
+                          padding: "11px",
+                          border: "1px solid #dbe3ed",
+                          borderRadius: "7px",
+                          textTransform: "uppercase",
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                       onClick={() => {
+                          if (
+                            voucherCode.trim().toUpperCase() === "SV-FIRST01" &&
+                            currency === "INR"
+                          ) {
+                            setVoucherApplied(true);
+                            setVoucherMessage("Voucher applied: ₹500 off");
+                            setError("");
+                          } else {
+                            setVoucherApplied(false);
+                            setVoucherMessage("");
+                            setError("Invalid voucher code or currency.");
+                          }
+                        }}
+                        disabled={loading || !voucherCode.trim()}
+                        style={{
+                          padding: "10px 14px",
+                          border: 0,
+                          borderRadius: "7px",
+                          background: "#00656A",
+                          color: "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Apply
+                  </button>
+                  {voucherMessage && (
+                    <small
+                      style={{
+                        display: "block",
+                        marginTop: "8px",
+                        color: "#16835c",
+                      }}
+                    >
+                      {voucherMessage}
+                    </small>
+                  )}
+                                      </div>
+                  </div>
+
 
               <div className="summary-row">
                 <span>

@@ -4,7 +4,7 @@ export const PLANS = {
   starter: {
     id: "starter",
     name: "Starter",
-    inr: 1953,
+    inr: 1453,
     usd: 63,
     description:
       "For small businesses and teams getting started with CRM.",
@@ -13,7 +13,7 @@ export const PLANS = {
   growth: {
     id: "growth",
     name: "Growth",
-    inr: 2953,
+    inr: 2453,
     usd: 93,
     description:
       "For growing teams that need more capacity and collaboration.",
@@ -22,7 +22,7 @@ export const PLANS = {
   scale: {
     id: "scale",
     name: "Scale",
-    inr: 4953,
+    inr: 4453,
     usd: 113,
     description:
       "For larger teams managing more leads, customers and workflows.",

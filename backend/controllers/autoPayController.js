@@ -319,9 +319,9 @@ exports.createAutoPaySubscription = async (req, res) => {
         }
 
         const prices = {
-            starter: { name: "Starter", inr: 1953 },
-            growth: { name: "Growth", inr: 2953 },
-            scale: { name: "Scale", inr: 4953 },
+            starter: { name: "Starter", inr: 1453 },
+            growth: { name: "Growth", inr: 2453 },
+            scale: { name: "Scale", inr: 4453 },
         };
 
         const discounts = {

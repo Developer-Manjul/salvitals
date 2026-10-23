@@ -117,6 +117,20 @@ const orderSchema = new mongoose.Schema(
             default: 0,
         },
 
+        // Voucher / Coupon discount
+        voucherCode: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: "",
+        },
+
+        voucherDiscount: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
         setupFee: {
             type: Number,
             default: 0,

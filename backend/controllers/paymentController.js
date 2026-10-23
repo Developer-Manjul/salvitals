@@ -17,17 +17,17 @@ const razorpay = new Razorpay({
 const PLANS = {
     starter: {
         name: "Starter",
-        inr: 1953,
+        inr: 1453,
         usd: 63,
     },
     growth: {
         name: "Growth",
-        inr: 2953,
+       inr: 2453,
         usd: 93,
     },
     scale: {
         name: "Scale",
-        inr: 4953,
+        inr: 4453,
         usd: 113,
     },
 };
@@ -1196,17 +1196,17 @@ exports.createOrder =
             }
 
             const {
-                orderType = "subscription",
-                currency = "INR",
-                planId,
-                period = 1,
-                periodLabel = "",
-                country = "",
-                addonType = "",
-                quantity = 1,
-                selectedAddons = [],
-            } = req.body;
-
+            orderType = "subscription",
+            currency = "INR",
+            planId,
+            period = 1,
+            periodLabel = "",
+            country = "",
+            addonType = "",
+            quantity = 1,
+            selectedAddons = [],
+            voucherCode = "",
+        } = req.body;
             const curr =
                 String(currency)
                     .toUpperCase() ===
@@ -1480,6 +1480,60 @@ exports.createOrder =
                 });
             }
 
+            let appliedVoucherCode = "";
+            let voucherDiscount = 0;
+
+            const enteredVoucherCode = String(voucherCode || "")
+                .trim()
+                .toUpperCase();
+
+            if (enteredVoucherCode) {
+                if (curr !== "INR") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Vouchers are available for INR payments only.",
+                    });
+                }
+
+                const assignedVoucher = user.assignedVoucher || {};
+
+                if (enteredVoucherCode !== "SV-FIRST01") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid voucher code.",
+                    });
+                }
+
+                if (assignedVoucher.isUsed) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "This voucher has already been used.",
+                    });
+                }
+
+                // Voucher is only for the user's first paid subscription.
+                const previousPaidSubscription = await Order.exists({
+                    userId: user._id,
+                    orderType: "subscription",
+                    paymentStatus: "paid",
+                });
+
+                if (previousPaidSubscription) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Voucher is valid only for your first subscription purchase.",
+                    });
+                }
+
+                voucherDiscount = Math.min(
+                    500,
+                    Math.max(0, Number(assignedVoucher.discountAmount) || 500),
+                    Math.max(0, Number(calculation.discountedAmount) || 0)
+                );
+
+                appliedVoucherCode = enteredVoucherCode;
+            }
+
            const setupFee =
                 calculateSetupFee(
                     user,
@@ -1558,10 +1612,13 @@ exports.createOrder =
                 0
             );
 
-            const subtotal =
-                calculation.discountedAmount +
-                setupFee +
-                addonsAmount;
+            const planAmountAfterVoucher =
+            Math.max(0, calculation.discountedAmount - voucherDiscount);
+
+                const subtotal =
+                    planAmountAfterVoucher +
+                    setupFee +
+                    addonsAmount;
 
             const tax =
                 calculateTax(
@@ -1649,69 +1706,53 @@ exports.createOrder =
                     },
                 });
 
+            
             const dbOrder =
                 await Order.create({
                     userId,
-                    orderType:
-                        "subscription",
-                    planId:
-                        normalizedPlanId,
-                    planName:
-                        plan.name,
-                    amount:
-                        totalAmount,
-                    planAmount:
-                        calculation.discountedAmount,
+                    orderType: "subscription",
+                    planId: normalizedPlanId,
+                    planName: plan.name,
+                    amount: totalAmount,
+                    planAmount: planAmountAfterVoucher,
+                    voucherCode: appliedVoucherCode,
+                    voucherDiscount: voucherDiscount,
                     setupFee,
                     tax,
-                    currency:
-                        curr,
-                    period:
-                        months,
+                    currency: curr,
+                    period: months,
                     periodLabel:
                         periodLabel ||
-                        `${months} month${
-                            months > 1
-                                ? "s"
-                                : ""
-                        }`,
+                        `${months} month${months > 1 ? "s" : ""}`,
                     addons: calculatedAddons,
-                    paymentStatus:
-                        "pending",
-                    razorpayOrderId:
-                        razorpayOrder.id,
-                    country:
-                        country || "",
+                    paymentStatus: "pending",
+                    razorpayOrderId: razorpayOrder.id,
+                    country: country || "",
                 });
 
-            return res.status(200).json({
-                success: true,
-                order: {
-                    id:
-                        razorpayOrder.id,
-                    amount:
-                        razorpayOrder.amount,
-                    currency:
-                        razorpayOrder.currency,
-                    receipt:
-                        razorpayOrder.receipt,
-                    dbOrderId:
-                        dbOrder._id.toString(),
-                    orderType:
-                        "subscription",
-                    totalAmount,
-                    planAmount:
-                        calculation.discountedAmount,
-                    setupFee,
-                    tax,
-                    originalPlanAmount:
-                        calculation.originalAmount,
-                    discountPercentage:
-                        calculation.discountPercentage,
-                    discountAmount:
-                        calculation.discountAmount,
-                },
-            });
+
+           
+        return res.status(200).json({
+            success: true,
+            order: {
+                id: razorpayOrder.id,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency,
+                receipt: razorpayOrder.receipt,
+                dbOrderId: dbOrder._id.toString(),
+                orderType: "subscription",
+                totalAmount,
+                planAmount: planAmountAfterVoucher,
+                voucherCode: appliedVoucherCode,
+                voucherDiscount,
+                setupFee,
+                tax,
+                originalPlanAmount: calculation.originalAmount,
+                discountPercentage: calculation.discountPercentage,
+                discountAmount: calculation.discountAmount,
+            },
+        });
+
         } catch (error) {
             console.error(
                 "CREATE ORDER ERROR:",
@@ -1728,233 +1769,255 @@ exports.createOrder =
         }
     };
 
-exports.verifyPayment =
-    async (
-        req,
-        res
-    ) => {
-        try {
-            const {
-                razorpay_order_id,
-                razorpay_payment_id,
-                razorpay_signature,
-            } = req.body;
 
+exports.verifyPayment = async (req, res) => {
+    try {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+        } = req.body;
+
+        if (
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment details are missing",
+            });
+        }
+
+        const generatedSignature = crypto
+            .createHmac(
+                "sha256",
+                process.env.RAZORPAY_KEY_SECRET
+            )
+            .update(
+                `${razorpay_order_id}|${razorpay_payment_id}`
+            )
+            .digest("hex");
+
+        if (generatedSignature !== razorpay_signature) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid payment signature",
+            });
+        }
+
+        const order = await Order.findOne({
+            razorpayOrderId: razorpay_order_id,
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found",
+            });
+        }
+
+        // Mark voucher as used only for the matching,
+        // successfully paid subscription order.
+        const markVoucherUsed = async (paidOrder) => {
             if (
-                !razorpay_order_id ||
-                !razorpay_payment_id ||
-                !razorpay_signature
+                paidOrder.orderType !== "subscription" ||
+                !paidOrder.voucherCode
             ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Payment details are missing",
-                });
+                return true;
             }
 
-            const generatedSignature =
-                crypto
-                    .createHmac(
-                        "sha256",
-                        process.env
-                            .RAZORPAY_KEY_SECRET
-                    )
-                    .update(
-                        `${razorpay_order_id}|${razorpay_payment_id}`
-                    )
-                    .digest(
-                        "hex"
-                    );
+            const normalizedCode = String(
+                paidOrder.voucherCode
+            ).trim().toUpperCase();
 
-            if (
-                generatedSignature !==
-                razorpay_signature
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Invalid payment signature",
-                });
-            }
-
-            const order =
-                await Order.findOne({
-                    razorpayOrderId:
-                        razorpay_order_id,
-                });
-
-            if (!order) {
-                return res.status(404).json({
-                    success: false,
-                    message:
-                        "Order not found",
-                });
-            }
-
-            if (order.paymentStatus === "paid") {
-                if (
-                    order.orderType === "addon" &&
-                    order.addonActivationStatus !== "activated"
-                ) {
-                    try {
-                        const user = await activateAddon(order);
-
-                        order.addonActivationStatus = "activated";
-                        await order.save();
-
-                        return res.status(200).json({
-                            success: true,
-                            message: "Add-on activation completed",
-                            order,
-                            orderType: order.orderType,
-                        });
-                    } catch (error) {
-                        console.error(
-                            "ADD-ON RETRY ACTIVATION ERROR:",
-                            error.message
-                        );
-
-                        return res.status(500).json({
-                            success: false,
-                            message: "Payment received, but add-on activation failed. Please retry.",
-                        });
-                    }
-                }
-
-                return res.status(200).json({
-                    success: true,
-                    message: "Payment already verified",
-                    order,
-                    orderType: order.orderType,
-                });
-            }
-
-            const currentYear =
-                new Date().getFullYear();
-
-            if (
-                !order.invoiceNumber
-            ) {
-                const paidOrdersCount =
-                    await Order.countDocuments({
-                        paymentStatus:
-                            "paid",
-                        invoiceNumber: {
-                            $regex:
-                                `^SV_${currentYear}_`,
-                        },
-                    });
-
-                const invoiceSequence =
-                    String(
-                        paidOrdersCount +
-                            1
-                    ).padStart(
-                        3,
-                        "0"
-                    );
-
-                order.invoiceNumber =
-                    `SV_${currentYear}_${invoiceSequence}`;
-            }
-
-            order.paymentStatus =
-                "paid";
-
-            order.razorpayPaymentId =
-                razorpay_payment_id;
-
-            order.razorpaySignature =
-                razorpay_signature;
-
-            await order.save();
-
-            let user =
-                await User.findById(
-                    order.userId
-                );
-
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message:
-                        "User not found",
-                });
-            }
-
-            user =
-                await activatePaidOrder(
-                    order
-                );
-            
-            if (order.orderType === "addon") {
-    order.addonActivationStatus = "activated";
-    await order.save();
-}
-
-            await sendInvoiceIfNeeded(
-                order
+            const updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: paidOrder.userId,
+                    "assignedVoucher.code": normalizedCode,
+                    "assignedVoucher.isUsed": false,
+                },
+                {
+                    $set: {
+                        "assignedVoucher.isUsed": true,
+                        "assignedVoucher.usedAt": new Date(),
+                        "assignedVoucher.orderId": paidOrder._id,
+                    },
+                },
+                { new: true }
             );
+
+            if (updatedUser) {
+                return true;
+            }
+
+            // Idempotent retry: this exact order may already
+            // have consumed the voucher.
+            const existingUser = await User.findOne({
+                _id: paidOrder.userId,
+                "assignedVoucher.code": normalizedCode,
+                "assignedVoucher.isUsed": true,
+                "assignedVoucher.orderId": paidOrder._id,
+            });
+
+            if (existingUser) {
+                return true;
+            }
+
+            console.error(
+                "VOUCHER USAGE CONFLICT:",
+                {
+                    orderId: String(paidOrder._id),
+                    userId: String(paidOrder.userId),
+                    voucherCode: normalizedCode,
+                }
+            );
+
+            return false;
+        };
+
+        // Idempotent payment verification.
+        if (order.paymentStatus === "paid") {
+            if (
+                order.orderType === "addon" &&
+                order.addonActivationStatus !== "activated"
+            ) {
+                try {
+                    await activateAddon(order);
+
+                    order.addonActivationStatus = "activated";
+                    await order.save();
+
+                    return res.status(200).json({
+                        success: true,
+                        message: "Add-on activation completed",
+                        order,
+                        orderType: order.orderType,
+                    });
+                } catch (error) {
+                    console.error(
+                        "ADD-ON RETRY ACTIVATION ERROR:",
+                        error.message
+                    );
+
+                    return res.status(500).json({
+                        success: false,
+                        message:
+                            "Payment received, but add-on activation failed. Please retry.",
+                    });
+                }
+            }
+
+           if (order.orderType === "subscription" && order.voucherCode) {
+                const voucherMarked = await markVoucherUsed(order);
+
+                if (!voucherMarked) {
+                    console.error(
+                        "Voucher usage could not be confirmed for order:",
+                        order._id
+                    );
+                }
+            }
 
             return res.status(200).json({
                 success: true,
-                message:
-                    order.orderType ===
-                    "addon"
-                        ? "Add-on payment verified successfully"
-                        : "Payment verified successfully",
+                message: "Payment already verified",
                 order,
-                orderType:
-                    order.orderType,
-                addon:
-                    order.orderType ===
-                    "addon"
-                        ? {
-                            type:
-                                order.addonType,
-                            name:
-                                order.addonName,
-                            quantity:
-                                Math.max(
-                                    1,
-                                    Math.round(
-                                        Number(
-                                            order.addonQuota ||
-                                            0
-                                        ) /
-                                        Number(
-                                            ADDONS[
-                                                order.addonType
-                                            ]?.quotaPerMonth ||
-                                            1
-                                        )
-                                    )
-                                ),
-                            months:
-                                1,
-                            quota:
-                                order.addonQuota,
-                            used:
-                                user
-                                    ?.addons?.[
-                                    order.addonType
-                                ]?.used ||
-                                0,
-                            startsAt:
-                                user
-                                    ?.addons?.[
-                                    order.addonType
-                                ]?.startsAt ||
-                                order.addonStartsAt,
-                            expiresAt:
-                                user
-                                    ?.addons?.[
-                                    order.addonType
-                                ]?.expiresAt ||
-                                order.addonExpiresAt,
-                        }
-                        : null,
-                purchasedAddons:
+                orderType: order.orderType,
+            });
+        }
+
+        const currentYear = new Date().getFullYear();
+
+        if (!order.invoiceNumber) {
+            const paidOrdersCount = await Order.countDocuments({
+                paymentStatus: "paid",
+                invoiceNumber: {
+                    $regex: `^SV_${currentYear}_`,
+                },
+            });
+
+            const invoiceSequence = String(
+                paidOrdersCount + 1
+            ).padStart(3, "0");
+
+            order.invoiceNumber =
+                `SV_${currentYear}_${invoiceSequence}`;
+        }
+
+        order.paymentStatus = "paid";
+        order.razorpayPaymentId = razorpay_payment_id;
+        order.razorpaySignature = razorpay_signature;
+
+        await order.save();
+
+        let user = await User.findById(order.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        // Voucher is consumed only after payment is confirmed.
+        if (order.orderType === "subscription") {
+            await markVoucherUsed(order);
+        }
+
+        user = await activatePaidOrder(order);
+
+        if (order.orderType === "addon") {
+            order.addonActivationStatus = "activated";
+            await order.save();
+        }
+
+        await sendInvoiceIfNeeded(order);
+
+        return res.status(200).json({
+            success: true,
+            message:
+                order.orderType === "addon"
+                    ? "Add-on payment verified successfully"
+                    : "Payment verified successfully",
+            order,
+            orderType: order.orderType,
+
+            addon:
+                order.orderType === "addon"
+                    ? {
+                        type: order.addonType,
+                        name: order.addonName,
+                        quantity: Math.max(
+                            1,
+                            Math.round(
+                                Number(order.addonQuota || 0) /
+                                Number(
+                                    ADDONS[order.addonType]
+                                        ?.quotaPerMonth || 1
+                                )
+                            )
+                        ),
+                        months: 1,
+                        quota: order.addonQuota,
+                        used:
+                            user?.addons?.[
+                                order.addonType
+                            ]?.used || 0,
+                        startsAt:
+                            user?.addons?.[
+                                order.addonType
+                            ]?.startsAt ||
+                            order.addonStartsAt,
+                        expiresAt:
+                            user?.addons?.[
+                                order.addonType
+                            ]?.expiresAt ||
+                            order.addonExpiresAt,
+                    }
+                    : null,
+
+            purchasedAddons:
                 order.orderType === "subscription"
                     ? (order.addons || []).map((addon) => ({
                         type: addon.addonType,
@@ -1964,81 +2027,51 @@ exports.verifyPayment =
                         amount: addon.amount,
                         months: 1,
                         startsAt:
-                            user?.addons?.[addon.addonType]?.startsAt || null,
+                            user?.addons?.[
+                                addon.addonType
+                            ]?.startsAt || null,
                         expiresAt:
-                            user?.addons?.[addon.addonType]?.expiresAt || null,
+                            user?.addons?.[
+                                addon.addonType
+                            ]?.expiresAt || null,
                     }))
                     : [],
-                subscription:
-                    user?.subscription
-                        ? {
-                            planId:
-                                user
-                                    .subscription
-                                    .planId ||
-                                "",
-                            planName:
-                                user
-                                    .subscription
-                                    .planName ||
-                                "",
-                            status:
-                                user
-                                    .subscription
-                                    .status ||
-                                "active",
-                            billingCycle:
-                                user
-                                    .subscription
-                                    .billingCycle ||
-                                "",
-                            startedAt:
-                                user
-                                    .subscription
-                                    .startedAt ||
-                                null,
-                            expiresAt:
-                                user
-                                    .subscription
-                                    .expiresAt ||
-                                null,
-                            nextBillingAt:
-                                user
-                                    .subscription
-                                    .nextBillingAt ||
-                                null,
-                            amount:
-                                Number(
-                                    user
-                                        .subscription
-                                        .amount ||
-                                    0
-                                ),
-                            currency:
-                                user
-                                    .subscription
-                                    .currency ||
-                                "INR",
-                            setupFeePaid:
-                                Boolean(
-                                    user
-                                        .subscription
-                                        .setupFeePaid
-                                ),
-                        }
-                        : null,
-            });
-        } catch (error) {
-            console.error(
-                "VERIFY PAYMENT ERROR:",
-                error
-            );
 
-            return res.status(500).json({
-                success: false,
-                message:
-                    error.message ||
-                    "Unable to verify payment",
-            });
-        }
-    };
+            subscription: user?.subscription
+                ? {
+                    planId:
+                        user.subscription.planId || "",
+                    planName:
+                        user.subscription.planName || "",
+                    status:
+                        user.subscription.status || "active",
+                    billingCycle:
+                        user.subscription.billingCycle || "",
+                    startedAt:
+                        user.subscription.startedAt || null,
+                    expiresAt:
+                        user.subscription.expiresAt || null,
+                    nextBillingAt:
+                        user.subscription.nextBillingAt || null,
+                    amount: Number(
+                        user.subscription.amount || 0
+                    ),
+                    currency:
+                        user.subscription.currency || "INR",
+                    setupFeePaid: Boolean(
+                        user.subscription.setupFeePaid
+                    ),
+                }
+                : null,
+        });
+    } catch (error) {
+        console.error("VERIFY PAYMENT ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message:
+                error.message ||
+                "Unable to verify payment",
+        });
+    }
+};

@@ -223,6 +223,38 @@ const userSchema = new mongoose.Schema(
             default: "user",
         },
 
+                // Assigned voucher for subscription checkout
+        assignedVoucher: {
+            code: {
+                type: String,
+                trim: true,
+                uppercase: true,
+                default: "",
+            },
+            discountAmount: {
+                type: Number,
+                default: 500,
+                min: 0,
+            },
+            isUsed: {
+                type: Boolean,
+                default: false,
+            },
+            assignedAt: {
+                type: Date,
+                default: null,
+            },
+            usedAt: {
+                type: Date,
+                default: null,
+            },
+            orderId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Order",
+                default: null,
+            },
+        },
+
         isActive: {
             type: Boolean,
             default: true,
