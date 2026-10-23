@@ -85,6 +85,15 @@ router.get(
   inboxController.getConversationMessages
 );
 
+router.patch(
+  "/inbox/:id/read",
+  inboxController.markConversationAsRead
+);
+
+router.post(
+  "/inbox/:id/messages",
+  controller.sendInboxMessage
+);
 
 
 module.exports = router;

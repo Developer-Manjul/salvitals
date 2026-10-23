@@ -32,6 +32,10 @@ const requireInboxPermission = (context, permission, res) => {
     return true;
 };
 
+const isValidObjectId = (id) => {
+    return /^[a-f\d]{24}$/i.test(String(id || ""));
+};
+
 // GET /api/integrations/meta/inbox
 exports.getConversations = async (req, res) => {
     try {
@@ -42,19 +46,26 @@ exports.getConversations = async (req, res) => {
         }
 
         const page = Math.max(1, Number(req.query.page) || 1);
-        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+        const limit = Math.min(
+            100,
+            Math.max(1, Number(req.query.limit) || 30)
+        );
 
         const filter = {
             userId: context.workspaceOwnerId,
         };
 
-        const platform = String(req.query.platform || "").toLowerCase();
+        const platform = String(req.query.platform || "")
+            .trim()
+            .toLowerCase();
 
         if (["facebook", "instagram"].includes(platform)) {
             filter.platform = platform;
         }
 
-        const status = String(req.query.status || "").toLowerCase();
+        const status = String(req.query.status || "")
+            .trim()
+            .toLowerCase();
 
         if (["open", "closed"].includes(status)) {
             filter.status = status;
@@ -81,7 +92,10 @@ exports.getConversations = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("META INBOX CONVERSATIONS ERROR:", error.message);
+        console.error(
+            "META INBOX CONVERSATIONS ERROR:",
+            error.message
+        );
 
         return res.status(500).json({
             success: false,
@@ -91,6 +105,7 @@ exports.getConversations = async (req, res) => {
 };
 
 // GET /api/integrations/meta/inbox/:id/messages
+// Opening a conversation clears its unread count.
 exports.getConversationMessages = async (req, res) => {
     try {
         const context = await getContext(req);
@@ -101,7 +116,7 @@ exports.getConversationMessages = async (req, res) => {
 
         const conversationId = String(req.params.id || "");
 
-        if (!/^[a-f\d]{24}$/i.test(conversationId)) {
+        if (!isValidObjectId(conversationId)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid conversation ID",
@@ -111,7 +126,7 @@ exports.getConversationMessages = async (req, res) => {
         const conversation = await MetaConversation.findOne({
             _id: conversationId,
             userId: context.workspaceOwnerId,
-        }).lean();
+        });
 
         if (!conversation) {
             return res.status(404).json({
@@ -121,28 +136,45 @@ exports.getConversationMessages = async (req, res) => {
         }
 
         const page = Math.max(1, Number(req.query.page) || 1);
-        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+        const limit = Math.min(
+            100,
+            Math.max(1, Number(req.query.limit) || 50)
+        );
+
+        const messageFilter = {
+            userId: context.workspaceOwnerId,
+            conversationId: conversation._id,
+        };
 
         const [messages, total] = await Promise.all([
-            MetaMessage.find({
-                userId: context.workspaceOwnerId,
-                conversationId: conversation._id,
-            })
+            MetaMessage.find(messageFilter)
                 .sort({ sentAt: -1, _id: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .lean(),
 
-            MetaMessage.countDocuments({
-                userId: context.workspaceOwnerId,
-                conversationId: conversation._id,
-            }),
+            MetaMessage.countDocuments(messageFilter),
         ]);
+
+        // Clear unread count after successfully loading this conversation.
+        if (conversation.unreadCount !== 0) {
+            await MetaConversation.updateOne(
+                {
+                    _id: conversation._id,
+                    userId: context.workspaceOwnerId,
+                },
+                {
+                    $set: { unreadCount: 0 },
+                }
+            );
+
+            conversation.unreadCount = 0;
+        }
 
         return res.status(200).json({
             success: true,
             conversation,
-            // Oldest to newest, so the chat UI can render naturally.
+            // Oldest message first for the chat UI.
             messages: messages.reverse(),
             pagination: {
                 page,
@@ -152,11 +184,70 @@ exports.getConversationMessages = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("META INBOX MESSAGES ERROR:", error.message);
+        console.error(
+            "META INBOX MESSAGES ERROR:",
+            error.message
+        );
 
         return res.status(500).json({
             success: false,
             message: "Unable to load conversation messages",
+        });
+    }
+};
+
+// PATCH /api/integrations/meta/inbox/:id/read
+exports.markConversationAsRead = async (req, res) => {
+    try {
+        const context = await getContext(req);
+
+        if (!requireInboxPermission(context, "inbox.view", res)) {
+            return;
+        }
+
+        const conversationId = String(req.params.id || "");
+
+        if (!isValidObjectId(conversationId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid conversation ID",
+            });
+        }
+
+        const conversation = await MetaConversation.findOneAndUpdate(
+            {
+                _id: conversationId,
+                userId: context.workspaceOwnerId,
+            },
+            {
+                $set: { unreadCount: 0 },
+            },
+            {
+                new: true,
+            }
+        );
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                message: "Conversation not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            conversationId: String(conversation._id),
+            unreadCount: conversation.unreadCount,
+        });
+    } catch (error) {
+        console.error(
+            "META INBOX MARK READ ERROR:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to mark conversation as read",
         });
     }
 };

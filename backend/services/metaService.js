@@ -491,3 +491,79 @@ exports.graphRequest =
 
 exports.requiredPermissions =
   REQUIRED_PERMISSIONS;
+
+  
+exports.sendConversationMessage = async ({
+  pageId,
+  recipientId,
+  text,
+  accessToken,
+}) => {
+  if (!pageId || !recipientId || !text || !accessToken) {
+    throw new Error("Missing required Meta message fields");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(pageId)}/messages`,
+    {
+      method: "POST",
+      params: {
+        access_token: accessToken,
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text },
+        messaging_type: "RESPONSE",
+      }),
+    }
+  );
+};
+
+exports.getMessagingParticipantProfile = async ({
+    platform,
+    participantId,
+    pageAccessToken,
+}) => {
+    if (!participantId || !pageAccessToken) {
+        return null;
+    }
+
+    try {
+        const fields =
+            platform === "instagram"
+                ? "name,username,profile_pic"
+                : "first_name,last_name,profile_pic";
+
+        const profile = await graphRequest(
+            `/${encodeURIComponent(participantId)}`,
+            {
+                params: {
+                    fields,
+                    access_token: pageAccessToken,
+                },
+            }
+        );
+
+        const name =
+            platform === "instagram"
+                ? profile.username || profile.name || ""
+                : [profile.first_name, profile.last_name]
+                    .filter(Boolean)
+                    .join(" ");
+
+        return {
+            name: String(name || "").trim(),
+            picture: String(profile.profile_pic || "").trim(),
+        };
+    } catch (error) {
+        console.error(
+            "META PARTICIPANT PROFILE FETCH ERROR:",
+            error.metaError || error.message
+        );
+
+        return null;
+    }
+};

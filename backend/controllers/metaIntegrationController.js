@@ -16,6 +16,11 @@ const Invoice = require("../models/Invoice");
 const MetaConversation = require("../models/MetaConversation");
 const MetaMessage = require("../models/MetaMessage");
 
+const {
+    getWorkspaceContext,
+    hasPermission,
+} = require("../utils/workspace");
+
 function getUserId(req) {
     const authorization = req.headers.authorization || "";
 
@@ -1430,30 +1435,65 @@ exports.receiveWebhook = async (
                         ? new Date(Number(event.timestamp))
                         : new Date();
 
-                    const conversation = await MetaConversation.findOneAndUpdate(
-                        {
+                  const conversation = await MetaConversation.findOneAndUpdate(
+                    {
+                        userId: integration.userId,
+                        platform: isInstagram ? "instagram" : "facebook",
+                        pageId: integration.pageId,
+                        externalConversationId: participantId,
+                    },
+                    {
+                        $setOnInsert: {
                             userId: integration.userId,
                             platform: isInstagram ? "instagram" : "facebook",
                             pageId: integration.pageId,
                             externalConversationId: participantId,
+                            status: "open",
                         },
-                        {
-                            $setOnInsert: {
-                                userId: integration.userId,
-                                platform: isInstagram ? "instagram" : "facebook",
-                                pageId: integration.pageId,
-                                externalConversationId: participantId,
-                                status: "open",
-                            },
-                        },
-                        {
-                            new: true,
-                            upsert: true,
-                            setDefaultsOnInsert: true,
-                        }
-                    );
+                    },
+                    {
+                        new: true,
+                        upsert: true,
+                        setDefaultsOnInsert: true,
+                    }
+                );
 
-                    let messageResult;
+                // Fetch customer name and profile picture
+                if (
+                    !conversation.participantName ||
+                    conversation.participantName === "Instagram/Facebook user" ||
+                    !conversation.participantProfilePicture
+                ) {
+                    try {
+                        const profile = await meta.getMessagingParticipantProfile({
+                            
+                            platform: isInstagram ? "instagram" : "facebook",
+                            participantId,
+                            pageAccessToken: decrypt(
+                                integration.accessTokenEncrypted
+                            ),
+                        });
+                        console.log("META CUSTOMER PROFILE RESPONSE:", profile);
+                        if (profile) {
+                            if (profile.name) {
+                                conversation.participantName = profile.name;
+                            }
+
+                            if (profile.picture) {
+                                conversation.participantProfilePicture = profile.picture;
+                            }
+
+                            await conversation.save();
+                        }
+                    } catch (profileError) {
+                        console.error(
+                            "META CONTACT PROFILE ERROR:",
+                            profileError.metaError || profileError.message
+                        );
+                    }
+                }
+
+                let messageResult;
 
                     try {
                         messageResult = await MetaMessage.updateOne(
@@ -2321,4 +2361,123 @@ exports.debugMetaPermissions =
         }
     };
 
+
+    
+
+exports.sendInboxMessage = async (req, res) => {
+  try {
+    const context = await getWorkspaceContext(req);
+
+    if (!context) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!hasPermission(context, "inbox.view")) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to access the inbox.",
+      });
+    }
+
+    const conversationId = String(req.params.id || "");
+    const text = String(req.body?.text || "").trim();
+
+    if (!/^[a-f\d]{24}$/i.test(conversationId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid conversation ID",
+      });
+    }
+
+    if (!text || text.length > 2000) {
+      return res.status(400).json({
+        success: false,
+        message: "Message is required and must be at most 2000 characters.",
+      });
+    }
+
+    const conversation = await MetaConversation.findOne({
+      _id: conversationId,
+      userId: context.workspaceOwnerId,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: "Conversation not found",
+      });
+    }
+
+    if (conversation.status === "closed") {
+      return res.status(409).json({
+        success: false,
+        message: "Reopen this conversation before replying.",
+      });
+    }
+
+    const integration = await MetaIntegration.findOne({
+      userId: context.workspaceOwnerId,
+      pageId: conversation.pageId,
+      isActive: true,
+    });
+
+    if (!integration) {
+      return res.status(409).json({
+        success: false,
+        message: "The connected Meta Page was not found. Reconnect it and try again.",
+      });
+    }
+
+    const accessToken = decrypt(integration.accessTokenEncrypted);
+
+    const result = await meta.sendConversationMessage({
+      pageId: integration.pageId,
+      recipientId: conversation.participantId,
+      text,
+      accessToken,
+    });
+
+    const externalMessageId = String(result.message_id || "");
+
+    const message = await MetaMessage.create({
+      userId: context.workspaceOwnerId,
+      conversationId: conversation._id,
+      platform: conversation.platform,
+      externalMessageId,
+      senderId: conversation.pageId,
+      recipientId: conversation.participantId,
+      direction: "outbound",
+      messageType: "text",
+      text,
+      sentAt: new Date(),
+      deliveryStatus: "sent",
+    });
+
+    conversation.lastMessageText = text;
+    conversation.lastMessageAt = message.sentAt;
+    conversation.lastMessageDirection = "outbound";
+    await conversation.save();
+
+    return res.status(200).json({
+      success: true,
+      message,
+    });
+  } catch (error) {
+    console.error(
+      "META INBOX SEND ERROR:",
+      error.metaError || error.message
+    );
+
+    return res.status(502).json({
+      success: false,
+      message:
+        error.metaError?.message ||
+        error.message ||
+        "Unable to send message through Meta.",
+    });
+  }
+};
 

@@ -1099,3 +1099,801 @@
     }
   }
 }
+
+
+@media (max-width: 1050px) {
+  .meta-inbox-page {
+    padding: 16px;
+
+    .mi-workspace {
+      grid-template-columns: minmax(230px, 285px) minmax(0, 1fr);
+    }
+
+    .mi-details-panel {
+      display: none;
+    }
+  }
+}
+
+
+
+/* ===== Social Inbox: three-column reference layout ===== */
+
+.meta-inbox-page {
+  --mi-primary: #087f8c;
+  --mi-primary-dark: #066b75;
+  --mi-primary-soft: #e8f6f6;
+
+  .mi-workspace {
+    grid-template-columns:
+      minmax(260px, 29%)
+      minmax(340px, 1fr)
+      minmax(245px, 27%);
+    height: calc(100vh - 215px);
+    min-height: 600px;
+    max-height: 900px;
+    border-radius: 13px;
+  }
+
+  .mi-sidebar {
+    border-right: 1px solid #e8edf1;
+  }
+
+  .mi-chat-panel {
+    min-width: 0;
+    border-right: 1px solid #e8edf1;
+  }
+
+  .mi-details-panel {
+    display: flex;
+    min-width: 0;
+    overflow-y: auto;
+  }
+
+  .mi-conversation {
+    padding: 14px 12px;
+  }
+
+  .mi-conversation.active {
+    background: #eaf7f8;
+    border-left-color: #087f8c;
+  }
+
+  .mi-chat-header {
+    min-height: 94px;
+  }
+
+  .mi-messages {
+    background: #f8fafc;
+    gap: 8px;
+  }
+
+  .mi-message-content {
+    max-width: min(78%, 440px);
+  }
+
+  .mi-bubble {
+    padding: 12px 15px;
+    border-radius: 13px;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+
+  .mi-message-row.outbound .mi-bubble {
+    background: #dff4f1;
+    border-color: #d1eeea;
+  }
+
+  .mi-composer-disabled {
+    background: #fff;
+  }
+}
+
+/* Keep all three panels on desktop and laptop screens. */
+@media (min-width: 1051px) {
+  .meta-inbox-page {
+    .mi-workspace {
+      grid-template-columns:
+        minmax(245px, 27%)
+        minmax(320px, 1fr)
+        minmax(235px, 25%);
+    }
+
+    .mi-details-panel {
+      display: flex;
+    }
+  }
+}
+
+/* On smaller screens, use the available space rather than squeezing panels. */
+@media (max-width: 1050px) {
+  .meta-inbox-page {
+    .mi-workspace {
+      grid-template-columns: minmax(230px, 34%) minmax(0, 1fr);
+      height: calc(100vh - 200px);
+      min-height: 560px;
+    }
+
+    .mi-details-panel {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 760px) {
+  .meta-inbox-page {
+    .mi-workspace {
+      display: flex;
+      height: auto;
+      min-height: 0;
+    }
+
+    .mi-details-panel {
+      display: flex;
+      max-height: 500px;
+      border-top: 1px solid #e8edf1;
+    }
+  }
+}
+
+
+
+/* =========================================
+   SOCIAL INBOX — REFERENCE DESIGN OVERRIDES
+   Facebook + Instagram only
+========================================= */
+
+.meta-inbox-page {
+  --mi-primary: #078b98;
+  --mi-primary-dark: #075d68;
+  --mi-primary-soft: #e7f6f7;
+  --mi-text: #172b42;
+  --mi-muted: #7b8ba1;
+  --mi-border: #e7edf3;
+
+  width: 100%;
+  min-width: 0;
+  padding: 20px 24px;
+  gap: 18px;
+  background: #f5f8fc;
+  color: var(--mi-text);
+}
+
+/* Page heading */
+
+.meta-inbox-page .mi-page-header {
+  width: 100%;
+  align-items: center;
+  margin: 0;
+}
+
+.meta-inbox-page .mi-page-header h1 {
+  color: #152d45;
+  font-size: 27px;
+  font-weight: 750;
+  letter-spacing: -0.7px;
+}
+
+.meta-inbox-page .mi-page-header p {
+  color: #788ba3;
+  font-size: 13px;
+}
+
+.meta-inbox-page .mi-refresh {
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 9px;
+  background: #fff;
+  color: #284258;
+  font-size: 12px;
+}
+
+/* Three-column inbox */
+
+.meta-inbox-page .mi-workspace {
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 355px)
+    minmax(360px, 1fr)
+    minmax(280px, 345px);
+  width: 100%;
+  height: calc(100vh - 205px);
+  min-height: 560px;
+  max-height: 900px;
+  overflow: hidden;
+  border: 1px solid #e5ebf2;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 5px 22px rgba(30, 55, 80, 0.035);
+}
+
+.meta-inbox-page .mi-sidebar,
+.meta-inbox-page .mi-chat-panel,
+.meta-inbox-page .mi-details-panel {
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+}
+
+.meta-inbox-page .mi-sidebar {
+  border-right: 1px solid #e6ecf2;
+}
+
+.meta-inbox-page .mi-chat-panel {
+  border-right: 1px solid #e6ecf2;
+}
+
+/* Conversation list header */
+
+.meta-inbox-page .mi-sidebar-heading {
+  padding: 19px 16px 15px;
+}
+
+.meta-inbox-page .mi-sidebar-heading h2 {
+  font-size: 15px;
+  color: #172d43;
+}
+
+.meta-inbox-page .mi-sidebar-heading p {
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-search-wrap {
+  height: 42px;
+  margin: 0 13px 13px;
+  border: 1px solid #e0e7ef;
+  border-radius: 9px;
+  background: #f7f9fc;
+}
+
+.meta-inbox-page .mi-search-wrap input {
+  font-size: 12px;
+}
+
+/* Facebook / Instagram filters */
+
+.meta-inbox-page .mi-platform-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 0 12px 13px;
+}
+
+.meta-inbox-page .mi-platform-tabs button {
+  min-height: 37px;
+  padding: 8px 5px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: #586c82;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.meta-inbox-page .mi-platform-tabs button.active {
+  border-color: #bde5e8;
+  background: #e9f7f8;
+  color: #006b78;
+}
+
+.meta-inbox-page .mi-status-tabs {
+  gap: 20px;
+  padding: 0 16px;
+}
+
+.meta-inbox-page .mi-status-tabs button {
+  padding: 13px 0 12px;
+  font-size: 11px;
+}
+
+/* Conversation rows */
+
+.meta-inbox-page .mi-conversation {
+  gap: 11px;
+  padding: 14px 12px;
+  border-bottom: 1px solid #edf1f5;
+  border-left: 3px solid transparent;
+  text-align: left;
+}
+
+.meta-inbox-page .mi-conversation.active {
+  border-left-color: #08a5b5;
+  background: #eaf8fa;
+}
+
+.meta-inbox-page .mi-conversation-heading strong {
+  color: #20374e;
+  font-size: 12px;
+}
+
+.meta-inbox-page .mi-conversation-heading time {
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-conversation-preview {
+  margin-top: 6px;
+  color: #72859b;
+  font-size: 11px;
+}
+
+.meta-inbox-page .mi-conversation-meta {
+  margin-top: 6px;
+}
+
+.meta-inbox-page .mi-conversation-meta > span:first-child {
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-unread {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #087f8c;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-avatar {
+  flex-shrink: 0;
+  background: #e2f1f3;
+  color: #126b77;
+}
+
+.meta-inbox-page .mi-sidebar-footer {
+  min-height: 43px;
+  padding: 12px 14px;
+  font-size: 10px;
+}
+
+/* Chat header */
+
+.meta-inbox-page .mi-chat-header {
+  min-height: 90px;
+  padding: 17px 19px;
+  border-bottom: 1px solid #e7edf3;
+}
+
+.meta-inbox-page .mi-chat-person {
+  gap: 12px;
+}
+
+.meta-inbox-page .mi-avatar-large {
+  width: 49px;
+  height: 49px;
+  flex-basis: 49px;
+}
+
+.meta-inbox-page .mi-chat-person h2 {
+  color: #1a3047;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.meta-inbox-page .mi-chat-person p {
+  gap: 7px;
+  margin-top: 7px;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-status-chip {
+  padding: 7px 11px;
+  font-size: 10px;
+}
+
+/* Conversation history divider */
+
+.meta-inbox-page .mi-chat-context {
+  min-height: 39px;
+  padding: 11px 18px;
+  gap: 9px;
+  background: #fff;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  padding: 23px 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.meta-inbox-page .mi-message-row {
+  gap: 9px;
+  margin: 8px 0;
+}
+
+.meta-inbox-page .mi-message-content {
+  max-width: min(78%, 460px);
+}
+
+.meta-inbox-page .mi-bubble {
+  padding: 12px 15px;
+  border: 1px solid #edf0f5;
+  border-radius: 13px;
+  background: #f0f3f9;
+  color: #263f57;
+  font-size: 12px;
+  line-height: 1.65;
+  box-shadow: none;
+}
+
+.meta-inbox-page .mi-message-row.inbound .mi-bubble {
+  border-bottom-left-radius: 4px;
+  background: #f0f3f9;
+}
+
+.meta-inbox-page .mi-message-row.outbound .mi-bubble {
+  border-color: #c9eceb;
+  border-bottom-right-radius: 4px;
+  background: #dcf4f1;
+  color: #214b50;
+}
+
+.meta-inbox-page .mi-message-time {
+  margin-top: 5px;
+  font-size: 10px;
+}
+
+/* =========================================
+   REPLY COMPOSER — replaces old disabled box
+========================================= */
+
+.meta-inbox-page .mi-composer {
+  flex: 0 0 auto;
+  padding: 0 15px 13px;
+  border-top: 1px solid #edf1f5;
+  background: #fff;
+}
+
+.meta-inbox-page .mi-composer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-height: 40px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.meta-inbox-page .mi-composer-tabs button {
+  position: relative;
+  align-self: stretch;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: #61748a;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.meta-inbox-page .mi-composer-tabs button.active {
+  color: #087f8c;
+  font-weight: 750;
+}
+
+.meta-inbox-page .mi-composer-tabs button.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: #0795a3;
+  content: "";
+}
+
+.meta-inbox-page .mi-composer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 9px;
+}
+
+.meta-inbox-page .mi-composer-form textarea {
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  max-height: 125px;
+  padding: 13px 14px;
+  resize: vertical;
+  border: 1px solid #dce5ee;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: #263f57;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.meta-inbox-page .mi-composer-form textarea::placeholder {
+  color: #8999ad;
+}
+
+.meta-inbox-page .mi-composer-form textarea:focus {
+  border-color: #80cbd1;
+  box-shadow: 0 0 0 3px rgba(8, 127, 140, .08);
+}
+
+.meta-inbox-page .mi-composer-form textarea:disabled {
+  background: #f5f7fa;
+  cursor: not-allowed;
+}
+
+.meta-inbox-page .mi-composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.meta-inbox-page .mi-composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.meta-inbox-page .mi-composer-tools button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #526b83;
+  font-size: 17px;
+}
+
+.meta-inbox-page .mi-composer-tools button:disabled {
+  opacity: .75;
+  cursor: not-allowed;
+}
+
+.meta-inbox-page .mi-send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 105px;
+  min-height: 39px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #078b98;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s, opacity .2s;
+}
+
+.meta-inbox-page .mi-send-button:hover:not(:disabled) {
+  background: #066c78;
+}
+
+.meta-inbox-page .mi-send-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.meta-inbox-page .mi-send-button span {
+  font-size: 15px;
+}
+
+.meta-inbox-page .mi-send-error,
+.meta-inbox-page .mi-send-notice {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.meta-inbox-page .mi-send-error {
+  color: #bd3434;
+}
+
+.meta-inbox-page .mi-send-notice {
+  color: #12835c;
+}
+
+/* Customer details panel */
+
+.meta-inbox-page .mi-details-panel {
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.meta-inbox-page .mi-details-heading {
+  min-height: 65px;
+  padding: 19px 16px;
+}
+
+.meta-inbox-page .mi-details-heading h2 {
+  font-size: 13px;
+}
+
+.meta-inbox-page .mi-customer-profile {
+  padding: 23px 14px 20px;
+}
+
+.meta-inbox-page .mi-avatar-profile {
+  width: 70px;
+  height: 70px;
+  flex-basis: 70px;
+}
+
+.meta-inbox-page .mi-customer-profile h3 {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.meta-inbox-page .mi-customer-profile > p {
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-customer-platform {
+  margin-top: 13px;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-detail-section {
+  padding: 18px 15px;
+}
+
+.meta-inbox-page .mi-detail-section h3 {
+  margin-bottom: 12px;
+  font-size: 9px;
+  letter-spacing: .8px;
+}
+
+.meta-inbox-page .mi-detail-row {
+  padding: 9px 0;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-detail-row > span {
+  color: #7c8ea3;
+}
+
+.meta-inbox-page .mi-detail-row > strong {
+  color: #304960;
+  font-size: 10px;
+}
+
+.meta-inbox-page .mi-details-footer {
+  margin-top: auto;
+  padding: 15px;
+}
+
+/* Empty states and scrollbars */
+
+.meta-inbox-page .mi-empty-state {
+  color: #7d8ea3;
+}
+
+.meta-inbox-page .mi-empty-state strong {
+  color: #344d64;
+}
+
+.meta-inbox-page .mi-conversation-list,
+.meta-inbox-page .mi-messages,
+.meta-inbox-page .mi-details-panel {
+  scrollbar-width: thin;
+  scrollbar-color: #dce5ec transparent;
+}
+
+.meta-inbox-page .mi-conversation-list::-webkit-scrollbar,
+.meta-inbox-page .mi-messages::-webkit-scrollbar,
+.meta-inbox-page .mi-details-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.meta-inbox-page .mi-conversation-list::-webkit-scrollbar-thumb,
+.meta-inbox-page .mi-messages::-webkit-scrollbar-thumb,
+.meta-inbox-page .mi-details-panel::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background: #dce5ec;
+}
+
+/* Laptop / medium desktop */
+
+@media (max-width: 1250px) and (min-width: 761px) {
+  .meta-inbox-page {
+    padding: 16px;
+  }
+
+  .meta-inbox-page .mi-workspace {
+    grid-template-columns:
+      minmax(235px, 285px)
+      minmax(320px, 1fr)
+      minmax(240px, 275px);
+    height: calc(100vh - 190px);
+  }
+
+  .meta-inbox-page .mi-details-panel {
+    display: flex;
+  }
+}
+
+/* Tablet */
+
+@media (max-width: 1050px) and (min-width: 761px) {
+  .meta-inbox-page .mi-workspace {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  }
+
+  .meta-inbox-page .mi-details-panel {
+    display: none;
+  }
+}
+
+/* Mobile */
+
+@media (max-width: 760px) {
+  .meta-inbox-page {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .meta-inbox-page .mi-page-header {
+    align-items: flex-start;
+  }
+
+  .meta-inbox-page .mi-page-header h1 {
+    font-size: 23px;
+  }
+
+  .meta-inbox-page .mi-workspace {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .meta-inbox-page .mi-sidebar {
+    max-height: 420px;
+    border-right: 0;
+    border-bottom: 1px solid #e6ecf2;
+  }
+
+  .meta-inbox-page .mi-conversation-list {
+    min-height: 140px;
+    max-height: 240px;
+  }
+
+  .meta-inbox-page .mi-chat-panel {
+    min-height: 560px;
+    border-right: 0;
+  }
+
+  .meta-inbox-page .mi-chat-header {
+    padding: 14px;
+  }
+
+  .meta-inbox-page .mi-messages {
+    min-height: 300px;
+    max-height: 480px;
+    padding: 15px 12px;
+  }
+
+  .meta-inbox-page .mi-composer {
+    padding: 0 10px 10px;
+  }
+
+  .meta-inbox-page .mi-details-panel {
+    display: flex;
+    max-height: 600px;
+    border-top: 1px solid #e6ecf2;
+  }
+
+  .meta-inbox-page .mi-message-content {
+    max-width: 84%;
+  }
+}
