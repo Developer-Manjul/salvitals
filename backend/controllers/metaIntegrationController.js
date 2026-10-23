@@ -1416,6 +1416,13 @@ exports.receiveWebhook = async (
 
                     const direction = isEcho ? "outbound" : "inbound";
                     const participantId = isEcho ? recipientId : senderId;
+                    console.log("META PROFILE ID CHECK:", {
+                    platform: isInstagram ? "instagram" : "facebook",
+                    pageId: integration.pageId,
+                    senderId,
+                    recipientId,
+                    participantId,
+                });
                     const text = String(message.text || "").trim();
 
                     const attachments = (
