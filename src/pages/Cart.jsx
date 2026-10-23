@@ -1979,63 +1979,99 @@ const response = await fetch(
               <div className="summary-divider" />
 
               
-                  <div
+                  
+                <div
+                  style={{
+                    margin: "16px 0",
+                    padding: "14px",
+                    border: "1px solid #dbe3ed",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <strong
                     style={{
-                      margin: "16px 0",
-                      padding: "14px",
-                      border: "1px solid #dbe3ed",
-                      borderRadius: "10px",
+                      display: "block",
+                      marginBottom: "10px",
                     }}
                   >
-                    <strong style={{ display: "block", marginBottom: "10px" }}>
-                      Have a voucher code?
-                    </strong>
+                    Have a voucher code?
+                  </strong>
 
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <input
-                        type="text"
-                        value={voucherCode}
-                        onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                        placeholder="Enter voucher code"
-                        disabled={loading}
-                        style={{
-                          minWidth: 0,
-                          flex: 1,
-                          padding: "11px",
-                          border: "1px solid #dbe3ed",
-                          borderRadius: "7px",
-                          textTransform: "uppercase",
-                        }}
-                      />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={voucherCode}
+                      onChange={(e) => {
+                        setVoucherCode(e.target.value.toUpperCase());
+                        setVoucherApplied(false);
+                        setVoucherMessage("");
+                        setError("");
+                      }}
+                      placeholder="Enter voucher code"
+                      disabled={loading}
+                      style={{
+                        minWidth: 0,
+                        flex: "1 1 140px",
+                        padding: "11px",
+                        border: "1px solid #dbe3ed",
+                        borderRadius: "7px",
+                        textTransform: "uppercase",
+                      }}
+                    />
 
-                      <button
-                        type="button"
-                       onClick={() => {
-                          if (
-                            voucherCode.trim().toUpperCase() === "SV-FIRST01" &&
-                            currency === "INR"
-                          ) {
-                            setVoucherApplied(true);
-                            setVoucherMessage("Voucher applied: ₹500 off");
-                            setError("");
-                          } else {
-                            setVoucherApplied(false);
-                            setVoucherMessage("");
-                            setError("Invalid voucher code or currency.");
-                          }
-                        }}
-                        disabled={loading || !voucherCode.trim()}
-                        style={{
-                          padding: "10px 14px",
-                          border: 0,
-                          borderRadius: "7px",
-                          background: "#00656A",
-                          color: "#fff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Apply
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isUpgrade) {
+                          setVoucherApplied(false);
+                          setVoucherMessage("");
+                          setError(
+                           "Voucher is available for new users only."
+                          );
+                          return;
+                        }
+
+                        if (currency !== "INR") {
+                          setVoucherApplied(false);
+                          setVoucherMessage("");
+                          setError("Vouchers are available for INR payments only.");
+                          return;
+                        }
+
+                        if (
+                          voucherCode.trim().toUpperCase() !== "SV-FIRST01"
+                        ) {
+                          setVoucherApplied(false);
+                          setVoucherMessage("");
+                          setError("Invalid voucher code.");
+                          return;
+                        }
+
+                        setVoucherApplied(true);
+                        setVoucherMessage("Voucher applied: ₹500 off");
+                        setError("");
+                      }}
+                      disabled={loading || !voucherCode.trim()}
+                      style={{
+                        padding: "10px 14px",
+                        border: 0,
+                        borderRadius: "7px",
+                        background: "#00656A",
+                        color: "#fff",
+                        cursor: loading ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+
                   {voucherMessage && (
                     <small
                       style={{
@@ -2047,8 +2083,20 @@ const response = await fetch(
                       {voucherMessage}
                     </small>
                   )}
-                                      </div>
-                  </div>
+
+                  {error && (
+                    <small
+                      style={{
+                        display: "block",
+                        marginTop: "8px",
+                        color: "#c0392b",
+                      }}
+                    >
+                      {error}
+                    </small>
+                  )}
+                </div>
+
 
 
               <div className="summary-row">
