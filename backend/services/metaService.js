@@ -536,12 +536,18 @@ exports.sendConversationMessage = async ({
   );
 };
 
+
 exports.getMessagingParticipantProfile = async ({
     platform,
     participantId,
     pageAccessToken,
 }) => {
     if (!participantId || !pageAccessToken) {
+        console.warn("META PARTICIPANT PROFILE SKIPPED:", {
+            platform,
+            hasParticipantId: Boolean(participantId),
+            hasAccessToken: Boolean(pageAccessToken),
+        });
         return null;
     }
 
@@ -561,6 +567,13 @@ exports.getMessagingParticipantProfile = async ({
             }
         );
 
+        console.log("META PARTICIPANT PROFILE RAW RESPONSE:", {
+            platform,
+            participantId,
+            fields,
+            profile,
+        });
+
         const name =
             platform === "instagram"
                 ? profile.username || profile.name || ""
@@ -568,14 +581,27 @@ exports.getMessagingParticipantProfile = async ({
                     .filter(Boolean)
                     .join(" ");
 
-        return {
+        const result = {
             name: String(name || "").trim(),
             picture: String(profile.profile_pic || "").trim(),
         };
+
+        console.log("META PARTICIPANT PROFILE RESULT:", {
+            platform,
+            participantId,
+            hasName: Boolean(result.name),
+            hasPicture: Boolean(result.picture),
+        });
+
+        return result;
     } catch (error) {
         console.error(
             "META PARTICIPANT PROFILE FETCH ERROR:",
-            error.metaError || error.message
+            JSON.stringify({
+                message: error.message,
+                status: error.status,
+                metaError: error.metaError,
+            }, null, 2)
         );
 
         return null;
