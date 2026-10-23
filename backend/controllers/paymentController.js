@@ -1155,47 +1155,35 @@ exports.getPaymentStatus = async (req, res) => {
     }
 };
 
-exports.createOrder =
-    async (
-        req,
-        res
-    ) => {
-        try {
-            const userId =
-                getUserId(req);
 
-            if (!userId) {
-                return res.status(401).json({
-                    success: false,
-                    message:
-                        "Please sign in before payment",
-                });
-            }
+exports.createOrder = async (req, res) => {
+    try {
+        const userId = getUserId(req);
 
-            const user =
-                await User.findById(
-                    userId
-                );
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Please sign in before payment",
+            });
+        }
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    message:
-                        "User not found",
-                });
-            }
+        const user = await User.findById(userId);
 
-            if (
-                !user.emailVerified
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Please verify your email before payment",
-                });
-            }
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "User not found",
+            });
+        }
 
-            const {
+        if (!user.emailVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email before payment",
+            });
+        }
+
+        const {
             orderType = "subscription",
             currency = "INR",
             planId,
@@ -1207,531 +1195,370 @@ exports.createOrder =
             selectedAddons = [],
             voucherCode = "",
         } = req.body;
-            const curr =
-                String(currency)
-                    .toUpperCase() ===
-                "USD"
-                    ? "USD"
-                    : "INR";
 
-            if (
-                orderType ===
-                "addon"
-            ) {
-                if (
-                    curr !==
-                    "INR"
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "Add-ons are currently available in INR only.",
-                    });
-                }
+        const curr =
+            String(currency).toUpperCase() === "USD"
+                ? "USD"
+                : "INR";
 
-               const subscription = user.subscription || {};
-
-                    const subscriptionIsActive =
-                        subscription.status === "active" &&
-                        subscription.expiresAt &&
-                        new Date(subscription.expiresAt).getTime() > Date.now();
-
-                    if (!subscriptionIsActive) {
-                        return res.status(400).json({
-                            success: false,
-                            message:
-                                "Please activate or renew your CRM plan before purchasing an add-on.",
-                        });
-                    }
-
-                const addonCalculation =
-                    calculateAddon(
-                        addonType,
-                        quantity,
-                        curr
-                    );
-
-                if (!addonCalculation) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "Invalid add-on or quantity selected.",
-                    });
-                }
-
-                const subtotal =
-                    addonCalculation.amount;
-
-                const tax =
-                    calculateTax(
-                        subtotal,
-                        curr
-                    );
-
-                const totalAmount =
-                    Math.round(
-                        (
-                            subtotal +
-                            tax
-                        ) *
-                            100
-                    ) / 100;
-
-                const razorpayAmount =
-                    Math.round(
-                        totalAmount *
-                            100
-                    );
-
-                const addonDates =
-                    getAddonDates();
-
-                const razorpayOrder =
-                    await razorpay.orders.create({
-                        amount:
-                            razorpayAmount,
-                        currency:
-                            curr,
-                        receipt:
-                            `salevitals_addon_${Date.now()}`,
-                        notes: {
-                            orderType:
-                                "addon",
-                            addonType:
-                                addonCalculation.addonType,
-                            addonName:
-                                addonCalculation.addonName,
-                            addonQuantity:
-                                String(
-                                    addonCalculation.quantity
-                                ),
-                            addonMonths:
-                                "1",
-                            addonQuota:
-                                String(
-                                    addonCalculation.quota
-                                ),
-                            addonUnitPrice:
-                                String(
-                                    addonCalculation.unitPrice
-                                ),
-                            addonStartsAt:
-                                addonDates.startedAt.toISOString(),
-                            addonExpiresAt:
-                                addonDates.expiresAt.toISOString(),
-                            subtotal:
-                                String(
-                                    subtotal
-                                ),
-                            tax:
-                                String(
-                                    tax
-                                ),
-                            totalAmount:
-                                String(
-                                    totalAmount
-                                ),
-                            userId:
-                                String(
-                                    userId
-                                ),
-                        },
-                    });
-
-                const dbOrder =
-                    await Order.create({
-                        userId,
-                        orderType:
-                            "addon",
-                        planId:
-                            addonCalculation.addonType,
-                        planName:
-                            user.subscription?.planName ||
-                            "",
-                        addonType:
-                            addonCalculation.addonType,
-                        addonName:
-                            addonCalculation.addonName,
-                        addonMonths:
-                            1,
-                        addonUnitPrice:
-                            addonCalculation.unitPrice,
-                        addonQuota:
-                            addonCalculation.quota,
-                        addonQuotaUsed:
-                            0,
-                        addonStartsAt:
-                            addonDates.startedAt,
-                        addonExpiresAt:
-                            addonDates.expiresAt,
-                        amount:
-                            totalAmount,
-                        planAmount:
-                            subtotal,
-                        setupFee:
-                            0,
-                        tax,
-                        currency:
-                            curr,
-                        period:
-                            1,
-                        periodLabel:
-                            `${addonCalculation.quantity} pack${
-                                addonCalculation.quantity > 1
-                                    ? "s"
-                                    : ""
-                            }`,
-                        
-                        paymentStatus:
-                            "pending",
-                        razorpayOrderId:
-                            razorpayOrder.id,
-                        country:
-                            country || "",
-                    });
-
-                return res.status(200).json({
-                    success: true,
-                    order: {
-                        id:
-                            razorpayOrder.id,
-                        amount:
-                            razorpayOrder.amount,
-                        currency:
-                            razorpayOrder.currency,
-                        receipt:
-                            razorpayOrder.receipt,
-                        dbOrderId:
-                            dbOrder._id.toString(),
-                        orderType:
-                            "addon",
-                        addonType:
-                            addonCalculation.addonType,
-                        addonName:
-                            addonCalculation.addonName,
-                        addonQuantity:
-                            addonCalculation.quantity,
-                        addonMonths:
-                            1,
-                        addonQuota:
-                            addonCalculation.quota,
-                        addonUnitPrice:
-                            addonCalculation.unitPrice,
-                        subtotal,
-                        tax,
-                        totalAmount,
-                        addonStartsAt:
-                            addonDates.startedAt,
-                        addonExpiresAt:
-                            addonDates.expiresAt,
-                    },
+        // ADD-ON PURCHASE: vouchers do not apply.
+        if (orderType === "addon") {
+            if (curr !== "INR") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Add-ons are currently available in INR only.",
                 });
             }
 
-            const normalizedPlanId =
-                normalizePlanId(
-                    planId
-                );
+            const subscription = user.subscription || {};
 
-            const plan =
-                getPlan(
-                    normalizedPlanId
-                );
+            const subscriptionIsActive =
+                subscription.status === "active" &&
+                subscription.expiresAt &&
+                new Date(subscription.expiresAt).getTime() > Date.now();
 
-            if (!plan) {
+            if (!subscriptionIsActive) {
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Invalid plan selected",
+                        "Please activate or renew your CRM plan before purchasing an add-on.",
                 });
             }
 
-            const months =
-                Number(period);
+            const addonCalculation = calculateAddon(
+                addonType,
+                quantity,
+                curr
+            );
+
+            if (!addonCalculation) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid add-on or quantity selected.",
+                });
+            }
+
+            const subtotal = addonCalculation.amount;
+            const tax = calculateTax(subtotal, curr);
+            const totalAmount =
+                Math.round((subtotal + tax) * 100) / 100;
+            const razorpayAmount = Math.round(totalAmount * 100);
+            const addonDates = getAddonDates();
+
+            const razorpayOrder = await razorpay.orders.create({
+                amount: razorpayAmount,
+                currency: curr,
+                receipt: `salevitals_addon_${Date.now()}`,
+                notes: {
+                    orderType: "addon",
+                    addonType: addonCalculation.addonType,
+                    addonName: addonCalculation.addonName,
+                    addonQuantity: String(addonCalculation.quantity),
+                    addonMonths: "1",
+                    addonQuota: String(addonCalculation.quota),
+                    addonUnitPrice: String(addonCalculation.unitPrice),
+                    addonStartsAt: addonDates.startedAt.toISOString(),
+                    addonExpiresAt: addonDates.expiresAt.toISOString(),
+                    subtotal: String(subtotal),
+                    tax: String(tax),
+                    totalAmount: String(totalAmount),
+                    userId: String(userId),
+                },
+            });
+
+            const dbOrder = await Order.create({
+                userId,
+                orderType: "addon",
+                planId: addonCalculation.addonType,
+                planName: user.subscription?.planName || "",
+                addonType: addonCalculation.addonType,
+                addonName: addonCalculation.addonName,
+                addonMonths: 1,
+                addonUnitPrice: addonCalculation.unitPrice,
+                addonQuota: addonCalculation.quota,
+                addonQuotaUsed: 0,
+                addonStartsAt: addonDates.startedAt,
+                addonExpiresAt: addonDates.expiresAt,
+                amount: totalAmount,
+                planAmount: subtotal,
+                setupFee: 0,
+                tax,
+                currency: curr,
+                period: 1,
+                periodLabel: `${addonCalculation.quantity} pack${
+                    addonCalculation.quantity > 1 ? "s" : ""
+                }`,
+                paymentStatus: "pending",
+                razorpayOrderId: razorpayOrder.id,
+                country: country || "",
+            });
+
+            return res.status(200).json({
+                success: true,
+                order: {
+                    id: razorpayOrder.id,
+                    amount: razorpayOrder.amount,
+                    currency: razorpayOrder.currency,
+                    receipt: razorpayOrder.receipt,
+                    dbOrderId: dbOrder._id.toString(),
+                    orderType: "addon",
+                    addonType: addonCalculation.addonType,
+                    addonName: addonCalculation.addonName,
+                    addonQuantity: addonCalculation.quantity,
+                    addonMonths: 1,
+                    addonQuota: addonCalculation.quota,
+                    addonUnitPrice: addonCalculation.unitPrice,
+                    subtotal,
+                    tax,
+                    totalAmount,
+                    addonStartsAt: addonDates.startedAt,
+                    addonExpiresAt: addonDates.expiresAt,
+                },
+            });
+        }
+
+        // SUBSCRIPTION ORDER
+        const normalizedPlanId = normalizePlanId(planId);
+        const plan = getPlan(normalizedPlanId);
+
+        if (!plan) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid plan selected",
+            });
+        }
+
+        const months = Number(period);
+
+        if (
+            !Number.isInteger(months) ||
+            !Object.prototype.hasOwnProperty.call(DISCOUNTS, months)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid subscription period",
+            });
+        }
+
+        const calculation = calculateSubscription(
+            normalizedPlanId,
+            months,
+            curr
+        );
+
+        if (!calculation) {
+            return res.status(400).json({
+                success: false,
+                message: "Unable to calculate plan amount",
+            });
+        }
+
+        let appliedVoucherCode = "";
+        let voucherDiscount = 0;
+
+        const enteredVoucherCode = String(voucherCode || "")
+            .trim()
+            .toUpperCase();
+
+        if (enteredVoucherCode) {
+            if (curr !== "INR") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Vouchers are available for INR payments only.",
+                });
+            }
+
+            if (enteredVoucherCode !== "SV-FIRST01") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid voucher code.",
+                });
+            }
+
+            const assignedVoucher = user.assignedVoucher || {};
+
+            if (assignedVoucher.isUsed) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This voucher has already been used.",
+                });
+            }
+
+            // Existing paid subscription means no first-purchase voucher.
+            const previousPaidSubscription = await Order.exists({
+                userId: user._id,
+                orderType: "subscription",
+                paymentStatus: "paid",
+            });
+
+            if (previousPaidSubscription) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Voucher is valid only for your first subscription purchase.",
+                });
+            }
+
+            // Also reject users whose account already has an active plan.
+            if (user.subscription?.status === "active") {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Voucher is only available for a new subscription purchase.",
+                });
+            }
+
+            voucherDiscount = Math.min(
+                500,
+                Math.max(
+                    0,
+                    Number(assignedVoucher.discountAmount) || 500
+                ),
+                Math.max(
+                    0,
+                    Number(calculation.discountedAmount) || 0
+                )
+            );
+
+            appliedVoucherCode = enteredVoucherCode;
+        }
+
+        const setupFee = calculateSetupFee(user, curr);
+
+        if (!Array.isArray(selectedAddons)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid add-ons selection.",
+            });
+        }
+
+        const allowedAddonTypes = [
+            "whatsapp_leads",
+            "contacts",
+            "ai_chat",
+            "pharmacy_invoice",
+        ];
+
+        const calculatedAddons = [];
+
+        for (const item of selectedAddons) {
+            const addonTypeSelected = item?.addonType;
+            const addonQuantity = Number(item?.quantity ?? 1);
 
             if (
-                !Number.isInteger(
-                    months
-                ) ||
-                !Object.prototype.hasOwnProperty.call(
-                    DISCOUNTS,
-                    months
+                !allowedAddonTypes.includes(addonTypeSelected) ||
+                !Number.isInteger(addonQuantity) ||
+                addonQuantity < 1 ||
+                addonQuantity > 10
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid add-on or quantity selected.",
+                });
+            }
+
+            if (
+                calculatedAddons.some(
+                    (addon) => addon.addonType === addonTypeSelected
                 )
             ) {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        "Invalid subscription period",
+                    message: "Duplicate add-on selected.",
                 });
             }
 
-            const calculation =
-                calculateSubscription(
-                    normalizedPlanId,
-                    months,
-                    curr
-                );
-
-            if (!calculation) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Unable to calculate plan amount",
-                });
-            }
-
-            let appliedVoucherCode = "";
-            let voucherDiscount = 0;
-
-            const enteredVoucherCode = String(voucherCode || "")
-                .trim()
-                .toUpperCase();
-
-            if (enteredVoucherCode) {
-                if (curr !== "INR") {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Vouchers are available for INR payments only.",
-                    });
-                }
-
-                const assignedVoucher = user.assignedVoucher || {};
-
-                if (enteredVoucherCode !== "SV-FIRST01") {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid voucher code.",
-                    });
-                }
-
-                if (assignedVoucher.isUsed) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "This voucher has already been used.",
-                    });
-                }
-
-                // Voucher is only for the user's first paid subscription.
-                const previousPaidSubscription = await Order.exists({
-                    userId: user._id,
-                    orderType: "subscription",
-                    paymentStatus: "paid",
-                });
-
-                if (previousPaidSubscription) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Voucher is valid only for your first subscription purchase.",
-                    });
-                }
-
-                voucherDiscount = Math.min(
-                    500,
-                    Math.max(0, Number(assignedVoucher.discountAmount) || 500),
-                    Math.max(0, Number(calculation.discountedAmount) || 0)
-                );
-
-                appliedVoucherCode = enteredVoucherCode;
-            }
-
-           const setupFee =
-                calculateSetupFee(
-                    user,
-                    curr
-                );
-
-            // Validate selected add-ons
-            if (!Array.isArray(selectedAddons)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid add-ons selection.",
-                });
-            }
-
-            const allowedAddonTypes = [
-                "whatsapp_leads",
-                "contacts",
-                "ai_chat",
-                "pharmacy_invoice",
-            ];
-
-            const calculatedAddons = [];
-
-            for (const item of selectedAddons) {
-                const addonTypeSelected = item?.addonType;
-                const addonQuantity = Number(item?.quantity ?? 1);
-
-                if (
-                    !allowedAddonTypes.includes(addonTypeSelected) ||
-                    !Number.isInteger(addonQuantity) ||
-                    addonQuantity < 1 ||
-                    addonQuantity > 10
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid add-on or quantity selected.",
-                    });
-                }
-
-                // Prevent duplicate add-on entries
-                if (
-                    calculatedAddons.some(
-                        addon => addon.addonType === addonTypeSelected
-                    )
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Duplicate add-on selected.",
-                    });
-                }
-
-                const addonCalculation = calculateAddon(
-                    addonTypeSelected,
-                    addonQuantity,
-                    curr
-                );
-
-                if (!addonCalculation) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Unable to calculate add-on amount.",
-                    });
-                }
-
-                calculatedAddons.push({
-                    addonType: addonCalculation.addonType,
-                    quantity: addonCalculation.quantity,
-                    unitPrice: addonCalculation.unitPrice,
-                    quota: addonCalculation.quota,
-                    amount: addonCalculation.amount,
-                });
-            }
-
-            const addonsAmount = calculatedAddons.reduce(
-                (sum, addon) => sum + addon.amount,
-                0
+            const addonCalculation = calculateAddon(
+                addonTypeSelected,
+                addonQuantity,
+                curr
             );
 
-            const planAmountAfterVoucher =
-            Math.max(0, calculation.discountedAmount - voucherDiscount);
-
-                const subtotal =
-                    planAmountAfterVoucher +
-                    setupFee +
-                    addonsAmount;
-
-            const tax =
-                calculateTax(
-                    subtotal,
-                    curr
-                );
-
-            const totalAmount =
-                Math.round(
-                    (
-                        subtotal +
-                        tax
-                    ) *
-                        100
-                ) / 100;
-
-            const razorpayAmount =
-                Math.round(
-                    totalAmount *
-                        100
-                );
-
-            const razorpayOrder =
-                await razorpay.orders.create({
-                    amount:
-                        razorpayAmount,
-                    currency:
-                        curr,
-                    receipt:
-                        `salevitals_${Date.now()}`,
-                    notes: {
-                        orderType:
-                            "subscription",
-                        planId:
-                            normalizedPlanId,
-                        planName:
-                            plan.name,
-                        period:
-                            String(
-                                months
-                            ),
-                        periodLabel:
-                            periodLabel ||
-                            `${months} month${
-                                months > 1
-                                    ? "s"
-                                    : ""
-                            }`,
-                        planAmount:
-                            String(
-                                calculation.discountedAmount
-                            ),
-                        originalPlanAmount:
-                            String(
-                                calculation.originalAmount
-                            ),
-                        discountPercentage:
-                            String(
-                                calculation.discountPercentage
-                            ),
-                        discountAmount:
-                            String(
-                                calculation.discountAmount
-                            ),
-                        setupFee:
-                            String(
-                                setupFee
-                            ),
-                        tax:
-                            String(
-                                tax
-                            ),
-                        cartTotal:
-                            String(
-                                totalAmount
-                            ),
-                        addonsAmount:
-                    String(addonsAmount),
-                     addons:
-                    JSON.stringify(calculatedAddons),
-                        userId:
-                            String(
-                                userId
-                            ),
-                    },
+            if (!addonCalculation) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Unable to calculate add-on amount.",
                 });
+            }
 
-            
-            const dbOrder =
-                await Order.create({
-                    userId,
-                    orderType: "subscription",
-                    planId: normalizedPlanId,
-                    planName: plan.name,
-                    amount: totalAmount,
-                    planAmount: planAmountAfterVoucher,
-                    voucherCode: appliedVoucherCode,
-                    voucherDiscount: voucherDiscount,
-                    setupFee,
-                    tax,
-                    currency: curr,
-                    period: months,
-                    periodLabel:
-                        periodLabel ||
-                        `${months} month${months > 1 ? "s" : ""}`,
-                    addons: calculatedAddons,
-                    paymentStatus: "pending",
-                    razorpayOrderId: razorpayOrder.id,
-                    country: country || "",
-                });
+            calculatedAddons.push({
+                addonType: addonCalculation.addonType,
+                quantity: addonCalculation.quantity,
+                unitPrice: addonCalculation.unitPrice,
+                quota: addonCalculation.quota,
+                amount: addonCalculation.amount,
+            });
+        }
 
+        const addonsAmount = calculatedAddons.reduce(
+            (sum, addon) => sum + addon.amount,
+            0
+        );
 
-           
+        const planAmountAfterVoucher = Math.max(
+            0,
+            calculation.discountedAmount - voucherDiscount
+        );
+
+        const subtotal =
+            planAmountAfterVoucher + setupFee + addonsAmount;
+
+        const tax = calculateTax(subtotal, curr);
+
+        const totalAmount =
+            Math.round((subtotal + tax) * 100) / 100;
+
+        const razorpayAmount = Math.round(totalAmount * 100);
+
+        const razorpayOrder = await razorpay.orders.create({
+            amount: razorpayAmount,
+            currency: curr,
+            receipt: `salevitals_${Date.now()}`,
+            notes: {
+                orderType: "subscription",
+                planId: normalizedPlanId,
+                planName: plan.name,
+                period: String(months),
+                periodLabel:
+                    periodLabel ||
+                    `${months} month${months > 1 ? "s" : ""}`,
+                planAmount: String(planAmountAfterVoucher),
+                originalPlanAmount: String(calculation.originalAmount),
+                discountPercentage: String(calculation.discountPercentage),
+                discountAmount: String(calculation.discountAmount),
+                voucherCode: appliedVoucherCode,
+                voucherDiscount: String(voucherDiscount),
+                setupFee: String(setupFee),
+                tax: String(tax),
+                cartTotal: String(totalAmount),
+                addonsAmount: String(addonsAmount),
+                addons: JSON.stringify(calculatedAddons),
+                userId: String(userId),
+            },
+        });
+
+        const dbOrder = await Order.create({
+            userId,
+            orderType: "subscription",
+            planId: normalizedPlanId,
+            planName: plan.name,
+            amount: totalAmount,
+            planAmount: planAmountAfterVoucher,
+            voucherCode: appliedVoucherCode,
+            voucherDiscount,
+            setupFee,
+            tax,
+            currency: curr,
+            period: months,
+            periodLabel:
+                periodLabel ||
+                `${months} month${months > 1 ? "s" : ""}`,
+            addons: calculatedAddons,
+            paymentStatus: "pending",
+            razorpayOrderId: razorpayOrder.id,
+            country: country || "",
+        });
+
         return res.status(200).json({
             success: true,
             order: {
@@ -1752,22 +1579,20 @@ exports.createOrder =
                 discountAmount: calculation.discountAmount,
             },
         });
+    } catch (error) {
+        console.error("CREATE ORDER ERROR:", error);
 
-        } catch (error) {
-            console.error(
-                "CREATE ORDER ERROR:",
-                error
-            );
+        return res.status(500).json({
+            success: false,
+            message:
+                error?.error?.description ||
+                error?.message ||
+                "Unable to create payment order",
+        });
+    }
+};
 
-            return res.status(500).json({
-                success: false,
-                message:
-                    error?.error?.description ||
-                    error?.message ||
-                    "Unable to create payment order",
-            });
-        }
-    };
+
 
 
 exports.verifyPayment = async (req, res) => {
@@ -1817,8 +1642,6 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
-        // Mark voucher as used only for the matching,
-        // successfully paid subscription order.
         const markVoucherUsed = async (paidOrder) => {
             if (
                 paidOrder.orderType !== "subscription" ||
@@ -1831,6 +1654,15 @@ exports.verifyPayment = async (req, res) => {
                 paidOrder.voucherCode
             ).trim().toUpperCase();
 
+            if (normalizedCode !== "SV-FIRST01") {
+                console.error(
+                    "UNEXPECTED VOUCHER CODE:",
+                    normalizedCode
+                );
+                return false;
+            }
+
+            // First try to consume the matching assigned voucher atomically.
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: paidOrder.userId,
@@ -1851,21 +1683,22 @@ exports.verifyPayment = async (req, res) => {
                 return true;
             }
 
-            // Idempotent retry: this exact order may already
-            // have consumed the voucher.
-            const existingUser = await User.findOne({
+            // Idempotent retry for the same order.
+            const alreadyUsedByThisOrder = await User.findOne({
                 _id: paidOrder.userId,
                 "assignedVoucher.code": normalizedCode,
                 "assignedVoucher.isUsed": true,
                 "assignedVoucher.orderId": paidOrder._id,
             });
 
-            if (existingUser) {
+            if (alreadyUsedByThisOrder) {
                 return true;
             }
 
+            // Public voucher users may not have an assignedVoucher record.
+            // Do not silently claim usage was recorded if it was not.
             console.error(
-                "VOUCHER USAGE CONFLICT:",
+                "VOUCHER USAGE NOT RECORDED:",
                 {
                     orderId: String(paidOrder._id),
                     userId: String(paidOrder.userId),
@@ -1876,7 +1709,7 @@ exports.verifyPayment = async (req, res) => {
             return false;
         };
 
-        // Idempotent payment verification.
+        // Idempotent retry for already-paid orders.
         if (order.paymentStatus === "paid") {
             if (
                 order.orderType === "addon" &&
@@ -1908,12 +1741,15 @@ exports.verifyPayment = async (req, res) => {
                 }
             }
 
-           if (order.orderType === "subscription" && order.voucherCode) {
+            if (
+                order.orderType === "subscription" &&
+                order.voucherCode
+            ) {
                 const voucherMarked = await markVoucherUsed(order);
 
                 if (!voucherMarked) {
                     console.error(
-                        "Voucher usage could not be confirmed for order:",
+                        "Voucher usage could not be confirmed:",
                         order._id
                     );
                 }
@@ -1960,9 +1796,18 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
-        // Voucher is consumed only after payment is confirmed.
-        if (order.orderType === "subscription") {
-            await markVoucherUsed(order);
+        if (
+            order.orderType === "subscription" &&
+            order.voucherCode
+        ) {
+            const voucherMarked = await markVoucherUsed(order);
+
+            if (!voucherMarked) {
+                console.error(
+                    "Voucher usage could not be confirmed for paid order:",
+                    order._id
+                );
+            }
         }
 
         user = await activatePaidOrder(order);
@@ -2001,18 +1846,12 @@ exports.verifyPayment = async (req, res) => {
                         months: 1,
                         quota: order.addonQuota,
                         used:
-                            user?.addons?.[
-                                order.addonType
-                            ]?.used || 0,
+                            user?.addons?.[order.addonType]?.used || 0,
                         startsAt:
-                            user?.addons?.[
-                                order.addonType
-                            ]?.startsAt ||
+                            user?.addons?.[order.addonType]?.startsAt ||
                             order.addonStartsAt,
                         expiresAt:
-                            user?.addons?.[
-                                order.addonType
-                            ]?.expiresAt ||
+                            user?.addons?.[order.addonType]?.expiresAt ||
                             order.addonExpiresAt,
                     }
                     : null,
@@ -2027,37 +1866,24 @@ exports.verifyPayment = async (req, res) => {
                         amount: addon.amount,
                         months: 1,
                         startsAt:
-                            user?.addons?.[
-                                addon.addonType
-                            ]?.startsAt || null,
+                            user?.addons?.[addon.addonType]?.startsAt || null,
                         expiresAt:
-                            user?.addons?.[
-                                addon.addonType
-                            ]?.expiresAt || null,
+                            user?.addons?.[addon.addonType]?.expiresAt || null,
                     }))
                     : [],
 
             subscription: user?.subscription
                 ? {
-                    planId:
-                        user.subscription.planId || "",
-                    planName:
-                        user.subscription.planName || "",
-                    status:
-                        user.subscription.status || "active",
-                    billingCycle:
-                        user.subscription.billingCycle || "",
-                    startedAt:
-                        user.subscription.startedAt || null,
-                    expiresAt:
-                        user.subscription.expiresAt || null,
+                    planId: user.subscription.planId || "",
+                    planName: user.subscription.planName || "",
+                    status: user.subscription.status || "active",
+                    billingCycle: user.subscription.billingCycle || "",
+                    startedAt: user.subscription.startedAt || null,
+                    expiresAt: user.subscription.expiresAt || null,
                     nextBillingAt:
                         user.subscription.nextBillingAt || null,
-                    amount: Number(
-                        user.subscription.amount || 0
-                    ),
-                    currency:
-                        user.subscription.currency || "INR",
+                    amount: Number(user.subscription.amount || 0),
+                    currency: user.subscription.currency || "INR",
                     setupFeePaid: Boolean(
                         user.subscription.setupFeePaid
                     ),
@@ -2075,3 +1901,4 @@ exports.verifyPayment = async (req, res) => {
         });
     }
 };
+
