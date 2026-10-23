@@ -95,5 +95,9 @@ router.post(
   controller.sendInboxMessage
 );
 
+router.post(
+  "/resubscribe-leadgen",
+  controller.resubscribeLeadgen
+);
 
 module.exports = router;

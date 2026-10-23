@@ -2582,3 +2582,67 @@ exports.sendInboxMessage = async (req, res) => {
   }
 };
 
+
+exports.resubscribeLeadgen = async (req, res) => {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    try {
+        const pageId = String(
+            req.body?.pageId || ""
+        ).trim();
+
+        if (!pageId) {
+            return res.status(400).json({
+                success: false,
+                message: "pageId is required",
+            });
+        }
+
+        const integration = await MetaIntegration.findOne({
+            userId,
+            pageId,
+            isActive: true,
+        });
+
+        if (!integration) {
+            return res.status(404).json({
+                success: false,
+                message: "Active Meta Page integration not found",
+            });
+        }
+
+        const accessToken = decrypt(
+            integration.accessTokenEncrypted
+        );
+
+        const subscription = await meta.subscribePageToLeadgen(
+            integration.pageId,
+            accessToken
+        );
+
+        console.log(
+            "META LEADGEN RESUBSCRIPTION SUCCESS:",
+            integration.pageId,
+            subscription
+        );
+
+        return res.json({
+            success: true,
+            pageId: integration.pageId,
+            pageName: integration.pageName,
+            subscription,
+        });
+    } catch (error) {
+        console.error(
+            "META LEADGEN RESUBSCRIPTION ERROR:",
+            error.metaError || error.message
+        );
+
+        return res.status(502).json({
+            success: false,
+            message: "Leadgen resubscription failed",
+            error: error.metaError || error.message,
+        });
+    }
+};
