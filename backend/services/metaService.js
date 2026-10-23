@@ -443,6 +443,20 @@ exports.subscribePageToMessages = (
     }
   );
 
+  exports.getInstagramMessageSubscriptions = (
+    instagramAccountId,
+    accessToken
+) =>
+    graphRequest(
+        `/${encodeURIComponent(instagramAccountId)}/subscribed_apps`,
+        {
+            method: "GET",
+            params: {
+                access_token: accessToken,
+            },
+        }
+    );
+
 exports.getPageMessageSubscriptions = (
     pageId,
     pageAccessToken
