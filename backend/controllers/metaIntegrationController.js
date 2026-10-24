@@ -1401,6 +1401,14 @@ exports.receiveWebhook = async (
          }
 
                     const isEcho = message.is_echo === true;
+                    console.log("META MESSAGE EVENT DEBUG:", {
+    platform: isInstagram ? "instagram" : "facebook",
+    isEcho,
+    messageId: message.mid || null,
+    text: message.text || "",
+    senderId: event.sender?.id || null,
+    recipientId: event.recipient?.id || null,
+});
 
                     const senderId = String(
                         (isEcho
