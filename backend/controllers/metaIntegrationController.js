@@ -1461,6 +1461,9 @@ exports.receiveWebhook = async (
                         externalConversationId: participantId,
                     },
                     {
+                        $set: {
+                            participantId: participantId,
+                        },
                         $setOnInsert: {
                             userId: integration.userId,
                             platform: isInstagram ? "instagram" : "facebook",
