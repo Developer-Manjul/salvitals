@@ -1393,8 +1393,12 @@ exports.receiveWebhook = async (
                     const message = event.message || {};
 
                     if (!message.mid) {
-                        continue;
-                    }
+            console.log("META MESSAGE SKIPPED: NO MESSAGE ID", {
+            platform: isInstagram ? "instagram" : "facebook",
+                message: JSON.stringify(message),
+            });
+            continue;
+         }
 
                     const isEcho = message.is_echo === true;
 
@@ -1436,8 +1440,13 @@ exports.receiveWebhook = async (
                     }));
 
                     if (!text && !attachments.length) {
-                        continue;
-                    }
+    console.log("META MESSAGE SKIPPED: EMPTY CONTENT", {
+        platform: isInstagram ? "instagram" : "facebook",
+        messageId: message.mid,
+        message: JSON.stringify(message),
+    });
+    continue;
+}
 
                     const messageType = text
                         ? "text"
