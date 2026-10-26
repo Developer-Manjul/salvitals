@@ -219,6 +219,8 @@ const invoiceSchema = new mongoose.Schema(
                 "Cash",
                 "UPI",
                 "Bank Transfer",
+                    "Finance (EMI)"
+
             ],
             default: "",
             trim: true,

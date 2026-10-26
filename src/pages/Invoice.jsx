@@ -3194,6 +3194,8 @@ export default function Invoice() {
 
                   <option value="Bank Transfer">Bank Transfer</option>
 
+                  <option value="Finance (EMI)">Finance (EMI)</option>
+
                 </select>
 
               </div>

@@ -559,6 +559,7 @@ exports.createInvoice = async (req, res) => {
             "Credit Card",
             "Debit Card",
             "Bank Transfer",
+            "Finance (EMI)",
             "Cheque",
             "Other",
         ];

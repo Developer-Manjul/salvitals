@@ -660,6 +660,7 @@ const normalizePaymentMode = (value) => {
         "Cash",
         "UPI",
         "Bank Transfer",
+        "Finance (EMI)",
     ];
 
     const paymentMode = String(value || "").trim();
