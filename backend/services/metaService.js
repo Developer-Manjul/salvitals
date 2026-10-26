@@ -554,7 +554,7 @@ exports.getMessagingParticipantProfile = async ({
     try {
         const fields =
             platform === "instagram"
-                ? "name,username,profile_pic"
+              ? "name,username,profile_picture_url"
                 : "first_name,last_name,profile_pic";
 
         const profile = await graphRequest(
@@ -583,7 +583,9 @@ exports.getMessagingParticipantProfile = async ({
 
         const result = {
             name: String(name || "").trim(),
-            picture: String(profile.profile_pic || "").trim(),
+            picture: String(
+    profile.profile_picture_url || ""
+).trim(),
         };
 
         console.log("META PARTICIPANT PROFILE RESULT:", {
