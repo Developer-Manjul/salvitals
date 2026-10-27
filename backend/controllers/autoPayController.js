@@ -725,23 +725,50 @@ exports.createAutoPaySubscription = async (req, res) => {
             );
         }
 
-        const razorpaySubscription = await razorpay.subscriptions.create({
-            plan_id: savedPlan.planId,
-            total_count: totalCount,
-            customer_notify: true,
-            start_at: startAt,
-            notes: {
-                userId: String(owner._id),
-                orderId: String(order._id),
-                planId: normalizedPlan,
-                periodMonths: String(months),
-                includedAddons: JSON.stringify(includedAddons),
-                subtotal: String(recurringSubtotal),
-                tax: String(recurringTax),
-                total: String(recurringAmount),
-                setupFeeIncluded: "false",
-            },
-        });
+        let razorpaySubscription;
+
+        try {
+            console.log("AUTOPAY CREATING SUBSCRIPTION:", {
+                planId: savedPlan.planId,
+                amount: recurringAmount,
+                startAt,
+                totalCount,
+            });
+
+            razorpaySubscription = await razorpay.subscriptions.create({
+                plan_id: savedPlan.planId,
+                total_count: totalCount,
+                customer_notify: true,
+                start_at: startAt,
+                notes: {
+                    userId: String(owner._id),
+                    orderId: String(order._id),
+                    planId: normalizedPlan,
+                    periodMonths: String(months),
+                    includedAddons: JSON.stringify(includedAddons),
+                    subtotal: String(recurringSubtotal),
+                    tax: String(recurringTax),
+                    total: String(recurringAmount),
+                    setupFeeIncluded: "false",
+                },
+            });
+
+            console.log("AUTOPAY SUBSCRIPTION CREATED:", {
+                subscriptionId: razorpaySubscription.id,
+                status: razorpaySubscription.status,
+                planId: razorpaySubscription.plan_id,
+            });
+        } catch (error) {
+            console.error("AUTOPAY RAZORPAY CREATE ERROR:", {
+                message: error?.message,
+                statusCode: error?.statusCode,
+                description:
+                    error?.error?.description || error?.description,
+                code: error?.error?.code || error?.code,
+            });
+
+            throw error;
+        }
 
         owner.subscription = {
             ...(typeof subscription.toObject === "function"
@@ -790,8 +817,6 @@ exports.createAutoPaySubscription = async (req, res) => {
         });
     }
 };
-
-
 
 
 exports.handleAutoPayWebhook = async (req, res) => {
