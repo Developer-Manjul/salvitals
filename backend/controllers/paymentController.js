@@ -18,17 +18,17 @@ const PLANS = {
     starter: {
         name: "Starter",
         inr: 1453,
-        usd: 63,
+        usd: 49,
     },
     growth: {
         name: "Growth",
        inr: 2453,
-        usd: 93,
+        usd: 79,
     },
     scale: {
         name: "Scale",
         inr: 4453,
-        usd: 113,
+        usd: 99,
     },
 };
 
