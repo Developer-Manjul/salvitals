@@ -411,13 +411,8 @@ async function sendInvoiceIfNeeded(
     }
 }
 
-async function activateSubscription(
-    order
-) {
-    const user =
-        await User.findById(
-            order.userId
-        );
+async function activateSubscription(order) {
+    const user = await User.findById(order.userId);
 
     if (!user) {
         throw new Error(
@@ -425,10 +420,7 @@ async function activateSubscription(
         );
     }
 
-    const planId =
-        normalizePlanId(
-            order.planId
-        );
+    const planId = normalizePlanId(order.planId);
 
     const planName =
         planId === "enterprise"
@@ -437,45 +429,60 @@ async function activateSubscription(
               order.planName ||
               planId;
 
-    const period =
-        Number(order.period) || 1;
+    const period = Number(order.period) || 1;
 
-    const dates =
-        getSubscriptionDates(
-            period
-        );
+    const previousSubscription = user.subscription || {};
 
-    const existingSetupFeePaid =
-        Boolean(
-            user.subscription?.setupFeePaid
-        );
+    const previousExpiry = previousSubscription.expiresAt
+        ? new Date(previousSubscription.expiresAt)
+        : null;
+
+    const previousPlanIsActive =
+        previousSubscription.status === "active" &&
+        previousExpiry &&
+        previousExpiry.getTime() > Date.now();
+
+    // Renewal means the same plan is being purchased again.
+    const isRenewal =
+        Boolean(previousPlanIsActive) &&
+        normalizePlanId(previousSubscription.planId) === planId;
+
+    const dates = isRenewal
+        ? (() => {
+              const expiresAt = addMonths(previousExpiry, period);
+
+              return {
+                  startedAt: previousSubscription.startedAt || new Date(),
+                  expiresAt,
+                  nextBillingAt: expiresAt,
+              };
+          })()
+        : getSubscriptionDates(period);
+
+    const existingSetupFeePaid = Boolean(
+        previousSubscription.setupFeePaid
+    );
 
     const setupFeePaid =
         existingSetupFeePaid ||
-        Number(
-            order.setupFee || 0
-        ) > 0;
-    
-    const previousSubscription = user.subscription || {};
+        Number(order.setupFee || 0) > 0;
 
-            const previousPlanIsActive =
-                previousSubscription.status === "active" &&
-                previousSubscription.expiresAt &&
-                new Date(previousSubscription.expiresAt).getTime() > Date.now();
-
-            if (user.addons) {
-                for (const addonType of [
-                    "contacts",
-                    "ai_chat",
-                    "pharmacy_invoice",
-                ]) {
-                    if (user.addons[addonType]) {
-                        user.addons[addonType].enabled = false;
-                    }
-                }
+    // Disable existing add-ons only when switching to another plan
+    // or starting a new subscription, not when renewing the same plan.
+    if (!isRenewal && user.addons) {
+        for (const addonType of [
+            "contacts",
+            "ai_chat",
+            "pharmacy_invoice",
+        ]) {
+            if (user.addons[addonType]) {
+                user.addons[addonType].enabled = false;
             }
+        }
+    }
 
     user.subscription = {
+        ...previousSubscription,
         planId,
         planName,
         status: "active",
@@ -483,29 +490,17 @@ async function activateSubscription(
             period === 1
                 ? "monthly"
                 : `${period}-months`,
-        startedAt:
-            dates.startedAt,
-        expiresAt:
-            dates.expiresAt,
-        nextBillingAt:
-            dates.nextBillingAt,
-        amount: Number(
-            order.planAmount || 0
-        ),
-        currency:
-            order.currency || "INR",
-        orderId:
-            order._id,
-        razorpayOrderId:
-            order.razorpayOrderId ||
-            "",
-        paymentId:
-            order.razorpayPaymentId ||
-            "",
+        startedAt: dates.startedAt,
+        expiresAt: dates.expiresAt,
+        nextBillingAt: dates.nextBillingAt,
+        amount: Number(order.planAmount || 0),
+        currency: order.currency || "INR",
+        orderId: order._id,
+        razorpayOrderId: order.razorpayOrderId || "",
+        paymentId: order.razorpayPaymentId || "",
         setupFeePaid,
     };
 
-  
     // Activate add-ons purchased with the subscription.
     const purchasedAddons = Array.isArray(order.addons)
         ? order.addons
@@ -541,19 +536,23 @@ async function activateSubscription(
                 ? addon.startsAt || now
                 : now;
 
+            const addonMonths = Number(purchased.months || order.period) || 1;
+
             const expiresAt = existingActive
-                ? addMonths(existingExpiry, 1)
-                : addMonths(now, 1);
+                ? addMonths(existingExpiry, addonMonths)
+                : addMonths(now, addonMonths);
 
             addon.enabled = true;
             addon.quota = isPharmacy
                 ? 0
                 : Number(existingActive ? addon.quota || 0 : 0) +
                   Number(purchased.quota || 0);
+
             addon.used = existingActive
                 ? Number(addon.used || 0)
                 : 0;
-            addon.months = 1;
+
+            addon.months = addonMonths;
             addon.unitPrice = Number(
                 purchased.unitPrice || config.unitPrice
             );
@@ -567,7 +566,6 @@ async function activateSubscription(
         order.addonActivationStatus = "activated";
         await order.save();
     }
-
 
     await user.save();
 
@@ -1368,44 +1366,76 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
-            if (enteredVoucherCode !== "SV-FIRST01") {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid voucher code.",
-                });
-            }
+            
+                const allowedVoucherCodes = ["SV-FIRST01", "SV-RENEW500"];
+
+                if (!allowedVoucherCodes.includes(enteredVoucherCode)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid voucher code.",
+                    });
+                }
+
 
             const assignedVoucher = user.assignedVoucher || {};
-
-            if (assignedVoucher.isUsed) {
-                return res.status(400).json({
-                    success: false,
-                    message: "This voucher has already been used.",
-                });
-            }
-
-            // Existing paid subscription means no first-purchase voucher.
-            const previousPaidSubscription = await Order.exists({
+            const previouslyUsedVoucher = await Order.exists({
                 userId: user._id,
-                orderType: "subscription",
+                voucherCode: enteredVoucherCode,
                 paymentStatus: "paid",
             });
 
-            if (previousPaidSubscription) {
+            if (previouslyUsedVoucher) {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        "Voucher is valid only for your first subscription purchase.",
+                    message: "This voucher has already been used on this account.",
                 });
             }
+            const previouslyPaidSubscription = await Order.exists({
+                userId: user._id,
+                paymentStatus: "paid",
+                $or: [
+                    { orderType: "subscription" },
+                    {
+                        orderType: { $exists: false },
+                        planId: { $exists: true, $ne: "" },
+                    },
+                    {
+                        orderType: null,
+                        planId: { $exists: true, $ne: "" },
+                    },
+                ],
+            });
 
-            // Also reject users whose account already has an active plan.
-            if (user.subscription?.status === "active") {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Voucher is only available for a new subscription purchase.",
-                });
+            if (enteredVoucherCode === "SV-FIRST01") {
+                // First-purchase voucher: new subscribers only
+                if (previouslyPaidSubscription) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "SV-FIRST01 is valid only for your first subscription purchase.",
+                    });
+                }
+
+                if (user.subscription?.status === "active") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "SV-FIRST01 is only available for new subscribers.",
+                    });
+                }
+
+                if (assignedVoucher.isUsed) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Your first-purchase voucher has already been used.",
+                    });
+                }
+            } else if (enteredVoucherCode === "SV-RENEW500") {
+                // Renewal voucher: existing subscribers only
+                if (!previouslyPaidSubscription && user.subscription?.status !== "active") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "SV-RENEW500 is available only to existing subscribers.",
+                    });
+                }
             }
 
             voucherDiscount = Math.min(
@@ -1421,7 +1451,7 @@ exports.createOrder = async (req, res) => {
             );
 
             appliedVoucherCode = enteredVoucherCode;
-        }
+                    }
 
         const setupFee = calculateSetupFee(user, curr);
 
@@ -1484,9 +1514,12 @@ exports.createOrder = async (req, res) => {
             calculatedAddons.push({
                 addonType: addonCalculation.addonType,
                 quantity: addonCalculation.quantity,
+                months,
                 unitPrice: addonCalculation.unitPrice,
-                quota: addonCalculation.quota,
-                amount: addonCalculation.amount,
+                // Charge the add-on for every month in the subscription period.
+                // Quota is also period-based so a multi-month renewal is consistent.
+                quota: addonCalculation.quota * months,
+                amount: addonCalculation.amount * months,
             });
         }
 
@@ -1592,9 +1625,6 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-
-
-
 exports.verifyPayment = async (req, res) => {
     try {
         const {
@@ -1654,15 +1684,18 @@ exports.verifyPayment = async (req, res) => {
                 paidOrder.voucherCode
             ).trim().toUpperCase();
 
-            if (normalizedCode !== "SV-FIRST01") {
-                console.error(
-                    "UNEXPECTED VOUCHER CODE:",
-                    normalizedCode
-                );
+            if (!["SV-FIRST01", "SV-RENEW500"].includes(normalizedCode)) {
+                console.error("UNEXPECTED VOUCHER CODE:", normalizedCode);
                 return false;
             }
 
-            // First try to consume the matching assigned voucher atomically.
+            // Renewal voucher: usage is tracked through the paid order itself.
+            // The createOrder validation checks prior paid orders for this code.
+            if (normalizedCode === "SV-RENEW500") {
+                return true;
+            }
+
+            // First-purchase voucher: consume the assigned voucher atomically.
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: paidOrder.userId,
@@ -1683,7 +1716,7 @@ exports.verifyPayment = async (req, res) => {
                 return true;
             }
 
-            // Idempotent retry for the same order.
+            // Allow retries for the same already-recorded order.
             const alreadyUsedByThisOrder = await User.findOne({
                 _id: paidOrder.userId,
                 "assignedVoucher.code": normalizedCode,
@@ -1695,16 +1728,11 @@ exports.verifyPayment = async (req, res) => {
                 return true;
             }
 
-            // Public voucher users may not have an assignedVoucher record.
-            // Do not silently claim usage was recorded if it was not.
-            console.error(
-                "VOUCHER USAGE NOT RECORDED:",
-                {
-                    orderId: String(paidOrder._id),
-                    userId: String(paidOrder.userId),
-                    voucherCode: normalizedCode,
-                }
-            );
+            console.error("FIRST VOUCHER USAGE NOT RECORDED:", {
+                orderId: String(paidOrder._id),
+                userId: String(paidOrder.userId),
+                voucherCode: normalizedCode,
+            });
 
             return false;
         };
@@ -1752,6 +1780,19 @@ exports.verifyPayment = async (req, res) => {
                         "Voucher usage could not be confirmed:",
                         order._id
                     );
+                }
+            }
+
+            // Recover a paid subscription order if payment was saved but
+            // activation failed before the previous request completed.
+            if (order.orderType === "subscription") {
+                const paidUser = await User.findById(order.userId);
+                const alreadyActivated =
+                    paidUser?.subscription?.status === "active" &&
+                    String(paidUser.subscription.orderId || "") === String(order._id);
+
+                if (!alreadyActivated) {
+                    await activatePaidOrder(order);
                 }
             }
 
@@ -1901,4 +1942,3 @@ exports.verifyPayment = async (req, res) => {
         });
     }
 };
-

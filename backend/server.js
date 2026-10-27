@@ -83,6 +83,7 @@ const pharmacyRoutes = require("./routes/PharmacyRoutes");
 const pharmacyInvoiceRoutes = require("./routes/PharmacyInvoiceRoutes");
 const billingRoutes = require("./routes/billingRoutes");
 
+// const adminRoutes = require("./routes/adminRoutes");
 const aiAssistantRoutes = require("./routes/aiAssistantRoutes");
 const aiKnowledgeRoutes = require("./routes/aiKnowledgeRoutes");
 const aiConversationRoutes = require("./routes/aiConversationRoutes");
@@ -126,6 +127,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/pharmacy", pharmacyRoutes);
 app.use("/api/pharmacy-invoices", pharmacyInvoiceRoutes);
 app.use("/api/billing", billingRoutes);
+// app.use("/api/admin", adminRoutes);
 
 app.use("/api/ai-assistant", aiAssistantRoutes);
 app.use("/api/ai-knowledge", aiKnowledgeRoutes);

@@ -276,12 +276,21 @@ const enableAutoPay = true;
         const data =
           await response.json();
 
-        if (
-          response.ok &&
-          data.success
-        ) {
-          setBilling(data);
-        }
+       
+if (response.ok && data.success) {
+  setBilling(data);
+
+  const activeAddons = Object.entries(data.addons || {})
+    .filter(([_, addon]) => addon?.enabled === true)
+    .map(([id, addon]) => ({
+      id,
+      quantity: 1,
+    }))
+    .filter((item) => ADDONS[item.id]);
+
+  setSelectedAddons(activeAddons);
+}
+
       } catch {
       } finally {
         setBillingLoading(false);
@@ -360,9 +369,16 @@ const enableAutoPay = true;
           : 180;
 
   const selectedAddonsSubtotal = selectedAddons.reduce((sum, item) => {
-    const addon = ADDONS[item.id];
-    return sum + (addon ? addon.price * Number(item.quantity || 1) : 0);
-  }, 0);
+  const addon = ADDONS[item.id];
+
+  return sum + (
+    addon
+      ? addon.price *
+        Number(item.quantity || 1) *
+        Number(selectedMonths || 1)
+      : 0
+  );
+}, 0);
 
   
 const [voucherApplied, setVoucherApplied] = useState(false);
@@ -481,15 +497,18 @@ const subscriptionTotal =
     return formatPrice(amount);
   };
 
-  const isCurrentPlan =
-    billing?.subscription?.planId ===
-    planId;
 
-  const isUpgrade =
-    Boolean(
-      billing?.subscription?.planId
-    ) &&
-    !isCurrentPlan;
+const isCurrentPlan =
+  billing?.subscription?.planId === planId;
+
+const isRenewal =
+  isCurrentPlan &&
+  billing?.subscription?.status === "active";
+
+const isUpgrade =
+  Boolean(billing?.subscription?.planId) &&
+  !isCurrentPlan;
+
 
   
   const handleAutoPaySubscription = async (token, apiBase) => {
@@ -768,9 +787,6 @@ const response = await fetch(
     setLoading(false);
   }
 };
-
-
-
 
   const handleAddonPayment =
     async () => {
@@ -2026,50 +2042,48 @@ const response = await fetch(
                       }}
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isUpgrade) {
-                          setVoucherApplied(false);
-                          setVoucherMessage("");
-                          setError(
-                           "Voucher is available for new users only."
-                          );
-                          return;
-                        }
+                   
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = voucherCode.trim().toUpperCase();
 
-                        if (currency !== "INR") {
-                          setVoucherApplied(false);
-                          setVoucherMessage("");
-                          setError("Vouchers are available for INR payments only.");
-                          return;
-                        }
+                      if (currency !== "INR") {
+                        setVoucherApplied(false);
+                        setVoucherMessage("");
+                        setError("Vouchers are available for INR payments only.");
+                        return;
+                      }
 
-                        if (
-                          voucherCode.trim().toUpperCase() !== "SV-FIRST01"
-                        ) {
-                          setVoucherApplied(false);
-                          setVoucherMessage("");
-                          setError("Invalid voucher code.");
-                          return;
-                        }
+                      if (!["SV-FIRST01", "SV-RENEW500"].includes(code)) {
+                        setVoucherApplied(false);
+                        setVoucherMessage("");
+                        setError("Invalid voucher code.");
+                        return;
+                      }
 
-                        setVoucherApplied(true);
-                        setVoucherMessage("Voucher applied: ₹500 off");
-                        setError("");
-                      }}
-                      disabled={loading || !voucherCode.trim()}
-                      style={{
-                        padding: "10px 14px",
-                        border: 0,
-                        borderRadius: "7px",
-                        background: "#00656A",
-                        color: "#fff",
-                        cursor: loading ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      Apply
-                    </button>
+                      setVoucherCode(code);
+                      setVoucherApplied(true);
+                      setVoucherMessage(
+                        code === "SV-FIRST01"
+                          ? "New user voucher applied: ₹500 off"
+                          : "Renewal voucher applied: ₹500 off"
+                      );
+                      setError("");
+                    }}
+                    disabled={loading || !voucherCode.trim()}
+                    style={{
+                      padding: "10px 14px",
+                      border: 0,
+                      borderRadius: "7px",
+                      background: "#00656A",
+                      color: "#fff",
+                      cursor: loading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Apply
+                  </button>
+
                   </div>
 
                   {voucherMessage && (

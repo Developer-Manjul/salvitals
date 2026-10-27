@@ -364,6 +364,7 @@ function buildSubscriptionFromOrder(order) {
 }
 
 
+
 exports.getCurrentBilling = async (req, res) => {
     try {
         const context = await requireBillingPermission(req, res);
@@ -396,11 +397,17 @@ exports.getCurrentBilling = async (req, res) => {
             subscriptionExpiresAt &&
             subscriptionExpiresAt > Date.now();
 
+        // Recover subscription from the latest paid order if necessary.
         if (!subscriptionIsActive) {
             const latestPaidOrder = await Order.findOne({
                 userId: ownerId,
-                orderType: "subscription",
                 paymentStatus: "paid",
+                $or: [
+                    { orderType: "subscription" },
+                    { orderType: { $exists: false } },
+                    { orderType: null },
+                    { orderType: "" },
+                ],
             })
                 .sort({ createdAt: -1 })
                 .lean();
@@ -418,17 +425,127 @@ exports.getCurrentBilling = async (req, res) => {
                 subscription = recoveredSubscription;
                 user.subscription = recoveredSubscription;
 
-                subscriptionExpiresAt = new Date(
-                    subscription.expiresAt
-                ).getTime();
+                subscriptionExpiresAt = subscription.expiresAt
+                    ? new Date(subscription.expiresAt).getTime()
+                    : null;
 
                 subscriptionIsActive =
-                    Boolean(
-                        subscription.status === "active" &&
-                        subscriptionExpiresAt > Date.now()
-                    );
+                    String(subscription.status || "").toLowerCase() === "active" &&
+                    Number.isFinite(subscriptionExpiresAt) &&
+                    subscriptionExpiresAt > Date.now();
             }
         }
+
+        // Recover the actual billing period from the original paid order.
+        let billingPeriod = Number(
+            subscription.period ||
+            subscription.periodMonths ||
+            0
+        );
+
+        let originalOrder = null;
+
+        if (subscription.orderId) {
+            originalOrder = await Order.findOne({
+                _id: subscription.orderId,
+                userId: ownerId,
+                paymentStatus: "paid",
+            })
+                .select(
+                    "_id period periodLabel orderType planId planName billingPeriodEnd"
+                )
+                .lean();
+        }
+
+        // Fallback for older subscriptions whose orderId is missing.
+        if (!originalOrder) {
+            const normalizedPlan = String(subscription.planId || "")
+                .trim()
+                .toLowerCase();
+
+            originalOrder = await Order.findOne({
+                userId: ownerId,
+                paymentStatus: "paid",
+                planId: normalizedPlan,
+                $or: [
+                    { orderType: "subscription" },
+                    { orderType: { $exists: false } },
+                    { orderType: null },
+                    { orderType: "" },
+                ],
+            })
+                .sort({ createdAt: -1 })
+                .select(
+                    "_id period periodLabel orderType planId planName billingPeriodEnd"
+                )
+                .lean();
+        }
+
+        if (originalOrder) {
+            const orderPeriod = Number(originalOrder.period || 0);
+
+            if ([1, 3, 6, 9, 12].includes(orderPeriod)) {
+                billingPeriod = orderPeriod;
+            } else {
+                const label = String(
+                    originalOrder.periodLabel || ""
+                ).trim().toLowerCase();
+
+                const labelMap = {
+                    monthly: 1,
+                    "1 month": 1,
+                    quarterly: 3,
+                    "3 months": 3,
+                    "3 month": 3,
+                    "half-yearly": 6,
+                    "6 months": 6,
+                    "9 months": 9,
+                    yearly: 12,
+                    annually: 12,
+                    "12 months": 12,
+                };
+
+                if (labelMap[label]) {
+                    billingPeriod = labelMap[label];
+                }
+            }
+        }
+
+        if (![1, 3, 6, 9, 12].includes(billingPeriod)) {
+            const startDate = subscription.startedAt
+                ? new Date(subscription.startedAt)
+                : null;
+
+            const expiryDate = subscription.expiresAt
+                ? new Date(subscription.expiresAt)
+                : null;
+
+            if (
+                startDate &&
+                expiryDate &&
+                Number.isFinite(startDate.getTime()) &&
+                Number.isFinite(expiryDate.getTime())
+            ) {
+                const monthDifference =
+                    (expiryDate.getFullYear() - startDate.getFullYear()) * 12 +
+                    (expiryDate.getMonth() - startDate.getMonth());
+
+                if ([1, 3, 6, 9, 12].includes(monthDifference)) {
+                    billingPeriod = monthDifference;
+                }
+            }
+        }
+
+        const billingCycleMap = {
+            1: "monthly",
+            3: "quarterly",
+            6: "half-yearly",
+            9: "9 months",
+            12: "yearly",
+        };
+
+        const billingCycle =
+            billingCycleMap[billingPeriod] || "";
 
         // Disable all add-ons when the CRM subscription is inactive.
         if (!subscriptionIsActive) {
@@ -460,9 +577,7 @@ exports.getCurrentBilling = async (req, res) => {
             }
         }
 
-        const normalizedPlanId = String(
-            subscription.planId || ""
-        )
+        const normalizedPlanId = String(subscription.planId || "")
             .trim()
             .toLowerCase();
 
@@ -540,9 +655,7 @@ exports.getCurrentBilling = async (req, res) => {
             ? null
             : Math.max(contactTotalLimit - contactUsed, 0);
 
-        const contactAddon = normalizeAddon(
-            user.addons?.contacts
-        );
+        const contactAddon = normalizeAddon(user.addons?.contacts);
 
         const teamMemberLimit = activePlan.planId
             ? getTeamMemberLimit(activePlan.planId)
@@ -567,14 +680,10 @@ exports.getCurrentBilling = async (req, res) => {
             ? getAIChatbotLimit(aiPlanId)
             : 0;
 
-        const aiAddon = normalizeAddon(
-            user.addons?.ai_chat
-        );
-
+        const aiAddon = normalizeAddon(user.addons?.ai_chat);
         const pharmacyInvoiceAddon = normalizeAddon(
             user.addons?.pharmacy_invoice
         );
-
         const whatsappLeadsAddon = normalizeAddon(
             user.addons?.whatsapp_leads
         );
@@ -605,13 +714,9 @@ exports.getCurrentBilling = async (req, res) => {
             ? null
             : Math.max(aiTotalLimit - aiUsed, 0);
 
-        const daysRemaining = getDaysRemaining(
-            activePlan.expiresAt
-        );
+        const daysRemaining = getDaysRemaining(activePlan.expiresAt);
 
-        const planDetails = getPlanDetails(
-            activePlan.planId
-        );
+        const planDetails = getPlanDetails(activePlan.planId);
 
         const billingHistory = await Order.find({
             userId: ownerId,
@@ -651,43 +756,24 @@ exports.getCurrentBilling = async (req, res) => {
 
             return {
                 id: String(order._id),
-
                 invoiceNumber: order.invoiceNumber || "",
-
                 date: order.createdAt || null,
-
                 orderType: order.orderType || "subscription",
-
                 itemName,
-
                 planId: order.planId || "",
-
                 planName: order.planName || "",
-
                 addonType: order.addonType || "",
-
                 addonName: order.addonName || "",
-
                 addonMonths: Number(order.addonMonths || 0),
-
                 addonQuota: Number(order.addonQuota || 0),
-
                 amount,
-
                 tax,
-
                 total: amount,
-
                 currency: order.currency || "INR",
-
                 paymentStatus: order.paymentStatus,
-
                 razorpayPaymentId: order.razorpayPaymentId || "",
-
                 period: Number(order.period || 0),
-
                 periodLabel: order.periodLabel || "",
-
                 createdAt: order.createdAt || null,
             };
         });
@@ -697,28 +783,27 @@ exports.getCurrentBilling = async (req, res) => {
 
             subscription: {
                 planId: activePlan.planId,
-
                 planName: activePlan.planName,
-
                 status: activePlan.status,
 
-                billingCycle: subscription.billingCycle || "monthly",
+                billingCycle,
+                period: billingPeriod,
+                periodMonths: billingPeriod,
 
                 startedAt: activePlan.startedAt || null,
-
                 expiresAt: activePlan.expiresAt || null,
-
                 nextBillingAt: activePlan.nextBillingAt || null,
-
                 daysRemaining,
 
                 amount: Number(subscription.amount || 0),
-
                 currency: subscription.currency || "INR",
-
                 setupFeePaid: Boolean(subscription.setupFeePaid),
 
-                orderId: subscription.orderId || null,
+                orderId: subscription.orderId
+                    ? String(subscription.orderId)
+                    : originalOrder?._id
+                        ? String(originalOrder._id)
+                        : null,
 
                 paymentId: subscription.paymentId || "",
             },
@@ -726,15 +811,10 @@ exports.getCurrentBilling = async (req, res) => {
             usage: {
                 contacts: {
                     planLimit: contactPlanLimit,
-
                     addonLimit: contactAddonLimit,
-
                     totalLimit: contactTotalLimit,
-
                     used: contactUsed,
-
                     remaining: contactRemaining,
-
                     percentage: calculatePercentage(
                         contactUsed,
                         contactTotalLimit
@@ -743,15 +823,10 @@ exports.getCurrentBilling = async (req, res) => {
 
                 aiChatbot: {
                     planLimit: aiPlanLimit,
-
                     addonLimit: aiAddonLimit,
-
                     totalLimit: aiTotalLimit,
-
                     used: aiUsed,
-
                     remaining: aiRemaining,
-
                     percentage: calculatePercentage(
                         aiUsed,
                         aiTotalLimit
@@ -760,15 +835,10 @@ exports.getCurrentBilling = async (req, res) => {
 
                 teamMembers: {
                     limit: teamMemberLimit,
-
                     used: teamMemberUsed,
-
                     remaining: teamMemberRemaining,
-
                     totalSeats,
-
                     usedSeats,
-
                     availableSeats: teamMemberRemaining,
                 },
             },
@@ -776,18 +846,12 @@ exports.getCurrentBilling = async (req, res) => {
             addons: {
                 contacts: {
                     ...contactAddon,
-                    status: getAddonStatus(
-                        contactAddon,
-                        isPlanActive
-                    ),
+                    status: getAddonStatus(contactAddon, isPlanActive),
                 },
 
                 ai_chat: {
                     ...aiAddon,
-                    status: getAddonStatus(
-                        aiAddon,
-                        isPlanActive
-                    ),
+                    status: getAddonStatus(aiAddon, isPlanActive),
                 },
 
                 pharmacy_invoice: {
@@ -809,30 +873,20 @@ exports.getCurrentBilling = async (req, res) => {
 
             plan: {
                 id: planDetails?.id || activePlan.planId || "",
-
                 name: planDetails?.name || activePlan.planName || "",
-
                 contactLimit: contactTotalLimit,
-
                 baseContactLimit: contactPlanLimit,
-
                 aiChatbotLimit: aiTotalLimit,
-
                 baseAIChatbotLimit: aiPlanLimit,
-
-                teamMemberLimit: teamMemberLimit,
+                teamMemberLimit,
             },
 
             plans: getAvailablePlans(activePlan.planId),
-
             billingHistory: formattedHistory,
         });
 
     } catch (error) {
-        console.error(
-            "GET CURRENT BILLING ERROR:",
-            error
-        );
+        console.error("GET CURRENT BILLING ERROR:", error);
 
         return res.status(500).json({
             success: false,
@@ -840,6 +894,7 @@ exports.getCurrentBilling = async (req, res) => {
         });
     }
 };
+
 
 
 exports.getPlans =

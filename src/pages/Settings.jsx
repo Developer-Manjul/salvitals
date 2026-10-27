@@ -1728,22 +1728,86 @@ const loadRazorpayScript = () => {
 
   
 
+
+
 const handleSettingsAutoPay = async () => {
+  if (autoPayLoading) return;
+
   try {
     setError("");
 
     const subscription = billing?.subscription;
+    const orderId = subscription?.orderId;
+
+    if (!orderId) {
+      throw new Error(
+        "Paid subscription order ID is missing. Please contact support."
+      );
+    }
 
     if (!subscription?.planId || !subscription?.expiresAt) {
       throw new Error("Current plan details are not available.");
     }
 
-    if (autoPayLoading) return;
+    const billingCycle = String(
+      subscription.billingCycle || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const periodMap = {
+      monthly: 1,
+      "1 month": 1,
+      quarterly: 3,
+      "3 months": 3,
+      "3 month": 3,
+      "half-yearly": 6,
+      "6 months": 6,
+      "9 months": 9,
+      yearly: 12,
+      annually: 12,
+      "12 months": 12,
+    };
+
+   const rawPeriod =
+  subscription.period ??
+  subscription.periodMonths ??
+  periodMap[billingCycle] ??
+  (
+    String(subscription.billingCycle || "")
+      .toLowerCase()
+      .includes("quarter")
+      ? 3
+      : String(subscription.planName || "")
+          .toLowerCase()
+          .includes("3 month")
+        ? 3
+        : undefined
+  );
+
+const period = Number(rawPeriod);
+
+    if (![1, 3, 6, 9, 12].includes(period)) {
+      throw new Error(
+        "Unable to determine your paid billing period. Please refresh billing details."
+      );
+    }
 
     setAutoPayLoading(true);
 
     const token = getToken();
     const apiBase = getApiBaseUrl();
+
+    if (!token) {
+      throw new Error("Your session has expired. Please log in again.");
+    }
+
+    console.log("AUTOPAY REQUEST:", {
+      planId: subscription.planId,
+      period,
+      orderId,
+      billingCycle,
+    });
 
     const response = await fetch(
       `${apiBase}/api/billing/autopay/subscribe`,
@@ -1755,7 +1819,8 @@ const handleSettingsAutoPay = async () => {
         },
         body: JSON.stringify({
           planId: subscription.planId,
-          period: subscription.billingCycle === "monthly" ? 1 : 12,
+          period,
+          orderId,
           selectedAddons: [],
         }),
       }
@@ -1764,16 +1829,23 @@ const handleSettingsAutoPay = async () => {
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      throw new Error(data.message || "Unable to create AutoPay subscription.");
+      throw new Error(
+        data.message || "Unable to create AutoPay subscription."
+      );
     }
 
     if (!data.subscriptionId || !data.keyId) {
       throw new Error("AutoPay subscription details are missing.");
     }
 
+    console.log("AUTOPAY CHECKOUT:", {
+      subscriptionId: data.subscriptionId,
+      resumeAuthorization: Boolean(data.resumeAuthorization),
+    });
+
     const loaded = await loadRazorpayScript();
 
-    if (!loaded) {
+    if (!loaded || !window.Razorpay) {
       throw new Error("Unable to load Razorpay checkout.");
     }
 
@@ -1782,8 +1854,11 @@ const handleSettingsAutoPay = async () => {
       subscription_id: data.subscriptionId,
       name: "SaleVitals",
       description: `${data.planName} AutoPay authorization`,
+
       handler: async (paymentResponse) => {
         try {
+          setError("");
+
           const verifyResponse = await fetch(
             `${apiBase}/api/billing/autopay/verify`,
             {
@@ -1793,10 +1868,12 @@ const handleSettingsAutoPay = async () => {
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
-                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                razorpay_payment_id:
+                  paymentResponse.razorpay_payment_id,
                 razorpay_subscription_id:
                   paymentResponse.razorpay_subscription_id,
-                razorpay_signature: paymentResponse.razorpay_signature,
+                razorpay_signature:
+                  paymentResponse.razorpay_signature,
               }),
             }
           );
@@ -1805,29 +1882,54 @@ const handleSettingsAutoPay = async () => {
 
           if (!verifyResponse.ok || !verifyData.success) {
             throw new Error(
-              verifyData.message || "AutoPay authorization verification failed."
+              verifyData.message ||
+                "AutoPay authorization verification failed."
             );
           }
 
+          const confirmedStatus = String(
+            verifyData.autoRenewStatus ||
+              verifyData.status ||
+              ""
+          ).toLowerCase();
+
+          // Authorization alone does not mean recurring billing is active.
+          const isEnabled = confirmedStatus === "active";
+
           setAutoPay((previous) => ({
             ...previous,
-            enabled: false,
-            status: "authenticated",
-            subscriptionId: data.subscriptionId,
+            enabled: isEnabled,
+            status: confirmedStatus || "authenticated",
+            subscriptionId:
+              verifyData.subscriptionId ||
+              paymentResponse.razorpay_subscription_id ||
+              data.subscriptionId,
           }));
 
-          setError(
-            "Authorization verified, but automatic renewals are not active yet. Please do not assume AutoPay is enabled."
-          );
+          if (isEnabled) {
+            setError("");
+          } else {
+            setError(
+              "AutoPay authorization verified. Waiting for Razorpay to confirm activation."
+            );
+          }
+
+          if (typeof fetchBilling === "function") {
+            await fetchBilling();
+          }
         } catch (err) {
-          setError(err.message || "AutoPay verification failed.");
+          setError(
+            err.message || "AutoPay verification failed."
+          );
         }
       },
+
       modal: {
         ondismiss: () => {
           setError("AutoPay authorization was cancelled.");
         },
       },
+
       theme: {
         color: "#00656A",
       },
@@ -1835,7 +1937,8 @@ const handleSettingsAutoPay = async () => {
 
     razorpay.on("payment.failed", (event) => {
       setError(
-        event?.error?.description || "AutoPay authorization failed."
+        event?.error?.description ||
+          "AutoPay authorization failed."
       );
     });
 
@@ -1846,6 +1949,8 @@ const handleSettingsAutoPay = async () => {
     setAutoPayLoading(false);
   }
 };
+
+
 
 
   console.log("Billing API response:", billing);
@@ -1941,6 +2046,8 @@ const handleSettingsAutoPay = async () => {
 
   const startAddon = (addonType, quantity) => {
     const subscription = billing?.subscription;
+    console.log("AUTOPAY SUBSCRIPTION:", subscription);
+console.log("AUTOPAY ORDER ID:", subscription?.orderId);
 
     if (!subscription?.planId || subscription.status !== "active") {
       setError("Please activate a CRM plan before purchasing an add-on.");
@@ -2193,83 +2300,182 @@ const handleSettingsAutoPay = async () => {
 
               
             </div>
+          {isActive && (
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "16px",
+                border: "1px solid #dbe3ed",
+                borderRadius: "12px",
+                background: "#ffffff",
+              }}
+            >
+              {/* AutoPay setting */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      color: "#17313a",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Enable AutoPay
+                  </div>
 
-            {isActive && (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: "12px",
-      marginTop: "18px",
-      padding: "12px 14px",
-      border: "1px solid #dbe3ed",
-      borderRadius: "10px",
-      background: "#fff",
-    }}
-  >
-    <span style={{ fontSize: "14px", fontWeight: 600, color: "#17313a" }}>
-      Enable AutoPay
-    </span>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      lineHeight: 1.5,
+                      color: "#718096",
+                    }}
+                  >
+                    Automatically renew your plan when it expires.
+                  </div>
+                </div>
 
-    <span
-      style={{
-        position: "relative",
-        display: "inline-flex",
-        width: "42px",
-        height: "24px",
-        flexShrink: 0,
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={autoPay.enabled}
-       disabled={autoPayLoading}
-        onChange={() => {
-            if (autoPay.enabled) {
-              return;
-            }
+                <span
+                  style={{
+                    position: "relative",
+                    display: "inline-flex",
+                    width: "42px",
+                    height: "24px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoPay.enabled}
+                    disabled={autoPayLoading}
+                    onChange={() => {
+                      if (autoPay.enabled || autoPayLoading) {
+                        return;
+                      }
 
-            handleSettingsAutoPay();
-          }}
-        aria-label="Enable AutoPay"
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          margin: 0,
-          opacity: 0,
-          cursor: "pointer",
-          zIndex: 2,
-        }}
-      />
+                      handleSettingsAutoPay();
+                    }}
+                    aria-label="Enable AutoPay"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      margin: 0,
+                      opacity: 0,
+                      cursor: autoPayLoading ? "not-allowed" : "pointer",
+                      zIndex: 2,
+                    }}
+                  />
 
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: "20px",
-          background: autoPay.enabled ? "#00656A" : "#d5dce2",
-        }}
-      />
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "20px",
+                      background: autoPay.enabled ? "#00656A" : "#d5dce2",
+                      transition: "background 0.2s ease",
+                    }}
+                  />
 
-      <span
-        style={{
-          position: "absolute",
-          top: "3px",
-          left: autoPay.enabled ? "21px" : "3px",
-          width: "18px",
-          height: "18px",
-          borderRadius: "50%",
-          background: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-          pointerEvents: "none",
-        }}
-      />
-    </span>
-  </div>
-)}
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "3px",
+                      left: autoPay.enabled ? "21px" : "3px",
+                      width: "18px",
+                      height: "18px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                      pointerEvents: "none",
+                      transition: "left 0.2s ease",
+                    }}
+                  />
+                </span>
+              </div>
+
+              {/* Divider */}
+              <div
+                style={{
+                  height: "1px",
+                  background: "#edf1f5",
+                  margin: "16px 0",
+                }}
+              />
+
+              {/* Manual renewal */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "14px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: "1 1 180px" }}>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#17313a",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Renew your plan
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      lineHeight: 1.5,
+                      color: "#718096",
+                    }}
+                  >
+                    Choose your billing period and continue to checkout.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    window.location.href = "/cart?renew=true";
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    border: "none",
+                    borderRadius: "8px",
+                    background: "#00656A",
+                    color: "#ffffff",
+                    padding: "10px 18px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    opacity: loading ? 0.65 : 1,
+                    boxShadow: "0 2px 5px rgba(0,101,106,0.15)",
+                  }}
+                >
+                  Renew Now
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+          )}
+
 
             {isActive ? (
               <>
@@ -2323,14 +2529,13 @@ const handleSettingsAutoPay = async () => {
                     </div>
                     <div className="plan-billing-card-copy">{plan.description || `CRM plan with ${plan.contactSave || plan.contactLimit || "premium"} contact capacity.`}</div>
                     <ul>{features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
-                    <button
-                      type="button"
-                      className={current ? "plan-billing-card-button active" : "plan-billing-card-button"}
-                      disabled={current}
-                      onClick={() => startPlan(plan)}
-                    >
-                      {current ? "Your current plan" : "Upgrade"}
-                    </button>
+                   <button
+                  type="button"
+                  className="plan-billing-card-button"
+                  onClick={() => startPlan(plan)}
+                >
+                  {current ? "Renew Now" : "Upgrade"}
+                </button>
                   </div>
                 );
               })}
