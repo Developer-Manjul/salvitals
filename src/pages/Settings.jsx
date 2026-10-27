@@ -2447,9 +2447,33 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={() => {
-                    window.location.href = "/cart?renew=true";
-                  }}
+                 onClick={() => {
+  const planId = billing?.subscription?.planId;
+
+  if (!planId) {
+    setError("Current subscription plan not found. Please refresh and try again.");
+    return;
+  }
+
+  const selectedPlan = PLANS[planId.toLowerCase()];
+
+  if (!selectedPlan) {
+    setError("Current plan could not be identified. Please contact support.");
+    return;
+  }
+
+  localStorage.setItem(
+    "selectedPlan",
+    JSON.stringify({
+      ...selectedPlan,
+      planId: selectedPlan.id,
+      planName: selectedPlan.name,
+      billing: "monthly",
+    })
+  );
+
+  window.location.href = `/cart?plan=${encodeURIComponent(selectedPlan.id)}&renew=true`;
+}}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
