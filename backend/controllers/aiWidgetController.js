@@ -167,32 +167,61 @@ const apiOrigin = "https://salevitals.com";
 #popup-message {
   position: fixed;
   right: 22px;
-  bottom: 96px;
-  max-width: 280px;
-  padding: 12px 16px;
+  bottom: 100px;
+  width: max-content;
+  max-width: 290px;
+  padding: 13px 17px;
   background: #ffffff;
   color: #263142;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 15px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
+  font-weight: 400;
   line-height: 1.5;
   cursor: pointer;
   z-index: 2147483646;
   display: none;
   overflow-wrap: anywhere;
+  animation: popupSlideIn 0.35s ease both;
 }
 
 #popup-message.show {
   display: block;
 }
 
+#popup-message::after {
+  content: "";
+  position: absolute;
+  right: 23px;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  transform: rotate(45deg);
+}
+
+@keyframes popupSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 520px) {
   #popup-message {
     right: 14px;
-    bottom: 82px;
-    max-width: calc(100vw - 100px);
+    bottom: 84px;
+    max-width: min(290px, calc(100vw - 90px));
+    padding: 12px 14px;
+    font-size: 12px;
   }
 }
 
