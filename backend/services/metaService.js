@@ -536,7 +536,6 @@ exports.sendConversationMessage = async ({
   );
 };
 
-
 exports.getMessagingParticipantProfile = async ({
     platform,
     participantId,
@@ -551,11 +550,12 @@ exports.getMessagingParticipantProfile = async ({
         return null;
     }
 
+    const isInstagram = platform === "instagram";
+
     try {
-        const fields =
-            platform === "instagram"
-              ? "name,username,profile_picture_url"
-                : "first_name,last_name,profile_pic";
+        const fields = isInstagram
+            ? "name,username,profile_picture_url"
+            : "first_name,last_name,profile_pic";
 
         const profile = await graphRequest(
             `/${encodeURIComponent(participantId)}`,
@@ -567,25 +567,20 @@ exports.getMessagingParticipantProfile = async ({
             }
         );
 
-        console.log("META PARTICIPANT PROFILE RAW RESPONSE:", {
-            platform,
-            participantId,
-            fields,
-            profile,
-        });
+        // Facebook and Instagram return different picture fields.
+        const name = isInstagram
+            ? profile.username || profile.name || ""
+            : [profile.first_name, profile.last_name]
+                  .filter(Boolean)
+                  .join(" ");
 
-        const name =
-            platform === "instagram"
-                ? profile.username || profile.name || ""
-                : [profile.first_name, profile.last_name]
-                    .filter(Boolean)
-                    .join(" ");
+        const picture = isInstagram
+            ? profile.profile_picture_url || ""
+            : profile.profile_pic || "";
 
         const result = {
-            name: String(name || "").trim(),
-            picture: String(
-    profile.profile_picture_url || ""
-).trim(),
+            name: String(name).trim(),
+            picture: String(picture).trim(),
         };
 
         console.log("META PARTICIPANT PROFILE RESULT:", {
@@ -600,7 +595,8 @@ exports.getMessagingParticipantProfile = async ({
         console.error(
             "META PARTICIPANT PROFILE FETCH ERROR:",
             JSON.stringify({
-                message: error.message,
+                platform,
+                participantId,
                 status: error.status,
                 metaError: error.metaError,
             }, null, 2)
@@ -609,3 +605,4 @@ exports.getMessagingParticipantProfile = async ({
         return null;
     }
 };
+
