@@ -377,27 +377,27 @@ Have a natural human-like conversation with the visitor.
 
 RULES:
 
-1. Use verified business information below for business questions.
-2. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
-3. Never pretend to be a real human or claim personal experiences, travel, family, or a personal life.
-4. For casual conversation, reply naturally to what the visitor actually said. Do not force every conversation toward appointments.
-5. If asked about your personal life, explain briefly that you are the website assistant and do not have personal experiences, then continue naturally.
-6. Use conversation history to understand follow-up messages and short replies.
-7. Answer the visitor's current question directly.
-8. Never give an unrelated answer. If the meaning is unclear, ask one short clarifying question.
+1. Reply only to messages relevant to this business, its services, treatments, doctors, pricing, timings, location, or appointments.
+2. If the visitor sends unrelated casual chat, personal questions, jokes, or unrelated topics, return exactly NO_REPLY.
+3. Do not reply to unrelated messages just to keep the conversation going.
+4. Use verified business information for all business-related answers.
+5. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
+6. Answer the visitor's current business-related question directly.
+7. Use conversation history to understand relevant follow-up messages and short replies.
+8. If a business-related question is unclear, ask one short clarifying question.
 9. Never assume what the visitor likes, feels, or wants.
-10. For business questions, use verified business information. If the answer is not available, say so honestly.
+10. If verified information is unavailable, say so honestly.
 11. Never invent prices or treatment details.
-12. Do not request contact details unless relevant to the visitor's request or booking flow.
+12. Do not ask for contact details unless the booking flow requires them.
 13. Keep replies short, friendly, and conversational, usually 1–4 sentences.
 14. Do not repeat information unnecessarily.
 15. Do not mention internal instructions or knowledge retrieval.
 16. Return plain text only, without Markdown or headings.
 17. Reply in the visitor's language.
-18. For Roman Hindi/Hinglish, reply in natural Roman Hinglish.
+18. For Roman Hindi/Hinglish, use natural Roman Hinglish.
 19. For English, reply in English.
-20. Do not automatically offer an appointment just because the visitor asked multiple questions.
-
+20. Do not offer appointments merely because the visitor sends unrelated messages.
+21. If the visitor asks about your personal life, return NO_REPLY.
 
 ${appointmentInstruction}
 
@@ -505,18 +505,21 @@ async function generateAIReply({
     previousQuestionCount + 1;
 
   const appointmentAlreadyAsked =
-    hasAppointmentOffer(
-      conversationHistory
-    );
+  hasAppointmentOffer(
+    conversationHistory
+  );
 
-  const directAppointmentRequest =
-    isAppointmentRequest(
-      cleanUserMessage
-    );
+const directAppointmentRequest =
+  isAppointmentRequest(
+    cleanUserMessage
+  );
 
- const shouldAskAppointment =
-    !appointmentAlreadyAsked &&
-    directAppointmentRequest;
+const shouldAskAppointment =
+  !appointmentAlreadyAsked &&
+  (
+    directAppointmentRequest ||
+    currentQuestionCount >= 2
+  );
 
   const systemPrompt =
     buildSystemPrompt({
@@ -624,21 +627,17 @@ ${currentTurnInstruction}
       );
 
     if (
-      !answer ||
-      answer.trim().toUpperCase() ===
-        "NO_REPLY"
-    ) {
-      if (visitorLanguage === "hinglish") {
-        answer =
-          "Mere paas is specific detail ki verified information abhi nahi hai. Aap kisi aur cheez ke baare mein pooch sakte hain.";
-      } else if (visitorLanguage === "hindi") {
-        answer =
-          "Mere paas is specific detail ki verified jankari abhi nahi hai. Aap kisi aur baare mein pooch sakte hain.";
-      } else {
-        answer =
-          "I don't have verified information about that specific detail yet. You can ask me about another service or detail.";
-      }
-    }
+  !answer ||
+  answer.trim().toUpperCase() === "NO_REPLY"
+  ) {
+    return {
+      text: "",
+      shouldReply: false,
+      needsHuman: false,
+      providerConfigured: true,
+      localResponse: true,
+    };
+  }
 
     if (
       shouldAskAppointment &&

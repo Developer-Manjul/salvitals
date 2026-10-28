@@ -472,6 +472,45 @@ const apiOrigin = "https://salevitals.com";
   border-bottom: 1px solid #f3d4d4;
 }
 
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  width: fit-content;
+}
+
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #89939f;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 .foot {
   border-top: 1px solid #edf0f3;
   background: #ffffff;
@@ -1205,8 +1244,42 @@ function showPopupMessage() {
       }
     );
 
-    body.scrollTop =
-      body.scrollHeight;
+       if (state.sending) {
+      var typingRow = document.createElement("div");
+      typingRow.className = "msg ai";
+
+      var typingWrapper = document.createElement("div");
+      typingWrapper.className = "ai-message-wrap";
+
+      var typingLogo = document.createElement("div");
+      typingLogo.className = "message-logo";
+
+      var assistant = state.assistant || {};
+      var logoUrl = String(assistant.logoUrl || "").trim();
+
+      if (logoUrl) {
+        var logoImage = document.createElement("img");
+        logoImage.src = logoUrl;
+        logoImage.alt = "";
+        logoImage.onerror = function () {
+          typingLogo.innerHTML = iconHtml;
+        };
+        typingLogo.appendChild(logoImage);
+      } else {
+        typingLogo.innerHTML = iconHtml;
+      }
+
+      var typingBubble = document.createElement("div");
+      typingBubble.className = "typing-indicator";
+      typingBubble.innerHTML = "<span></span><span></span><span></span>";
+
+      typingWrapper.appendChild(typingLogo);
+      typingWrapper.appendChild(typingBubble);
+      typingRow.appendChild(typingWrapper);
+      body.appendChild(typingRow);
+    }
+
+    body.scrollTop = body.scrollHeight;
   }
 
   function setError(message) {
@@ -1403,6 +1476,25 @@ function showPopupMessage() {
 
     state.sending = true;
 
+    var typingRow = document.createElement("div");
+typingRow.className = "msg ai";
+typingRow.id = "aiTypingIndicator";
+
+var typingWrapper = document.createElement("div");
+typingWrapper.className = "ai-message-wrap";
+
+var typingLogo = document.createElement("div");
+typingLogo.className = "message-logo";
+typingLogo.innerHTML = iconHtml;
+
+var typingBubble = document.createElement("div");
+typingBubble.className = "typing-indicator";
+typingBubble.innerHTML = "<span></span><span></span><span></span>";
+
+typingWrapper.appendChild(typingLogo);
+typingWrapper.appendChild(typingBubble);
+typingRow.appendChild(typingWrapper);
+
     send.disabled = true;
 
     state.messages.push({
@@ -1413,6 +1505,9 @@ function showPopupMessage() {
     input.value = "";
 
     render();
+
+    body.appendChild(typingRow);
+body.scrollTop = body.scrollHeight;
 
     try {
       var response =
@@ -1482,14 +1577,19 @@ function showPopupMessage() {
         error.message ||
           "Unable to send message"
       );
+      
     } finally {
-      state.sending = false;
-
-      send.disabled = false;
-
-      input.focus();
+    var activeTyping = body.querySelector("#aiTypingIndicator");
+    if (activeTyping) {
+      activeTyping.remove();
     }
+
+    state.sending = false;
+    send.disabled = false;
+    input.focus();
+    render();
   }
+    }
 
   function startPolling() {
     if (state.poll) {
