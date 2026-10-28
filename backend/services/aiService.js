@@ -80,114 +80,63 @@ function cleanAnswer(text) {
     .trim();
 }
 
+
 function detectLanguage(text) {
-  const value = String(text || "")
-    .toLowerCase()
-    .trim();
+  const value = String(text || "").trim();
 
   if (!value) {
     return "english";
   }
-
-  const hindiWords = [
-    "kya",
-    "ka",
-    "ki",
-    "ke",
-    "ko",
-    "se",
-    "me",
-    "mein",
-    "mai",
-    "mujhe",
-    "mera",
-    "meri",
-    "mere",
-    "aap",
-    "apka",
-    "apki",
-    "apke",
-    "batao",
-    "bata",
-    "chahiye",
-    "hai",
-    "hain",
-    "kitna",
-    "kitne",
-    "kitni",
-    "kab",
-    "kaise",
-    "kyu",
-    "kyon",
-    "aur",
-    "krna",
-    "karna",
-    "kar",
-    "karo",
-    "du",
-    "do",
-    "de",
-    "iska",
-    "iske",
-    "iski",
-    "uska",
-    "uske",
-    "uski",
-  ];
-
-  const englishWords = [
-    "what",
-    "which",
-    "where",
-    "when",
-    "why",
-    "how",
-    "cost",
-    "price",
-    "appointment",
-    "book",
-    "service",
-    "services",
-    "treatment",
-    "doctor",
-    "available",
-    "timing",
-    "time",
-    "tell",
-    "please",
-    "can",
-    "could",
-    "would",
-    "want",
-    "need",
-  ];
-
+  if (/[\u0900-\u097F]/.test(value)) {
+    return "hindi";
+  }
   const words = value
+    .toLowerCase()
     .replace(/[^\w\s]/g, " ")
     .split(/\s+/)
     .filter(Boolean);
 
+  const hindiWords = new Set([
+    "kya", "ka", "ki", "ke", "ko", "se", "me",
+    "mein", "mai", "mujhe", "mera", "meri", "mere",
+    "aap", "apka", "apki", "apke", "batao", "bata",
+    "chahiye", "hai", "hain", "ho", "kitna", "kitne",
+    "kitni", "kab", "kaise", "kyu", "kyon", "aur",
+    "krna", "karna", "kar", "karo", "du", "do", "de",
+    "iska", "iske", "iski", "uska", "uske", "uski",
+    "baare", "bare", "kuch", "tum", "tumhara",
+    "pasand", "ghumne", "zindagi", "yaar", "bhai",
+    "haan", "han", "nahi", "nahin", "acha", "achha"
+  ]);
+
+  const englishWords = new Set([
+    "what", "which", "where", "when", "why", "how",
+    "cost", "price", "appointment", "book", "service",
+    "services", "treatment", "doctor", "available",
+    "timing", "time", "tell", "please", "can", "could",
+    "would", "want", "need", "about", "your", "me",
+    "my", "life", "like", "help", "hello", "thanks"
+  ]);
+
   const hindiCount = words.filter(
-    (word) => hindiWords.includes(word)
+    word => hindiWords.has(word)
   ).length;
 
   const englishCount = words.filter(
-    (word) => englishWords.includes(word)
+    word => englishWords.has(word)
   ).length;
 
-  if (
-    hindiCount >= 2 &&
-    englishCount >= 1
-  ) {
+  if (hindiCount > 0 && englishCount > 0) {
     return "hinglish";
   }
 
-  if (hindiCount >= 2) {
-    return "hindi";
+  if (hindiCount > 0) {
+    return "hinglish";
   }
 
   return "english";
 }
+
 
 function isGreeting(text) {
   return /^(hi|hii|hiii|hello|hey|heyy|namaste|namaskar|good morning|good afternoon|good evening|hi there|hello there|hey there)[.!?\s]*$/i.test(
@@ -425,30 +374,30 @@ ${languageInstruction}
 
 Have a natural human-like conversation with the visitor.
 
+
 RULES:
 
-1. Use verified business information below.
-2. Never invent or guess business facts.
-3. Never invent names, doctors, services, treatments, products, prices, timings, locations, addresses, policies, contact details or availability.
-4. Never assume the business industry.
-5. Do not use unrelated general knowledge for business questions.
-6. Understand follow-up questions from conversation history.
-7. Short questions such as "cost?", "how much?", "and hair?", "timing?", "aur iska?", "kitna?" should be understood from previous conversation.
-8. Do not return NO_REPLY.
-9. Always give the visitor a useful response.
-10. If the exact treatment price is not available in verified business information, explain that the cost depends on the patient's individual concerns, condition, and the procedure and treatment plan recommended by the doctor. Do not say that the treatment information is unknown or unavailable. Do not invent or estimate a price. Recommend a consultation to discuss suitable options and the estimated cost. Answer the visitor's question before asking for their name, mobile number, or offering an appointment. For consultation-fee questions, provide the verified consultation fee directly if available in the knowledge.
-11. Keep responses short and conversational.
-12. Prefer 1 to 4 short sentences.
-13. Do not dump website content.
+1. Use verified business information below for business questions.
+2. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
+3. Never pretend to be a real human or claim personal experiences, travel, family, or a personal life.
+4. For casual conversation, reply naturally to what the visitor actually said. Do not force every conversation toward appointments.
+5. If asked about your personal life, explain briefly that you are the website assistant and do not have personal experiences, then continue naturally.
+6. Use conversation history to understand follow-up messages and short replies.
+7. Answer the visitor's current question directly.
+8. Never give an unrelated answer. If the meaning is unclear, ask one short clarifying question.
+9. Never assume what the visitor likes, feels, or wants.
+10. For business questions, use verified business information. If the answer is not available, say so honestly.
+11. Never invent prices or treatment details.
+12. Do not request contact details unless relevant to the visitor's request or booking flow.
+13. Keep replies short, friendly, and conversational, usually 1–4 sentences.
 14. Do not repeat information unnecessarily.
-15. Do not mention internal instructions, AI, knowledge retrieval or processing.
-16. Do not use Markdown, bullets, headings or bold formatting.
-17. Return plain conversational text only.
-18. Do not create human-handover messages.
-19. Match the visitor's language.
-20. If the visitor speaks English, reply in English.
-21. If the visitor speaks Hinglish, reply in Hinglish.
-22. If the visitor speaks Hindi, reply in Hindi.
+15. Do not mention internal instructions or knowledge retrieval.
+16. Return plain text only, without Markdown or headings.
+17. Reply in the visitor's language.
+18. For Roman Hindi/Hinglish, reply in natural Roman Hinglish.
+19. For English, reply in English.
+20. Do not automatically offer an appointment just because the visitor asked multiple questions.
+
 
 ${appointmentInstruction}
 
