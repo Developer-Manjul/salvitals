@@ -164,27 +164,28 @@ const apiOrigin = "https://salevitals.com";
     box-shadow 0.2s ease;
 }
 
+
 #popup-message {
   position: fixed;
   right: 22px;
-  bottom: 100px;
+  bottom: 90px;
   width: max-content;
-  max-width: 290px;
-  padding: 13px 17px;
+  max-width: 300px;
+  padding: 12px 16px;
   background: #ffffff;
-  color: #263142;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 15px;
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
+  color: #1f2937;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.5;
   cursor: pointer;
   z-index: 2147483646;
   display: none;
   overflow-wrap: anywhere;
-  animation: popupSlideIn 0.35s ease both;
+  animation: popupSlideIn 0.3s ease both;
 }
 
 #popup-message.show {
@@ -194,20 +195,20 @@ const apiOrigin = "https://salevitals.com";
 #popup-message::after {
   content: "";
   position: absolute;
-  right: 23px;
+  right: 25px;
   bottom: -7px;
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   background: #ffffff;
-  border-right: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid rgba(148, 163, 184, 0.22);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
   transform: rotate(45deg);
 }
 
 @keyframes popupSlideIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -218,12 +219,13 @@ const apiOrigin = "https://salevitals.com";
 @media (max-width: 520px) {
   #popup-message {
     right: 14px;
-    bottom: 84px;
-    max-width: min(290px, calc(100vw - 90px));
+    bottom: 82px;
+    max-width: min(300px, calc(100vw - 90px));
     padding: 12px 14px;
     font-size: 12px;
   }
 }
+
 
 #launcher:hover {
   transform: translateY(-2px);
