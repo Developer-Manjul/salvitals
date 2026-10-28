@@ -209,13 +209,15 @@ async function sendLeadWhatsAppNotification(lead) {
         };
     }
 
-    if (!isWithinAllowedWindow(settings)) {
+    if (
+    settings.sendOutsideWindow !== true &&
+    !isWithinAllowedWindow(settings)
+    ) {
         return {
             sent: false,
             reason: "outside_window",
         };
     }
-
     const accessToken =
         process.env.WHATSAPP_ACCESS_TOKEN ||
         process.env.META_WHATSAPP_ACCESS_TOKEN ||

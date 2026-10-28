@@ -493,3 +493,130 @@
     width: 100%;
   }
 }
+
+/* 24-hour notification option */
+.sv-lw-all-day {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 18px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #d8e6fa;
+  border-radius: 10px;
+  background: #f2f7ff;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.sv-lw-all-day:hover {
+  background: #edf4ff;
+  border-color: #b9d2fa;
+}
+
+.sv-lw-all-day input[type="checkbox"] {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #1769e8;
+  cursor: pointer;
+}
+
+.sv-lw-all-day-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sv-lw-all-day-copy strong {
+  color: #173766;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.sv-lw-all-day-copy small {
+  color: #71819b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sv-lw-time-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 0;
+}
+
+.sv-lw-time-fields.is-disabled {
+  opacity: 0.55;
+}
+
+.sv-lw-time-fields.is-disabled input {
+  cursor: not-allowed;
+  background: #f1f3f6;
+}
+
+.sv-lw-schedule-hint {
+  margin: 10px 0 0;
+  color: #71819b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.sv-lw-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.sv-lw-save {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 20px;
+  border: 1px solid #0758d5;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #1674f5, #0755cc);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(22, 105, 232, 0.18);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sv-lw-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(22, 105, 232, 0.25);
+}
+
+.sv-lw-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .sv-lw-time-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sv-lw-all-day {
+    padding: 12px;
+  }
+
+  .sv-lw-actions {
+    margin-top: 16px;
+  }
+
+  .sv-lw-save {
+    width: 100%;
+  }
+}

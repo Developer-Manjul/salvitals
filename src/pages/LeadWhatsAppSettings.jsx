@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS = {
   startTime: "19:00",
   endTime: "10:00",
   timezone: "Asia/Kolkata",
-  leadSources: ["Website", "Facebook", "Instagram", "AI Chat"],
+  leadSources: ["Website", "Meta", "AI Chat", "Google Ads"],
   sendOutsideWindow: false,
 };
 
@@ -75,7 +75,9 @@ function getToken() {
 function SectionHeading({ icon, title, description }) {
   return (
     <div className="sv-lw-section-heading">
-      <div className="sv-lw-section-icon" aria-hidden="true">{icon}</div>
+      <div className="sv-lw-section-icon" aria-hidden="true">
+        {icon}
+      </div>
       <div>
         <h3>{title}</h3>
         <p>{description}</p>
@@ -103,7 +105,9 @@ export default function LeadWhatsAppSettings() {
           `${getApiBaseUrl()}/api/lead-whatsapp/settings`,
           {
             method: "GET",
-            headers: { Authorization: `Bearer ${getToken()}` },
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+            },
             cache: "no-store",
           }
         );
@@ -111,7 +115,9 @@ export default function LeadWhatsAppSettings() {
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          throw new Error(data.message || "Unable to load WhatsApp settings.");
+          throw new Error(
+            data.message || "Unable to load WhatsApp settings."
+          );
         }
 
         if (!cancelled) {
@@ -121,6 +127,8 @@ export default function LeadWhatsAppSettings() {
             leadSources: Array.isArray(data.settings?.leadSources)
               ? data.settings.leadSources
               : DEFAULT_SETTINGS.leadSources,
+            sendOutsideWindow:
+              data.settings?.sendOutsideWindow === true,
           });
         }
       } catch (err) {
@@ -128,18 +136,25 @@ export default function LeadWhatsAppSettings() {
           setError(err.message || "Unable to load settings.");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadSettings();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
   const updateSetting = (field, value) => {
-    setSettings((previous) => ({ ...previous, [field]: value }));
+    setSettings((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+
     setError("");
     setSuccess("");
   };
@@ -151,6 +166,7 @@ export default function LeadWhatsAppSettings() {
         ? previous.leadSources.filter((item) => item !== source)
         : [...previous.leadSources, source],
     }));
+
     setError("");
     setSuccess("");
   };
@@ -167,6 +183,14 @@ export default function LeadWhatsAppSettings() {
 
     if (settings.leadSources.length === 0) {
       setError("Select at least one lead source.");
+      return;
+    }
+
+    if (
+      !settings.sendOutsideWindow &&
+      settings.startTime === settings.endTime
+    ) {
+      setError("Start Time and End Time cannot be the same.");
       return;
     }
 
@@ -188,7 +212,9 @@ export default function LeadWhatsAppSettings() {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.message || "Unable to save settings.");
+        throw new Error(
+          data.message || "Unable to save settings."
+        );
       }
 
       setSettings({
@@ -197,6 +223,8 @@ export default function LeadWhatsAppSettings() {
         leadSources: Array.isArray(data.settings?.leadSources)
           ? data.settings.leadSources
           : DEFAULT_SETTINGS.leadSources,
+        sendOutsideWindow:
+          data.settings?.sendOutsideWindow === true,
       });
 
       setSuccess("WhatsApp lead notification settings saved.");
@@ -218,9 +246,14 @@ export default function LeadWhatsAppSettings() {
   return (
     <div className="sv-lead-whatsapp-page">
       <div className="sv-lw-header">
-        <div className="sv-lw-main-icon" aria-hidden="true">◉</div>
+        <div className="sv-lw-main-icon" aria-hidden="true">
+          ◉
+        </div>
+
         <div>
-          <h2 className="sv-lw-title">WhatsApp Lead Notifications</h2>
+          <h2 className="sv-lw-title">
+            WhatsApp Lead Notifications
+          </h2>
           <p className="sv-lw-subtitle">
             Receive WhatsApp alerts when new leads arrive in your CRM.
             Stay updated and never miss an opportunity.
@@ -228,20 +261,39 @@ export default function LeadWhatsAppSettings() {
         </div>
       </div>
 
-      {error && <div className="sv-lw-message sv-lw-error" role="alert">{error}</div>}
-      {success && <div className="sv-lw-message sv-lw-success" role="status">✓ {success}</div>}
+      {error && (
+        <div className="sv-lw-message sv-lw-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="sv-lw-message sv-lw-success" role="status">
+          ✓ {success}
+        </div>
+      )}
 
       <form onSubmit={saveSettings}>
         <section className="sv-lw-enable">
           <div className="sv-lw-enable-content">
-            <div className="sv-lw-enable-icon" aria-hidden="true">◉</div>
+            <div className="sv-lw-enable-icon" aria-hidden="true">
+              ◉
+            </div>
+
             <div>
               <strong>Enable lead notifications</strong>
               <p>
-                Turn automatic WhatsApp lead alerts on or off. When enabled,
-                you can receive alerts for new leads.
+                Turn automatic WhatsApp lead alerts on or off.
+                When enabled, you can receive alerts for new leads.
               </p>
-              <span className={settings.enabled ? "sv-lw-status active" : "sv-lw-status"}>
+
+              <span
+                className={
+                  settings.enabled
+                    ? "sv-lw-status active"
+                    : "sv-lw-status"
+                }
+              >
                 {settings.enabled ? "● Enabled" : "○ Disabled"}
               </span>
             </div>
@@ -251,7 +303,9 @@ export default function LeadWhatsAppSettings() {
             <input
               type="checkbox"
               checked={settings.enabled}
-              onChange={(event) => updateSetting("enabled", event.target.checked)}
+              onChange={(event) =>
+                updateSetting("enabled", event.target.checked)
+              }
               aria-label="Enable WhatsApp lead notifications"
             />
             <span className="sv-lw-switch-track" />
@@ -267,12 +321,15 @@ export default function LeadWhatsAppSettings() {
 
           <div className="sv-lw-fields">
             <div className="sv-lw-field">
-              <label>
-                Recipient WhatsApp number
+              <label htmlFor="sv-lw-recipient">
+                WhatsApp Number
                 <input
+                  id="sv-lw-recipient"
                   type="tel"
                   value={settings.recipientNumber}
-                  onChange={(event) => updateSetting("recipientNumber", event.target.value)}
+                  onChange={(event) =>
+                    updateSetting("recipientNumber", event.target.value)
+                  }
                   placeholder="919876543210"
                   autoComplete="tel"
                 />
@@ -281,46 +338,96 @@ export default function LeadWhatsAppSettings() {
             </div>
 
             <div className="sv-lw-field">
-              <label>
+              <label htmlFor="sv-lw-timezone">
                 Timezone
                 <select
+                  id="sv-lw-timezone"
                   value={settings.timezone}
-                  onChange={(event) => updateSetting("timezone", event.target.value)}
+                  onChange={(event) =>
+                    updateSetting("timezone", event.target.value)
+                  }
                 >
                   {!TIMEZONES.includes(settings.timezone) && (
-                    <option value={settings.timezone}>{settings.timezone}</option>
+                    <option value={settings.timezone}>
+                      {settings.timezone}
+                    </option>
                   )}
+
                   {TIMEZONES.map((timezone) => (
-                    <option key={timezone} value={timezone}>{timezone}</option>
+                    <option key={timezone} value={timezone}>
+                      {timezone}
+                    </option>
                   ))}
                 </select>
               </label>
             </div>
+          </div>
 
+          <label
+            className={`sv-lw-all-day ${
+              settings.sendOutsideWindow ? "is-active" : ""
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={settings.sendOutsideWindow}
+              onChange={(event) =>
+                updateSetting("sendOutsideWindow", event.target.checked)
+              }
+            />
+
+            <span className="sv-lw-all-day-copy">
+              <strong>Send notifications 24 hours (All day)</strong>
+              <small>
+                When enabled, you will receive WhatsApp alerts at any
+                time, day or night.
+              </small>
+            </span>
+          </label>
+
+          <div
+            className={`sv-lw-fields sv-lw-time-fields ${
+              settings.sendOutsideWindow ? "is-disabled" : ""
+            }`}
+          >
             <div className="sv-lw-field">
-              <label>
-                Notification start time
+              <label htmlFor="sv-lw-start-time">
+                Start Time
                 <input
+                  id="sv-lw-start-time"
                   type="time"
                   value={settings.startTime}
-                  onChange={(event) => updateSetting("startTime", event.target.value)}
-                  required
+                  onChange={(event) =>
+                    updateSetting("startTime", event.target.value)
+                  }
+                  disabled={settings.sendOutsideWindow}
+                  required={!settings.sendOutsideWindow}
                 />
               </label>
             </div>
 
             <div className="sv-lw-field">
-              <label>
-                Notification end time
+              <label htmlFor="sv-lw-end-time">
+                End Time
                 <input
+                  id="sv-lw-end-time"
                   type="time"
                   value={settings.endTime}
-                  onChange={(event) => updateSetting("endTime", event.target.value)}
-                  required
+                  onChange={(event) =>
+                    updateSetting("endTime", event.target.value)
+                  }
+                  disabled={settings.sendOutsideWindow}
+                  required={!settings.sendOutsideWindow}
                 />
               </label>
             </div>
           </div>
+
+          <p className="sv-lw-schedule-hint">
+            {settings.sendOutsideWindow
+              ? "Notifications can be sent throughout the day and night."
+              : "Notifications are sent only during your selected time window."}
+          </p>
         </section>
 
         <section className="sv-lw-card">
@@ -341,7 +448,9 @@ export default function LeadWhatsAppSettings() {
                   style={{
                     background: selected ? source.background : "#fff",
                     borderColor: selected ? source.border : "#e1e9f3",
-                    boxShadow: selected ? `inset 0 0 0 1px ${source.border}` : "none",
+                    boxShadow: selected
+                      ? `inset 0 0 0 1px ${source.border}`
+                      : "none",
                   }}
                 >
                   <input
@@ -350,6 +459,7 @@ export default function LeadWhatsAppSettings() {
                     onChange={() => toggleSource(source.name)}
                     aria-label={`Notify for ${source.name} leads`}
                   />
+
                   <span
                     className="sv-lw-source-icon"
                     style={{ background: source.color }}
@@ -357,20 +467,43 @@ export default function LeadWhatsAppSettings() {
                   >
                     {source.icon}
                   </span>
+
                   <span className="sv-lw-source-info">
-                    <span className="sv-lw-source-name">{source.name}</span>
-                    <span className="sv-lw-source-description">{source.description}</span>
+                    <span className="sv-lw-source-name">
+                      {source.name}
+                    </span>
+                    <span className="sv-lw-source-description">
+                      {source.description}
+                    </span>
                   </span>
                 </label>
               );
             })}
           </div>
 
-
           <div className="sv-lw-actions">
-            <button type="submit" className="sv-lw-save" disabled={saving}>
-              <span aria-hidden="true">▣</span>
-              {saving ? "Saving..." : "Save Settings"}
+            <button
+              type="submit"
+              className="sv-lw-save"
+              disabled={saving}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                <path d="M17 21v-8H7v8" />
+                <path d="M7 3v5h8" />
+              </svg>
+
+              <span>{saving ? "Saving..." : "Save Settings"}</span>
             </button>
           </div>
         </section>

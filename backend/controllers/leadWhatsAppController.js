@@ -40,7 +40,7 @@ exports.getSettings = async (req, res) => {
             endTime: "10:00",
             timezone: "Asia/Kolkata",
             leadSources: ALLOWED_SOURCES,
-            sendOutsideWindow: false,
+          sendOutsideWindow: false,
         };
 
         const settings = setting
@@ -58,10 +58,7 @@ exports.getSettings = async (req, res) => {
             settings,
         });
     } catch (error) {
-        console.error(
-            "GET LEAD WHATSAPP SETTINGS ERROR:",
-            error.message
-        );
+        console.error("GET LEAD WHATSAPP SETTINGS ERROR:", error);
 
         return res.status(500).json({
             success: false,
@@ -89,13 +86,14 @@ exports.saveSettings = async (req, res) => {
         }
 
         const {
-            enabled,
-            recipientNumber,
-            startTime,
-            endTime,
-            timezone,
-            leadSources,
-        } = req.body;
+        enabled,
+        recipientNumber,
+        startTime,
+        endTime,
+        timezone,
+        leadSources,
+        sendOutsideWindow,
+    } = req.body;
 
         if (typeof enabled !== "boolean") {
             return res.status(400).json({
@@ -167,7 +165,7 @@ exports.saveSettings = async (req, res) => {
                     endTime,
                     timezone: selectedTimezone,
                     leadSources: [...new Set(leadSources)],
-                    sendOutsideWindow: false,
+                    sendOutsideWindow: sendOutsideWindow === true,
                 },
             },
             {
