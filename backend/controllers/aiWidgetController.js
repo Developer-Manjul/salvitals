@@ -102,6 +102,16 @@ exports.getConfig = async (req, res) => {
           ),
         welcomeMessage,
         enabled: assistant.enabled,
+        popupEnabled: assistant.popupEnabled !== false,
+      popupMessage: String(
+        assistant.popupMessage || ""
+      ).trim(),
+      popupDelaySeconds: Number(
+        assistant.popupDelaySeconds ?? 3
+      ),
+      popupRepeatMinutes: Number(
+        assistant.popupRepeatMinutes ?? 30
+      ),
       },
     });
   } catch (error) {
@@ -152,6 +162,38 @@ const apiOrigin = "https://salevitals.com";
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+#popup-message {
+  position: fixed;
+  right: 22px;
+  bottom: 96px;
+  max-width: 280px;
+  padding: 12px 16px;
+  background: #ffffff;
+  color: #263142;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  z-index: 2147483646;
+  display: none;
+  overflow-wrap: anywhere;
+}
+
+#popup-message.show {
+  display: block;
+}
+
+@media (max-width: 520px) {
+  #popup-message {
+    right: 14px;
+    bottom: 82px;
+    max-width: calc(100vw - 100px);
+  }
 }
 
 #launcher:hover {
@@ -585,6 +627,13 @@ const apiOrigin = "https://salevitals.com";
   <span id="launcherIcon"></span>
 </button>
 
+<div
+  id="popup-message"
+  role="button"
+  tabindex="0"
+  aria-label="Open chat"
+></div>
+
 <section id="panel" aria-live="polite">
   <div class="head">
     <div class="brand">
@@ -744,6 +793,36 @@ const apiOrigin = "https://salevitals.com";
     shadow.getElementById(
       "launcher"
     );
+
+    var popupMessage =
+  shadow.getElementById("popup-message");
+
+var popupTimer = null;
+var popupRepeatTimer = null;
+
+function hidePopupMessage() {
+  if (popupMessage) {
+    popupMessage.classList.remove("show");
+  }
+}
+
+function showPopupMessage() {
+  var assistant = state.assistant || {};
+
+  if (
+    !popupMessage ||
+    assistant.popupEnabled === false ||
+    !String(assistant.popupMessage || "").trim() ||
+    state.open
+  ) {
+    return;
+  }
+
+  popupMessage.textContent =
+    String(assistant.popupMessage).trim();
+
+  popupMessage.classList.add("show");
+}
 
   var launcherIcon =
     shadow.getElementById(
@@ -1141,6 +1220,40 @@ const apiOrigin = "https://salevitals.com";
           data.assistant;
 
         applyBranding();
+        hidePopupMessage();
+
+        if (popupTimer) {
+          clearTimeout(popupTimer);
+        }
+
+        if (popupRepeatTimer) {
+          clearInterval(popupRepeatTimer);
+        }
+
+        if (
+          data.assistant.popupEnabled !== false &&
+          String(data.assistant.popupMessage || "").trim()
+        ) {
+          var delaySeconds = Math.min(
+            120,
+            Math.max(0, Number(data.assistant.popupDelaySeconds ?? 3))
+          );
+
+          var repeatMinutes = Math.min(
+            1440,
+            Math.max(0, Number(data.assistant.popupRepeatMinutes ?? 30))
+          );
+
+          popupTimer = setTimeout(function () {
+            showPopupMessage();
+
+            if (repeatMinutes > 0) {
+              popupRepeatTimer = setInterval(function () {
+                showPopupMessage();
+              }, repeatMinutes * 60 * 1000);
+            }
+          }, delaySeconds * 1000);
+        }
 
         return true;
       }
@@ -1469,11 +1582,14 @@ const apiOrigin = "https://salevitals.com";
     setTimeout(syncMobileViewport, 400);
   });
 
-
-
-  
 launcher.onclick = async function () {
   state.open = true;
+  hidePopupMessage();
+
+if (popupTimer) {
+  clearTimeout(popupTimer);
+  popupTimer = null;
+}
 
   launcher.classList.add("chat-open");
   panel.classList.add("open");
@@ -1497,6 +1613,22 @@ launcher.onclick = async function () {
     syncMobileViewport();
   }, 100);
 };
+
+function openChatFromPopup() {
+  hidePopupMessage();
+  launcher.click();
+}
+
+popupMessage.addEventListener("click", function () {
+  openChatFromPopup();
+});
+
+popupMessage.addEventListener("keydown", function (event) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openChatFromPopup();
+  }
+});
 
 close.onclick = function () {
   state.open = false;

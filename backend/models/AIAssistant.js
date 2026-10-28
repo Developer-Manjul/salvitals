@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const aiAssistantSchema = new mongoose.Schema(
@@ -73,6 +74,33 @@ const aiAssistantSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "Hello 👋 Welcome! How can I help you today?",
+    },
+
+    // Floating chat popup settings
+    popupEnabled: {
+      type: Boolean,
+      default: true,
+    },
+
+    popupMessage: {
+      type: String,
+      trim: true,
+      maxlength: 300,
+      default: "Hi 👋 Need help? Let's talk!",
+    },
+
+    popupDelaySeconds: {
+      type: Number,
+      min: 0,
+      max: 120,
+      default: 3,
+    },
+
+    popupRepeatMinutes: {
+      type: Number,
+      min: 0,
+      max: 1440,
+      default: 30,
     },
 
     customInstructions: {

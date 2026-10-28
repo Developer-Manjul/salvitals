@@ -185,127 +185,99 @@ exports.getAssistant = async (
     }
 };
 
-exports.updateAssistant = async (
-    req,
-    res
-) => {
+exports.updateAssistant = async (req, res) => {
     try {
-        const context =
-            await getContext(req);
+        const context = await getContext(req);
 
-        if (
-            !requirePermission(
-                context,
-                "ai.use",
-                res
-            )
-        ) {
+        if (!requirePermission(context, "ai.use", res)) {
             return;
         }
 
-        const ownerId =
-            context.workspaceOwnerId;
+        const ownerId = context.workspaceOwnerId;
+        const body = req.body || {};
 
-        const assistant =
-            await AIAssistant.findOneAndUpdate(
-                {
-                    ownerId,
+        const popupDelay = Number(body.popupDelaySeconds);
+        const popupRepeat = Number(body.popupRepeatMinutes);
+
+        const assistant = await AIAssistant.findOneAndUpdate(
+            { ownerId },
+            {
+                $set: {
+                    enabled: body.enabled !== false,
+
+                    assistantName:
+                        cleanString(body.assistantName, 120) ||
+                        "AI Assistant",
+
+                    fromName: cleanString(body.fromName, 200),
+                    logoUrl: cleanString(body.logoUrl, 1000),
+                    primaryColor: cleanColor(body.primaryColor),
+                    websiteUrl: cleanString(body.websiteUrl, 500),
+
+                    welcomeMessage:
+                        cleanString(body.welcomeMessage, 1000) ||
+                        "Hello 👋 Welcome! How can I help you today?",
+
+                    // Floating chat popup settings
+                    popupEnabled: body.popupEnabled !== false,
+
+                    popupMessage: cleanString(
+                        body.popupMessage,
+                        300
+                    ),
+
+                    popupDelaySeconds: Math.min(
+                        Math.max(
+                            Number.isFinite(popupDelay) ? popupDelay : 3,
+                            0
+                        ),
+                        120
+                    ),
+
+                    popupRepeatMinutes: Math.min(
+                        Math.max(
+                            Number.isFinite(popupRepeat) ? popupRepeat : 30,
+                            0
+                        ),
+                        1440
+                    ),
+
+                    customInstructions: cleanString(
+                        body.customInstructions,
+                        10000
+                    ),
+
+                    status:
+                        body.enabled === false
+                            ? "disabled"
+                            : "active",
                 },
-                {
-                    $set: {
-                        enabled:
-                            req.body?.enabled !==
-                            false,
 
-                        assistantName:
-                            cleanString(
-                                req.body
-                                    ?.assistantName,
-                                120
-                            ) ||
-                            "AI Assistant",
-
-                        fromName:
-                            cleanString(
-                                req.body
-                                    ?.fromName,
-                                200
-                            ),
-
-                        logoUrl:
-                            cleanString(
-                                req.body
-                                    ?.logoUrl,
-                                1000
-                            ),
-
-                        primaryColor:
-                            cleanColor(
-                                req.body
-                                    ?.primaryColor
-                            ),
-
-                        websiteUrl:
-                            cleanString(
-                                req.body
-                                    ?.websiteUrl,
-                                500
-                            ),
-
-                        welcomeMessage:
-                            cleanString(
-                                req.body
-                                    ?.welcomeMessage,
-                                1000
-                            ) ||
-                            "Hello 👋 Welcome! How can I help you today?",
-
-                        customInstructions:
-                            cleanString(
-                                req.body
-                                    ?.customInstructions,
-                                10000
-                            ),
-
-                        status:
-                            req.body
-                                ?.enabled ===
-                            false
-                                ? "disabled"
-                                : "active",
-                    },
-
-                    $setOnInsert: {
-                        ownerId,
-                    },
-                },
-                {
-                    new: true,
-                    upsert: true,
-                    setDefaultsOnInsert: true,
-                    runValidators: true,
-                }
-            );
+                $setOnInsert: { ownerId },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+                runValidators: true,
+            }
+        );
 
         return res.json({
             success: true,
-            message:
-                "AI Assistant settings saved",
+            message: "AI Assistant settings saved",
             assistant,
         });
     } catch (error) {
-        console.error(
-            "UPDATE AI ASSISTANT ERROR:",
-            error
-        );
+        console.error("UPDATE AI ASSISTANT ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to save AI Assistant settings",
+            message: "Unable to save AI Assistant settings",
         });
     }
 };
+
 
 exports.getUsage = async (
     req,

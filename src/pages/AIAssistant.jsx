@@ -117,6 +117,10 @@ export default function AIAssistant({ initialConversationId = "", initialTab = "
     websiteUrl: "",
     welcomeMessage:
       "Hello 👋 Welcome! How can I help you today?",
+    popupEnabled: true,
+    popupMessage: "Hi 👋 Need help? Let's talk!",
+    popupDelaySeconds: 3,
+    popupRepeatMinutes: 30,
     customInstructions: "",
     enabled: true,
   });
@@ -180,6 +184,19 @@ export default function AIAssistant({ initialConversationId = "", initialTab = "
         welcomeMessage:
           data.assistant?.welcomeMessage ||
           "Hello 👋 Welcome! How can I help you today?",
+
+        popupEnabled:
+          data.assistant?.popupEnabled !== false,
+
+        popupMessage:
+          data.assistant?.popupMessage ??
+          "Hi 👋 Need help? Let's talk!",
+
+        popupDelaySeconds:
+          Number(data.assistant?.popupDelaySeconds ?? 3),
+
+        popupRepeatMinutes:
+          Number(data.assistant?.popupRepeatMinutes ?? 30),
 
         customInstructions:
           data.assistant?.customInstructions || "",
@@ -1067,6 +1084,123 @@ export default function AIAssistant({ initialConversationId = "", initialTab = "
               </div>
 
               {}
+
+              <section
+                className="ai-card"
+                style={{
+                  marginTop: "18px",
+                  border: "1px solid #e7ebef",
+                  borderRadius: "12px",
+                  padding: "18px",
+                  background: "#fff",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "16px",
+                    flexWrap: "wrap",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: "17px", color: "#1f2937" }}>
+                      Chat Popup Message
+                    </h2>
+                    <p style={{ margin: "5px 0 0", fontSize: "12px", color: "#7b8494" }}>
+                      Show a short message above the floating chat icon on your website.
+                    </p>
+                  </div>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#374151",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.popupEnabled}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          popupEnabled: event.target.checked,
+                        }))
+                      }
+                    />
+                    Enable popup
+                  </label>
+                </div>
+
+                <label className="ai-form-group">
+                  <span>Popup Message</span>
+                  <textarea
+                    rows="3"
+                    maxLength={300}
+                    value={form.popupMessage}
+                    disabled={!form.popupEnabled}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        popupMessage: event.target.value,
+                      }))
+                    }
+                    placeholder="Example: Hi 👋 Need help? Let's talk!"
+                  />
+                  <small style={{ display: "block", marginTop: "5px", color: "#8b94a3", fontSize: "11px" }}>
+                    {String(form.popupMessage || "").length}/300 characters. This is the short message visitors see before opening the chat.
+                  </small>
+                </label>
+
+                <div className="ai-form-grid" style={{ marginTop: "14px" }}>
+                  <label className="ai-form-group">
+                    <span>Show after (seconds)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={form.popupDelaySeconds}
+                      disabled={!form.popupEnabled}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          popupDelaySeconds: event.target.value,
+                        }))
+                      }
+                    />
+                    <small style={{ color: "#8b94a3", fontSize: "11px" }}>
+                      0–120 seconds after the page loads.
+                    </small>
+                  </label>
+
+                  <label className="ai-form-group">
+                    <span>Repeat interval (minutes)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1440"
+                      value={form.popupRepeatMinutes}
+                      disabled={!form.popupEnabled}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          popupRepeatMinutes: event.target.value,
+                        }))
+                      }
+                    />
+                    <small style={{ color: "#8b94a3", fontSize: "11px" }}>
+                      0 means do not repeat; maximum 1440 minutes.
+                    </small>
+                  </label>
+                </div>
+              </section>
 
               <label className="ai-form-group">
 
