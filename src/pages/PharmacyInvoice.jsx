@@ -105,6 +105,9 @@ export default function PharmacyInvoice() {
   const [form, setForm] = useState(newInvoice);
   const [showPreview, setShowPreview] = useState(false);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [customerSearch, setCustomerSearch] = useState("");
   const [medicineSearch, setMedicineSearch] = useState({});
 const [showMedicineOptions, setShowMedicineOptions] = useState({});
@@ -624,9 +627,70 @@ const chooseMedicine = (index, medicine) => {
     </div>
   );
 
-  const filteredInvoices = invoices.filter((invoice) =>
-    `${invoice.invoiceNumber || ""} ${invoice.customerName || ""}`.toLowerCase().includes(search.trim().toLowerCase())
+  const filteredInvoices = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return invoices.filter((invoice) => {
+      const searchable = `${invoice.invoiceNumber || ""} ${invoice.customerName || ""} ${invoice.phone || ""} ${(invoice.items || []).map((line) => line.medicineName || line.name || "").join(" ")}`.toLowerCase();
+      if (query && !searchable.includes(query)) return false;
+
+      const rawDate = invoice.invoiceDate || invoice.createdAt || "";
+      const invoiceDate = rawDate ? new Date(rawDate) : null;
+      if (dateFrom) {
+        const from = new Date(`${dateFrom}T00:00:00`);
+        if (!invoiceDate || Number.isNaN(invoiceDate.getTime()) || invoiceDate < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(`${dateTo}T23:59:59.999`);
+        if (!invoiceDate || Number.isNaN(invoiceDate.getTime()) || invoiceDate > to) return false;
+      }
+
+      if (deliveryFilter !== "all") {
+        const isSent = String(invoice.status || "").toLowerCase() === "sent";
+        if (deliveryFilter === "sent" && !isSent) return false;
+        if (deliveryFilter === "not-sent" && isSent) return false;
+      }
+      return true;
+    });
+  }, [invoices, search, dateFrom, dateTo, deliveryFilter]);
+
+  const pharmacyInvoiceTotal = useMemo(
+    () => filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.total || invoice.grandTotal || 0), 0),
+    [filteredInvoices]
   );
+
+  const exportPharmacyInvoices = () => {
+    const columns = [
+      ["Invoice Number", (item) => item.invoiceNumber || ""],
+      ["Customer", (item) => item.customerName || ""],
+      ["Phone", (item) => item.phone || ""],
+      ["Invoice Date", (item) => item.invoiceDate ? formatDate(item.invoiceDate) : ""],
+      ["Medicines", (item) => (item.items || []).map((line) => line.medicineName || line.name || "").filter(Boolean).join("; ")],
+      ["Total", (item) => Number(item.total || item.grandTotal || 0).toFixed(2)],
+      ["Payment Mode", (item) => item.paymentMode || ""],
+      ["Delivery Status", (item) => String(item.status || "").toLowerCase() === "sent" ? "Sent" : "Not sent"],
+    ];
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [
+      columns.map(([heading]) => escapeCsv(heading)).join(","),
+      ...filteredInvoices.map((item) => columns.map(([, getter]) => escapeCsv(getter(item))).join(",")),
+    ].join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `pharmacy-invoices-${today()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearInvoiceFilters = () => {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setDeliveryFilter("all");
+  };
 
   return (
     <div className="invoice-page pharmacy-invoice-page">
@@ -646,11 +710,135 @@ const chooseMedicine = (index, medicine) => {
       {success && <div className="invoice-alert success">{success}</div>}
 
       {view === "list" ? (
-        <div className="invoice-list-card">
-          <div className="invoice-list-toolbar">
-            <div className="invoice-search"><span>⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search invoice number or customer..." /></div>
-            <div className="invoice-count">{filteredInvoices.length} invoices</div>
+        <>
+          <style>{`
+            .pharmacy-invoice-dashboard-stats {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 12px;
+              margin: 18px 0 14px;
+            }
+            .pharmacy-invoice-stat {
+              display: flex;
+              align-items: center;
+              gap: 14px;
+              min-width: 0;
+              padding: 16px 18px;
+              border: 1px solid #dce6f2;
+              border-radius: 12px;
+              background: #fff;
+              box-shadow: 0 2px 8px rgba(20, 45, 80, .035);
+            }
+            .pharmacy-invoice-stat-icon {
+              display: grid;
+              place-items: center;
+              flex: 0 0 44px;
+              width: 44px;
+              height: 44px;
+              border-radius: 50%;
+              background: #eaf2ff;
+              color: #2563eb;
+              font-size: 23px;
+              font-weight: 700;
+            }
+            .pharmacy-invoice-stat-icon.total-value { background: #e4f8ee; color: #059669; }
+            .pharmacy-invoice-stat-label { color: #64748b; font-size: 12px; margin-bottom: 3px; }
+            .pharmacy-invoice-stat-value { color: #10264c; font-size: 23px; font-weight: 750; line-height: 1.2; }
+            .pharmacy-invoice-stat-note { color: #7b8ba5; font-size: 11px; margin-top: 4px; }
+            .pharmacy-invoice-filters {
+              display: grid;
+              grid-template-columns: minmax(220px, 1.5fr) minmax(145px, .8fr) minmax(145px, .8fr) minmax(150px, .8fr) auto auto;
+              gap: 10px;
+              align-items: end;
+              padding: 14px;
+              border-bottom: 1px solid #e5ebf3;
+              background: #fff;
+            }
+            .pharmacy-invoice-filter-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+            .pharmacy-invoice-filter-field label { color: #64748b; font-size: 11px; font-weight: 600; }
+            .pharmacy-invoice-filter-field input, .pharmacy-invoice-filter-field select {
+              box-sizing: border-box;
+              width: 100%;
+              min-width: 0;
+              height: 38px;
+              padding: 0 10px;
+              border: 1px solid #d6e0ed;
+              border-radius: 7px;
+              background: #fff;
+              color: #17345d;
+              font-size: 12px;
+              outline: none;
+            }
+            .pharmacy-invoice-filter-field input:focus, .pharmacy-invoice-filter-field select:focus { border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(37,99,235,.08); }
+            .pharmacy-invoice-export, .pharmacy-invoice-clear {
+              height: 38px;
+              padding: 0 13px;
+              border-radius: 7px;
+              white-space: nowrap;
+              cursor: pointer;
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .pharmacy-invoice-export { color: #059669; background: #fff; border: 1px solid #10b981; }
+            .pharmacy-invoice-export:hover { background: #ecfdf5; }
+            .pharmacy-invoice-clear { color: #475569; background: #fff; border: 1px solid #d6e0ed; }
+            .pharmacy-invoice-filter-count { align-self: center; color: #7b8ba5; font-size: 11px; white-space: nowrap; }
+            @media (max-width: 1050px) {
+              .pharmacy-invoice-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            }
+            @media (max-width: 640px) {
+              .pharmacy-invoice-dashboard-stats { grid-template-columns: 1fr; }
+              .pharmacy-invoice-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
+              .pharmacy-invoice-filter-search { grid-column: 1 / -1; }
+              .pharmacy-invoice-filter-count { justify-self: start; }
+              .pharmacy-invoice-stat { padding: 13px; }
+              .pharmacy-invoice-stat-value { font-size: 20px; }
+            }
+          `}</style>
+          <div className="pharmacy-invoice-dashboard-stats">
+            <div className="pharmacy-invoice-stat">
+              <div className="pharmacy-invoice-stat-icon">▤</div>
+              <div>
+                <div className="pharmacy-invoice-stat-label">Total Invoices</div>
+                <div className="pharmacy-invoice-stat-value">{filteredInvoices.length}</div>
+                <div className="pharmacy-invoice-stat-note">Invoices in selected period</div>
+              </div>
+            </div>
+            <div className="pharmacy-invoice-stat">
+              <div className="pharmacy-invoice-stat-icon total-value">₹</div>
+              <div>
+                <div className="pharmacy-invoice-stat-label">Total Invoice Value</div>
+                <div className="pharmacy-invoice-stat-value">{money(pharmacyInvoiceTotal)}</div>
+                <div className="pharmacy-invoice-stat-note">Across selected invoices</div>
+              </div>
+            </div>
           </div>
+          <div className="invoice-list-card">
+            <div className="pharmacy-invoice-filters">
+              <div className="pharmacy-invoice-filter-field pharmacy-invoice-filter-search">
+                <label htmlFor="pharmacy-invoice-search">Search</label>
+                <input id="pharmacy-invoice-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search invoice, customer, phone or medicine..." />
+              </div>
+              <div className="pharmacy-invoice-filter-field">
+                <label htmlFor="pharmacy-invoice-from">From date</label>
+                <input id="pharmacy-invoice-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+              </div>
+              <div className="pharmacy-invoice-filter-field">
+                <label htmlFor="pharmacy-invoice-to">To date</label>
+                <input id="pharmacy-invoice-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+              <div className="pharmacy-invoice-filter-field">
+                <label htmlFor="pharmacy-invoice-delivery">Delivery status</label>
+                <select id="pharmacy-invoice-delivery" value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value)}>
+                  <option value="all">All statuses</option>
+                  <option value="sent">Sent</option>
+                  <option value="not-sent">Not sent</option>
+                </select>
+              </div>
+              <button type="button" className="pharmacy-invoice-export" onClick={exportPharmacyInvoices}>▣ Export Excel</button>
+              <button type="button" className="pharmacy-invoice-clear" onClick={clearInvoiceFilters}>Clear</button>
+              <div className="pharmacy-invoice-filter-count">{filteredInvoices.length} invoices</div>
+            </div>
           <div className="invoice-table-wrap">
             <table className="invoice-table">
               <thead><tr><th>INVOICE NUMBER</th><th>CUSTOMER</th><th>DATE</th><th>MEDICINES</th><th>TOTAL</th><th>DELIVERY</th><th>ACTION</th></tr></thead>
@@ -731,7 +919,8 @@ const chooseMedicine = (index, medicine) => {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       ) : (
         <form onSubmit={saveInvoice}>
           <div className="invoice-create-layout">

@@ -4,10 +4,7 @@ import { getApiBaseUrl } from "../config/api";
 
 import "../styles/Invoice.scss";
 
-
-
 const API_BASE = getApiBaseUrl();
-
 const COUNTRY_CURRENCY_MAP = {
   IN: { currency: "INR", locale: "en-IN" },
   US: { currency: "USD", locale: "en-US" },
@@ -302,6 +299,11 @@ export default function Invoice() {
 
   const [search, setSearch] = useState("");
 
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [serviceFilter, setServiceFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   const [invoices, setInvoices] = useState([]);
 
   const [services, setServices] = useState([]);
@@ -430,135 +432,135 @@ export default function Invoice() {
 
 
 
- const loadInvoices = async () => {
-  try {
-    setLoading(true);
-
-    const data = await api("/api/invoices");
-
-    let invoiceList = Array.isArray(data.invoices)
-      ? data.invoices
-      : [];
-
-    // Get workspace owner's billing profile directly.
-    // Never take billing profile from an old invoice.
-    let ownerProfile = billingProfile || profile || null;
-
+  const loadInvoices = async () => {
     try {
-      const profileData = await api("/api/auth/profile");
+      setLoading(true);
 
-      if (profileData?.success) {
-        if (profileData.workspaceOwnerProfile) {
-          ownerProfile = profileData.workspaceOwnerProfile;
-          setBillingProfile(profileData.workspaceOwnerProfile);
-        } else if (profileData.user) {
-          ownerProfile = profileData.user;
+      const data = await api("/api/invoices");
 
-          if (!profileData.user.workspaceOwner) {
-            setBillingProfile(profileData.user);
+      let invoiceList = Array.isArray(data.invoices)
+        ? data.invoices
+        : [];
+
+      // Get workspace owner's billing profile directly.
+      // Never take billing profile from an old invoice.
+      let ownerProfile = billingProfile || profile || null;
+
+      try {
+        const profileData = await api("/api/auth/profile");
+
+        if (profileData?.success) {
+          if (profileData.workspaceOwnerProfile) {
+            ownerProfile = profileData.workspaceOwnerProfile;
+            setBillingProfile(profileData.workspaceOwnerProfile);
+          } else if (profileData.user) {
+            ownerProfile = profileData.user;
+
+            if (!profileData.user.workspaceOwner) {
+              setBillingProfile(profileData.user);
+            }
+          }
+
+          if (profileData.user) {
+            setProfile(profileData.user);
           }
         }
-
-        if (profileData.user) {
-          setProfile(profileData.user);
-        }
+      } catch (profileError) {
+        console.error("Invoice owner profile load error:", profileError);
       }
-    } catch (profileError) {
-      console.error("Invoice owner profile load error:", profileError);
-    }
 
-    const ownerCountry = normalizeCountryCode(
-      ownerProfile?.countryCode ||
-      ownerProfile?.country_code ||
-      ownerProfile?.country ||
-      ownerProfile?.billingCountry ||
-      ownerProfile?.billingCountryCode
-    );
+      const ownerCountry = normalizeCountryCode(
+        ownerProfile?.countryCode ||
+        ownerProfile?.country_code ||
+        ownerProfile?.country ||
+        ownerProfile?.billingCountry ||
+        ownerProfile?.billingCountryCode
+      );
 
-    const ownerCurrency = normalizeCurrencyCode(
-      ownerProfile?.currencyCode ||
-      ownerProfile?.currency_code ||
-      ownerProfile?.currency ||
-      ownerProfile?.billingCurrency ||
-      ownerProfile?.billingCurrencyCode
-    );
+      const ownerCurrency = normalizeCurrencyCode(
+        ownerProfile?.currencyCode ||
+        ownerProfile?.currency_code ||
+        ownerProfile?.currency ||
+        ownerProfile?.billingCurrency ||
+        ownerProfile?.billingCurrencyCode
+      );
 
-    const finalCountry =
-      ownerCountry ||
-      (ownerCurrency === "INR" ? "IN" : "");
+      const finalCountry =
+        ownerCountry ||
+        (ownerCurrency === "INR" ? "IN" : "");
 
-    const finalCurrency =
-      finalCountry === "IN"
-        ? "INR"
-        : ownerCurrency ||
+      const finalCurrency =
+        finalCountry === "IN"
+          ? "INR"
+          : ownerCurrency ||
           COUNTRY_CURRENCY_MAP[finalCountry]?.currency ||
           "USD";
 
-    // Normalize every invoice for the current workspace.
-    invoiceList = invoiceList.map((item) => {
-      const itemCountry = normalizeCountryCode(
-        item.countryCode ||
-        item.billedBy?.countryCode
-      );
+      // Normalize every invoice for the current workspace.
+      invoiceList = invoiceList.map((item) => {
+        const itemCountry = normalizeCountryCode(
+          item.countryCode ||
+          item.billedBy?.countryCode
+        );
 
-      const itemTaxLabel = String(
-        item.taxLabel ||
-        item.billedBy?.taxLabel ||
-        ""
-      ).toUpperCase();
+        const itemTaxLabel = String(
+          item.taxLabel ||
+          item.billedBy?.taxLabel ||
+          ""
+        ).toUpperCase();
 
-      const isIndia =
-        finalCountry === "IN" ||
-        itemCountry === "IN" ||
-        itemTaxLabel === "GST";
+        const isIndia =
+          finalCountry === "IN" ||
+          itemCountry === "IN" ||
+          itemTaxLabel === "GST";
 
-      return {
-        ...item,
+        return {
+          ...item,
 
-        countryCode: isIndia
-          ? "IN"
-          : itemCountry || finalCountry,
-
-        currencyCode: isIndia
-          ? "INR"
-          : item.currencyCode ||
-            finalCurrency,
-
-        currencySymbol: isIndia
-          ? "₹"
-          : item.currencySymbol || "",
-
-        taxLabel: isIndia
-          ? "GST"
-          : item.taxLabel || "Tax",
-
-        billedBy: {
-          ...(item.billedBy || {}),
-          ...(ownerProfile || {}),
           countryCode: isIndia
             ? "IN"
-            : item.billedBy?.countryCode || finalCountry,
+            : itemCountry || finalCountry,
+
           currencyCode: isIndia
             ? "INR"
-            : item.billedBy?.currencyCode || finalCurrency,
+            : item.currencyCode ||
+            finalCurrency,
+
           currencySymbol: isIndia
             ? "₹"
-            : item.billedBy?.currencySymbol || "",
+            : item.currencySymbol || "",
+
           taxLabel: isIndia
             ? "GST"
-            : item.billedBy?.taxLabel || "Tax",
-        },
-      };
-    });
+            : item.taxLabel || "Tax",
 
-    setInvoices(invoiceList);
-  } catch (error) {
-    console.error("Invoice load error:", error);
-    setInvoices([]);
-  } finally {
-    setLoading(false);
-  }
-};
+          billedBy: {
+            ...(item.billedBy || {}),
+            ...(ownerProfile || {}),
+            countryCode: isIndia
+              ? "IN"
+              : item.billedBy?.countryCode || finalCountry,
+            currencyCode: isIndia
+              ? "INR"
+              : item.billedBy?.currencyCode || finalCurrency,
+            currencySymbol: isIndia
+              ? "₹"
+              : item.billedBy?.currencySymbol || "",
+            taxLabel: isIndia
+              ? "GST"
+              : item.billedBy?.taxLabel || "Tax",
+          },
+        };
+      });
+
+      setInvoices(invoiceList);
+    } catch (error) {
+      console.error("Invoice load error:", error);
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
 
@@ -630,35 +632,114 @@ export default function Invoice() {
 
 
 
+  const periodInvoices = useMemo(() => {
+    return invoices.filter((item) => {
+      const rawDate = item.invoiceDate || item.date || item.createdAt;
+      if (!rawDate) return !dateFrom && !dateTo;
+      const parsed = new Date(rawDate);
+      if (Number.isNaN(parsed.getTime())) return !dateFrom && !dateTo;
+      const invoiceDay = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+      if (dateFrom && invoiceDay < dateFrom) return false;
+      if (dateTo && invoiceDay > dateTo) return false;
+      return true;
+    });
+  }, [invoices, dateFrom, dateTo]);
+
+  const serviceOptions = useMemo(() => {
+    const names = invoices.flatMap((item) => {
+      if (Array.isArray(item.items) && item.items.length) {
+        return item.items.map((service) => service.serviceName || service.name || "");
+      }
+      return [item.serviceName || ""];
+    });
+    return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [invoices]);
+
   const filteredInvoices = useMemo(() => {
-
     const value = search.trim().toLowerCase();
-
-
-
-    if (!value) {
-
-      return invoices;
-
-    }
-
-
-
-    return invoices.filter(
-
-      (item) =>
-
+    return periodInvoices.filter((item) => {
+      const serviceName = String(item.serviceName || item.items?.[0]?.serviceName || "");
+      const allServices = Array.isArray(item.items) ? item.items.map((service) => service.serviceName || service.name || "").join(" ") : serviceName;
+      const status = String(item.paymentStatus || item.status || "Draft").toLowerCase();
+      const matchesSearch = !value ||
         String(item.invoiceNumber || "").toLowerCase().includes(value) ||
-
+        String(item.patientId || "").toLowerCase().includes(value) ||
         String(item.customerName || "").toLowerCase().includes(value) ||
+        allServices.toLowerCase().includes(value);
+      const matchesService = serviceFilter === "all" || allServices.toLowerCase().includes(serviceFilter.toLowerCase());
+      const matchesStatus = statusFilter === "all" || status === statusFilter.toLowerCase();
+      return matchesSearch && matchesService && matchesStatus;
+    });
+  }, [periodInvoices, search, serviceFilter, statusFilter]);
 
-        String(item.serviceName || "").toLowerCase().includes(value)
+  const invoiceStats = useMemo(() => {
+    const getInvoiceAmount = (item) =>
+      Math.max(0, Number(item.total ?? item.grandTotal ?? item.amount ?? 0) || 0);
 
-    );
+    const getPaidAmount = (item) => {
+      const total = getInvoiceAmount(item);
+      const status = String(item.paymentStatus ?? item.status ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[_-]+/g, " ");
 
-  }, [invoices, search]);
+      // A fully-paid status confirms the full invoice was received.
+      if (["paid", "complete", "completed", "fully paid", "payment received"].includes(status)) {
+        return total;
+      }
 
+      // Use an explicit received/paid amount for unpaid or partially-paid invoices.
+      // Sending an invoice (e.g. status "Sent") is not the same as receiving payment.
+      const recordedPaid = Number(
+        item.paidAmount ??
+        item.amountPaid ??
+        item.amountReceived ??
+        item.paymentReceived ??
+        item.receivedAmount ??
+        0
+      ) || 0;
 
+      return Math.min(total, Math.max(0, recordedPaid));
+    };
+
+    const totalValue = filteredInvoices.reduce((sum, item) => sum + getInvoiceAmount(item), 0);
+    const paidAmount = filteredInvoices.reduce((sum, item) => sum + getPaidAmount(item), 0);
+    const pendingAmount = Math.max(0, totalValue - paidAmount);
+
+    return { count: filteredInvoices.length, totalValue, paidAmount, pendingAmount };
+  }, [filteredInvoices]);
+
+  const exportInvoices = () => {
+    const columns = [
+      ["Invoice Number", (item) => item.invoiceNumber || ""],
+      ["Patient ID", (item) => item.patientId || ""],
+      ["Customer", (item) => item.customerName || ""],
+      ["Phone", (item) => item.customerPhone || ""],
+      ["Date", (item) => item.invoiceDate || item.date || ""],
+      ["Service", (item) => item.serviceName || item.items?.map((service) => service.serviceName).filter(Boolean).join("; ") || ""],
+      ["Cost", (item) => Number(item.total ?? item.grandTotal) || 0],
+      ["Payment Mode", (item) => item.paymentMode || ""],
+      ["Status", (item) => item.status || "Draft"],
+    ];
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      columns.map(([heading]) => escapeCsv(heading)).join(","),
+      ...filteredInvoices.map((item) =>
+        columns.map(([, getter]) => escapeCsv(getter(item))).join(",")
+      ),
+    ];
+    const blob = new Blob(["\uFEFF", rows.join("\r\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   const totals = useMemo(() => {
 
@@ -1932,53 +2013,53 @@ export default function Invoice() {
 
 
 
- const printInvoice = async () => {
-  const invoiceElement = pdfExportRef.current;
+  const printInvoice = async () => {
+    const invoiceElement = pdfExportRef.current;
 
-  if (!invoiceElement) {
-    setShowPreview(true);
+    if (!invoiceElement) {
+      setShowPreview(true);
 
-    setTimeout(() => {
-      printInvoice();
-    }, 500);
+      setTimeout(() => {
+        printInvoice();
+      }, 500);
 
-    return;
-  }
+      return;
+    }
 
-  try {
-    const iframe = document.createElement("iframe");
+    try {
+      const iframe = document.createElement("iframe");
 
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "1px";
-    iframe.style.height = "1px";
-    iframe.style.border = "0";
-    iframe.style.opacity = "0";
-    iframe.style.pointerEvents = "none";
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "1px";
+      iframe.style.height = "1px";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
 
-    document.body.appendChild(iframe);
+      document.body.appendChild(iframe);
 
-    const printDocument =
-      iframe.contentDocument || iframe.contentWindow.document;
+      const printDocument =
+        iframe.contentDocument || iframe.contentWindow.document;
 
-    const styles = Array.from(
-      document.querySelectorAll('link[rel="stylesheet"], style')
-    )
-      .map((node) => {
-        if (node.tagName.toLowerCase() === "link") {
-          return `<link rel="stylesheet" href="${node.href}">`;
-        }
+      const styles = Array.from(
+        document.querySelectorAll('link[rel="stylesheet"], style')
+      )
+        .map((node) => {
+          if (node.tagName.toLowerCase() === "link") {
+            return `<link rel="stylesheet" href="${node.href}">`;
+          }
 
-        return node.outerHTML;
-      })
-      .join("\n");
+          return node.outerHTML;
+        })
+        .join("\n");
 
-    const invoiceHtml = invoiceElement.outerHTML;
+      const invoiceHtml = invoiceElement.outerHTML;
 
-    printDocument.open();
+      printDocument.open();
 
-    printDocument.write(`
+      printDocument.write(`
       <!DOCTYPE html>
       <html>
         <head>
@@ -2059,60 +2140,60 @@ export default function Invoice() {
       </html>
     `);
 
-    printDocument.close();
+      printDocument.close();
 
-    const waitForImages = async () => {
-      const images = Array.from(printDocument.images);
+      const waitForImages = async () => {
+        const images = Array.from(printDocument.images);
 
-      await Promise.all(
-        images.map((image) => {
-          if (image.complete) {
-            return Promise.resolve();
+        await Promise.all(
+          images.map((image) => {
+            if (image.complete) {
+              return Promise.resolve();
+            }
+
+            return new Promise((resolve) => {
+              image.onload = resolve;
+              image.onerror = resolve;
+            });
+          })
+        );
+      };
+
+      const waitForFonts = async () => {
+        if (printDocument.fonts?.ready) {
+          try {
+            await printDocument.fonts.ready;
+          } catch {
+            // ignore font loading error
           }
-
-          return new Promise((resolve) => {
-            image.onload = resolve;
-            image.onerror = resolve;
-          });
-        })
-      );
-    };
-
-    const waitForFonts = async () => {
-      if (printDocument.fonts?.ready) {
-        try {
-          await printDocument.fonts.ready;
-        } catch {
-          // ignore font loading error
         }
-      }
-    };
+      };
 
-    await waitForImages();
-    await waitForFonts();
+      await waitForImages();
+      await waitForFonts();
 
-    // Give browser time to render the invoice
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1000);
-    });
+      // Give browser time to render the invoice
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
 
-    iframe.contentWindow.focus();
+      iframe.contentWindow.focus();
 
-    iframe.contentWindow.print();
+      iframe.contentWindow.print();
 
-    // Remove iframe after print dialog is opened
-    setTimeout(() => {
-      try {
-        document.body.removeChild(iframe);
-      } catch {
-        // iframe already removed
-      }
-    }, 3000);
-  } catch (error) {
-    console.error("Print invoice error:", error);
-    setError("Unable to print invoice.");
-  }
-};
+      // Remove iframe after print dialog is opened
+      setTimeout(() => {
+        try {
+          document.body.removeChild(iframe);
+        } catch {
+          // iframe already removed
+        }
+      }, 3000);
+    } catch (error) {
+      console.error("Print invoice error:", error);
+      setError("Unable to print invoice.");
+    }
+  };
 
 
 
@@ -2401,42 +2482,169 @@ export default function Invoice() {
 
 
 
+      <style>{`
+        .invoice-dashboard-stats {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin: 18px 0 14px;
+        }
+        .invoice-stat-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+          padding: 16px 18px;
+          border: 1px solid #e1e9f3;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 3px 10px rgba(20, 54, 95, .035);
+        }
+        .invoice-stat-icon {
+          display: flex;
+          flex: 0 0 40px;
+          width: 40px;
+          height: 40px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          font-size: 21px;
+          font-weight: 700;
+        }
+        .invoice-stat-icon.blue { color: #2673f5; background: #eaf2ff; }
+        .invoice-stat-icon.green { color: #08a66a; background: #e5f8ef; }
+        .invoice-stat-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+        .invoice-stat-copy > span { color: #61718b; font-size: 11px; }
+        .invoice-stat-copy > strong { color: #10284d; font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
+        .invoice-stat-copy > small { color: #8390a5; font-size: 10px; }
+        .invoice-list-toolbar {
+          display: grid !important;
+          grid-template-columns: minmax(205px, 1.05fr) minmax(125px, .65fr) minmax(115px, .55fr) minmax(165px, .9fr) auto;
+          align-items: end;
+          gap: 12px;
+          padding: 14px 16px !important;
+          flex-wrap: nowrap !important;
+          border-bottom: 1px solid #e6edf5;
+        }
+        .invoice-date-range-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+        .invoice-filter-label { color: #64748b; font-size: 11px; font-weight: 600; line-height: 1.2; }
+        .invoice-date-range-inputs { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .invoice-date-field { display: block; min-width: 0; flex: 1; }
+        .invoice-date-field input {
+          display: block;
+          width: 100%;
+          min-width: 0;
+          height: 36px;
+          box-sizing: border-box;
+          padding: 0 7px;
+          border: 1px solid #d7e1ee;
+          border-radius: 7px;
+          background: #fff;
+          color: #29415f;
+          font: inherit;
+          font-size: 11px;
+        }
+        .invoice-date-range-arrow { color: #8190a5; font-size: 13px; flex: 0 0 auto; }
+        .invoice-date-filter {
+          width: 100%;
+          min-width: 0;
+          height: 36px;
+          padding: 0 9px;
+          border: 1px solid #d7e1ee;
+          border-radius: 7px;
+          background: #fff;
+          color: #29415f;
+          font-size: 12px;
+        }
+        .invoice-search { width: 100% !important; min-width: 0; box-sizing: border-box; }
+        .invoice-search input { width: 100%; min-width: 0; box-sizing: border-box; }
+        .invoice-export-group { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+        .invoice-export-btn { height: 36px; padding: 0 12px; border: 1px solid #10a66a; border-radius: 7px; color: #07945b; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .invoice-export-btn:hover { background: #effcf5; }
+        .invoice-clear-filters { height: 34px; padding: 0 9px; border: 1px solid #d7e1ee; border-radius: 7px; color: #52657e; background: #fff; cursor: pointer; white-space: nowrap; }
+        .invoice-count { color: #8390a5; font-size: 10px; white-space: nowrap; }
+        @media (max-width: 980px) {
+          .invoice-list-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .invoice-export-group { grid-column: 1 / -1; justify-content: flex-end; }
+        }
+        @media (max-width: 900px) {
+          .invoice-dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .invoice-list-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+          .invoice-search { grid-column: 1 / -1; }
+          .invoice-export-group { grid-column: auto; justify-content: flex-start; flex-wrap: wrap; }
+        }
+        @media (max-width: 560px) {
+          .invoice-dashboard-stats { grid-template-columns: 1fr; }
+          .invoice-stat-card { padding: 13px 15px; }
+          .invoice-stat-copy > strong { font-size: 18px; }
+          .invoice-list-toolbar { grid-template-columns: 1fr; padding: 12px !important; }
+          .invoice-search, .invoice-export-group { grid-column: auto; }
+          .invoice-export-group { justify-content: flex-start; }
+          .invoice-clear-filters { flex: 0 0 auto; }
+        }
+      `}</style>
+
       {error && <div className="invoice-alert error">{error}</div>}
 
       {success && <div className="invoice-alert success">{success}</div>}
 
-
+      <div className="invoice-dashboard-stats">
+        <div className="invoice-stat-card">
+          <div className="invoice-stat-icon blue">▤</div>
+          <div className="invoice-stat-copy">
+            <span>Total Invoices</span>
+            <strong>{invoiceStats.count}</strong>
+            <small>Invoices in selected period</small>
+          </div>
+        </div>
+        <div className="invoice-stat-card">
+          <div className="invoice-stat-icon green">₹</div>
+          <div className="invoice-stat-copy">
+            <span>Total Invoice Value</span>
+            <strong>{formatCurrency(invoiceStats.totalValue, "INR")}</strong>
+            <small>Across selected invoices</small>
+          </div>
+        </div>
+      </div>
 
       <div className="invoice-list-card">
 
         <div className="invoice-list-toolbar">
-
+          <div className="invoice-date-range-group">
+            <span className="invoice-filter-label">Date Range</span>
+            <div className="invoice-date-range-inputs">
+              <label className="invoice-date-field">
+                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} aria-label="Start date" />
+              </label>
+              <span className="invoice-date-range-arrow">→</span>
+              <label className="invoice-date-field">
+                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} aria-label="End date" />
+              </label>
+            </div>
+          </div>
+          <div className="invoice-date-range-group">
+            <label className="invoice-filter-label" htmlFor="invoice-service-filter">Service</label>
+            <select id="invoice-service-filter" className="invoice-date-filter" value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} aria-label="Filter by service">
+              <option value="all">All Services</option>
+              {serviceOptions.map((service) => <option key={service} value={service}>{service}</option>)}
+            </select>
+          </div>
+          <div className="invoice-date-range-group">
+            <label className="invoice-filter-label" htmlFor="invoice-status-filter">Status</label>
+            <select id="invoice-status-filter" className="invoice-date-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status">
+              <option value="all">All Status</option>
+              {[...new Set(invoices.map((item) => String(item.paymentStatus || item.status || "Draft").trim()).filter(Boolean))].sort().map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
           <div className="invoice-search">
-
             <span>⌕</span>
-
-            <input
-
-              type="text"
-
-              value={search}
-
-              onChange={(e) => setSearch(e.target.value)}
-
-              placeholder="Search invoice number or customer..."
-
-            />
-
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search invoice number, patient or customer..." />
           </div>
-
-
-
-          <div className="invoice-count">
-
-            {filteredInvoices.length} invoices
-
+          <div className="invoice-export-group">
+            <button type="button" className="invoice-export-btn" onClick={exportInvoices}>▣ Export Excel</button>
+            <button type="button" className="invoice-clear-filters" onClick={() => { setDateFrom(""); setDateTo(""); setServiceFilter("all"); setStatusFilter("all"); setSearch(""); }}>Clear</button>
+            <span className="invoice-count">{filteredInvoices.length} invoices</span>
           </div>
-
         </div>
 
 
@@ -2581,7 +2789,7 @@ export default function Invoice() {
                           title="Edit invoice"
                           aria-label="Edit invoice"
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                         </button>
 
                         <button
@@ -2591,7 +2799,7 @@ export default function Invoice() {
                           title="Download PDF"
                           aria-label="Download PDF"
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
                         </button>
 
                         <button
@@ -2667,7 +2875,7 @@ export default function Invoice() {
                           }}
 
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
                         </button>
 
                         <button
@@ -2677,11 +2885,11 @@ export default function Invoice() {
                           disabled={saving}
                           title="Send invoice on WhatsApp"
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z" /></svg>
                           <span>Send on WhatsApp</span>
                         </button>
 
-                       <style>{`
+                        <style>{`
                         .invoice-whatsapp-btn {
                           display: inline-flex;
                           align-items: center;
@@ -2737,7 +2945,7 @@ export default function Invoice() {
                           title="Delete invoice"
                           aria-label="Delete invoice"
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-action-svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m19 6-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg>
                         </button>
 
                       </div>
@@ -3831,30 +4039,30 @@ export default function Invoice() {
 
             </button>
 
-         {editingInvoiceId && (
-          <button
-            type="button"
-            className="invoice-edit-whatsapp-btn"
-            onClick={() => {
-              const currentInvoice = invoices.find(
-                (item) =>
-                  String(item._id || item.id) ===
-                  String(editingInvoiceId)
-              );
+            {editingInvoiceId && (
+              <button
+                type="button"
+                className="invoice-edit-whatsapp-btn"
+                onClick={() => {
+                  const currentInvoice = invoices.find(
+                    (item) =>
+                      String(item._id || item.id) ===
+                      String(editingInvoiceId)
+                  );
 
-              if (currentInvoice) {
-                sendExistingInvoiceToWhatsApp(currentInvoice);
-              }
-            }}
-            disabled={saving}
-            title="Send invoice on WhatsApp"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
-            <span>
-              {saving ? "Sending..." : "Send on WhatsApp"}
-            </span>
-          </button>
-        )}
+                  if (currentInvoice) {
+                    sendExistingInvoiceToWhatsApp(currentInvoice);
+                  }
+                }}
+                disabled={saving}
+                title="Send invoice on WhatsApp"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z" /></svg>
+                <span>
+                  {saving ? "Sending..." : "Send on WhatsApp"}
+                </span>
+              </button>
+            )}
           </div>
 
 
@@ -3989,7 +4197,7 @@ export default function Invoice() {
 
                 >
 
-                  <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="invoice-whatsapp-svg" fill="currentColor"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.1 0C5.55 0 .22 5.32.22 11.87c0 2.1.55 4.15 1.6 5.96L.12 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.24-6.15-3.47-8.42ZM12.1 21.75h-.01a9.86 9.86 0 0 1-5.02-1.37l-.36-.21-3.76.99 1-3.66-.24-.38a9.83 9.83 0 0 1-1.51-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.01c0 5.46-4.45 9.9-9.92 9.9Zm5.43-7.42c-.3-.15-1.77-.87-2.05-.97-.28-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.8-1.49-1.78-1.66-2.08-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.28.3-1.04 1.02-1.04 2.49s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.5 1.69.64.71.23 1.36.2 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z" /></svg>
                   <span>Send on WhatsApp</span>
 
                 </button>
@@ -4013,19 +4221,12 @@ export default function Invoice() {
 
 
             <div className="invoice-preview-scroll">
-
               {renderInvoiceDocument()}
-
             </div>
 
-
-
             <div className="invoice-preview-footer">
-
               <button type="button" className="invoice-secondary-btn" onClick={() => setShowPreview(false)}>
-
                 Close
-
               </button>
 
             </div>
@@ -4040,8 +4241,5 @@ export default function Invoice() {
 
   );
 
-
-
   return view === "create" ? renderCreate() : renderList();
-
 }
