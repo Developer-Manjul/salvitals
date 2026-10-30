@@ -369,6 +369,7 @@ exports.connect = async (req, res) => {
     }
 };
 
+
 exports.callback = async (req, res) => {
     const frontend = (
         process.env.FRONTEND_URL ||
@@ -377,94 +378,112 @@ exports.callback = async (req, res) => {
 
     let stateRecord;
 
-        try {
-            stateRecord = await MetaOAuthState.findOne({
-                state: req.query.state,
-                expiresAt: {
-                    $gt: new Date(),
-                },
-            }).maxTimeMS(10000);
-        } catch (error) {
-            console.error("META CALLBACK STATE LOOKUP ERROR:", error);
+    try {
+        // 1. Find valid OAuth state
+        stateRecord = await MetaOAuthState.findOne({
+            state: req.query.state,
+            expiresAt: {
+                $gt: new Date(),
+            },
+        }).maxTimeMS(10000);
+
+        if (!stateRecord) {
             return res.redirect(
-                `${frontend}/dashboard?metaError=Unable%20to%20verify%20Meta%20authorization`
+                `${frontend}/dashboard?metaError=Invalid%20or%20expired%20Meta%20authorization`
             );
         }
 
-    if (!stateRecord) {
-        return res.redirect(
-            `${frontend}/dashboard?metaError=Invalid%20or%20expired%20Meta%20authorization`
-        );
-    }
-
-    if (req.query.error) {
-        await MetaOAuthState.deleteOne({
-            _id: stateRecord._id,
-        });
-
-        return res.redirect(
-            `${frontend}/dashboard?metaError=Meta%20authorization%20was%20cancelled`
-        );
-    }
-
-    if (!req.query.code) {
-        await MetaOAuthState.deleteOne({
-            _id: stateRecord._id,
-        });
-
-        return res.redirect(
-            `${frontend}/dashboard?metaError=Meta%20authorization%20code%20missing`
-        );
-    }
-
-    try {
-        const tokenData = await Promise.race([
-        meta.exchangeCodeForToken(req.query.code),
-        new Promise((_, reject) =>
-            setTimeout(
-                () => reject(new Error("Meta token exchange timeout")),
-                15000
-            )
-        ),
-    ]);
-
-        console.log("========================================");
-        console.log("META OAUTH USER TOKEN RECEIVED");
-        console.log("META TOKEN TYPE:", tokenData.token_type || "");
-        console.log(
-            "META TOKEN EXPIRES IN:",
-            tokenData.expires_in || ""
-        );
-        console.log("========================================");
-
-        const pages = await Promise.race([
-        meta.getPages(tokenData.access_token),
-        new Promise((_, reject) =>
-            setTimeout(
-                () => reject(new Error("Meta pages fetch timeout")),
-                20000
-            )
-        ),
-    ]);
-
-        console.log("META CALLBACK PAGES:");
-
-        for (const page of pages.data || []) {
-            console.log("META PAGE:", {
-                id: page.id,
-                name: page.name,
-                hasPageAccessToken: Boolean(
-                    page.access_token
-                ),
-                hasInstagram:
-                    Boolean(
-                        page.instagram_business_account?.id
-                    ),
-                businessId:
-                    page.business?.id || "",
+        // 2. Handle user cancellation
+        if (req.query.error) {
+            await MetaOAuthState.deleteOne({
+                _id: stateRecord._id,
             });
+
+            return res.redirect(
+                `${frontend}/dashboard?metaError=Meta%20authorization%20was%20cancelled`
+            );
         }
 
+        if (!req.query.code) {
+            await MetaOAuthState.deleteOne({
+                _id: stateRecord._id,
+            });
+
+            return res.redirect(
+                `${frontend}/dashboard?metaError=Meta%20authorization%20code%20missing`
+            );
+        }
+
+        // 3. Atomically lock state to prevent duplicate callbacks
+        const lockedState = await MetaOAuthState.findOneAndUpdate(
+            {
+                _id: stateRecord._id,
+                codeUsed: { $ne: true },
+            },
+            {
+                $set: {
+                    codeUsed: true,
+                },
+            },
+            {
+                new: true,
+            }
+        );
+
+        if (!lockedState) {
+            return res.redirect(
+                `${frontend}/dashboard?metaError=Authorization%20already%20processed`
+            );
+        }
+
+        stateRecord = lockedState;
+
+        // 4. Exchange OAuth code for access token
+        console.log("META CALLBACK: Starting token exchange");
+
+        const tokenData = await Promise.race([
+            meta.exchangeCodeForToken(req.query.code),
+            new Promise((_, reject) =>
+                setTimeout(
+                    () => reject(
+                        new Error("Meta token exchange timeout")
+                    ),
+                    15000
+                )
+            ),
+        ]);
+
+        if (!tokenData?.access_token) {
+            throw new Error(
+                "Meta did not return an access token"
+            );
+        }
+
+        console.log("META CALLBACK: Token received");
+
+        // 5. Fetch Facebook Pages
+        console.log("META CALLBACK: Fetching Facebook pages");
+
+        const pages = await Promise.race([
+            meta.getPages(tokenData.access_token),
+            new Promise((_, reject) =>
+                setTimeout(
+                    () => reject(
+                        new Error("Meta pages fetch timeout")
+                    ),
+                    45000
+                )
+            ),
+        ]);
+
+        const pageList = pages?.data || [];
+
+        console.log(
+            "META CALLBACK: Pages fetched:",
+            pageList.length
+        );
+
+        // 6. Save encrypted user token
         stateRecord.accessTokenEncrypted = encrypt(
             tokenData.access_token
         );
@@ -472,38 +491,32 @@ exports.callback = async (req, res) => {
         stateRecord.tokenExpiresAt =
             tokenData.expires_in
                 ? new Date(
-                      Date.now() +
-                          Number(tokenData.expires_in) *
-                              1000
-                  )
+                    Date.now() +
+                    Number(tokenData.expires_in) * 1000
+                )
                 : null;
 
-        stateRecord.pages = (
-            pages.data || []
-        ).map((page) => ({
+        // 7. Save Facebook Pages and Instagram details
+        stateRecord.pages = pageList.map((page) => ({
             id: page.id,
             name: page.name || "",
 
             accessToken: encrypt(
                 page.access_token ||
-                    tokenData.access_token
+                tokenData.access_token
             ),
 
             instagramAccountId:
-                page.instagram_business_account
-                    ?.id || "",
+                page.instagram_business_account?.id || "",
 
             instagramUsername:
-                page.instagram_business_account
-                    ?.username || "",
+                page.instagram_business_account?.username || "",
 
             instagramName:
-                page.instagram_business_account
-                    ?.name || "",
+                page.instagram_business_account?.name || "",
 
             instagramProfilePicture:
-                page.instagram_business_account
-                    ?.profile_picture_url || "",
+                page.instagram_business_account?.profile_picture_url || "",
 
             businessId:
                 page.business?.id || "",
@@ -519,31 +532,41 @@ exports.callback = async (req, res) => {
             stateRecord.pages.map((page) => ({
                 id: page.id,
                 name: page.name,
-                hasEncryptedPageToken:
-                    Boolean(page.accessToken),
+                hasEncryptedPageToken: Boolean(page.accessToken),
+                hasInstagram: Boolean(page.instagramAccountId),
             }))
         );
 
+        // 8. Redirect to page selection
         return res.redirect(
             `${frontend}/dashboard?metaSelectPage=true`
         );
+
     } catch (error) {
         console.error(
             "META CALLBACK ERROR:",
             error.response?.data ||
-                error.metaError ||
-                error.message
+            error.metaError ||
+            error.message
         );
 
-        await MetaOAuthState.deleteOne({
-            _id: stateRecord._id,
-        });
+        if (stateRecord?._id) {
+            await MetaOAuthState.deleteOne({
+                _id: stateRecord._id,
+            }).catch((deleteError) => {
+                console.error(
+                    "META CALLBACK STATE DELETE ERROR:",
+                    deleteError.message
+                );
+            });
+        }
 
         return res.redirect(
             `${frontend}/dashboard?metaError=Unable%20to%20load%20Meta%20Pages`
         );
     }
 };
+
 
 exports.status = async (
     req,

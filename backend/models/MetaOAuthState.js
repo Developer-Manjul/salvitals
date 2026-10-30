@@ -1,60 +1,78 @@
+
 const mongoose = require("mongoose");
 
-const metaOAuthStateSchema = new mongoose.Schema({
-  state: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-    index: true
-  },
-  accessTokenEncrypted: {
-    type: String,
-    default: ""
-  },
-  tokenExpiresAt: {
-    type: Date,
-    default: null
-  },
-  pages: {
-    type: Array,
-    default: []
-  },
+const metaOAuthStateSchema = new mongoose.Schema(
+    {
+        state: {
+            type: String,
+            required: true,
+            unique: true,
+            index: true,
+        },
 
-      connectionType: {
-      type: String,
-      enum: ["facebook", "whatsapp"],
-      default: "facebook",
-    },
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+            index: true,
+        },
 
-    whatsappBusinessAccountId: {
-      type: String,
-      default: "",
-    },
+        accessTokenEncrypted: {
+            type: String,
+            default: "",
+        },
 
-    whatsappPhoneNumberId: {
-      type: String,
-      default: "",
-    },
+        tokenExpiresAt: {
+            type: Date,
+            default: null,
+        },
 
-    whatsappDisplayPhoneNumber: {
-      type: String,
-      default: "",
+        pages: {
+            type: Array,
+            default: [],
+        },
+
+        // Prevent duplicate OAuth callback processing
+        codeUsed: {
+            type: Boolean,
+            default: false,
+        },
+
+        connectionType: {
+            type: String,
+            enum: ["facebook", "whatsapp"],
+            default: "facebook",
+        },
+
+        whatsappBusinessAccountId: {
+            type: String,
+            default: "",
+        },
+
+        whatsappPhoneNumberId: {
+            type: String,
+            default: "",
+        },
+
+        whatsappDisplayPhoneNumber: {
+            type: String,
+            default: "",
+        },
+
+        expiresAt: {
+            type: Date,
+            required: true,
+            index: {
+                expires: 0,
+            },
+        },
     },
-  expiresAt: {
-    type: Date,
-    required: true,
-    index: {
-      expires: 0
+    {
+        timestamps: true,
     }
-  },
-}, {
-  timestamps: true
-});
+);
 
-module.exports = mongoose.model("MetaOAuthState", metaOAuthStateSchema);
+module.exports = mongoose.model(
+    "MetaOAuthState",
+    metaOAuthStateSchema
+);
