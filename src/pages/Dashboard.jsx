@@ -839,11 +839,11 @@ export default function Dashboard() {
     }
 
     if (
-      dashboardParams.get("metaSelectPage") === "true" ||
-      dashboardParams.get("metaError")
-    ) {
-      setActive("Settings");
-    }
+    dashboardParams.get("metaSelectPage") === "true" ||
+    dashboardParams.get("metaError")
+) {
+    setActive("Integrations");
+}
 
     if (savedUser) {
       try {
