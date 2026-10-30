@@ -118,10 +118,6 @@ exports.getAuthorizationUrl = (state) => {
     "true"
   );
 
-  url.searchParams.set(
-    "auth_type",
-    "rerequest"
-  );
 
   return url.toString();
 };
