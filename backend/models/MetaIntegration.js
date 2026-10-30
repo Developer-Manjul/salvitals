@@ -11,6 +11,18 @@ const metaIntegrationSchema = new mongoose.Schema(
     instagramProfilePicture: { type: String, default: "" },
     businessId: { type: String, default: "" },
     businessName: { type: String, default: "" },
+    whatsappBusinessAccountId: {
+      type: String,
+      default: "",
+    },
+    whatsappPhoneNumberId: {
+      type: String,
+      default: "",
+    },
+    whatsappDisplayPhoneNumber: {
+      type: String,
+      default: "",
+    },
     accessTokenEncrypted: { type: String, required: true },
     tokenExpiresAt: { type: Date, default: null },
     isActive: { type: Boolean, default: true },

@@ -11,15 +11,15 @@ const metaConversationSchema = new mongoose.Schema(
     },
 
     platform: {
-      type: String,
-      enum: ["facebook", "instagram"],
-      required: true,
-    },
+    type: String,
+    enum: ["facebook", "instagram", "whatsapp"],
+    required: true,
+  },
 
     pageId: {
-      type: String,
-      required: true,
-    },
+    type: String,
+    default: "",
+  },
 
     instagramAccountId: {
       type: String,
@@ -90,8 +90,32 @@ metaConversationSchema.index(
     pageId: 1,
     externalConversationId: 1,
   },
-  { unique: true }
+  {
+    unique: true,
+    partialFilterExpression: {
+      pageId: { $type: "string", $gt: "" },
+    },
+  }
 );
+
+metaConversationSchema.index(
+  {
+    userId: 1,
+    platform: 1,
+    externalConversationId: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      platform: "whatsapp",
+    },
+  }
+);
+
+metaConversationSchema.index({
+  userId: 1,
+  lastMessageAt: -1,
+});
 
 metaConversationSchema.index({
   userId: 1,

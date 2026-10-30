@@ -16,7 +16,7 @@ import AIAssistant from "./AIAssistant";
 import MetaIntegrationPanel from "./MetaIntegrationPanel";
 
 import MetaInbox from "./MetaInbox";
-
+import WhatsAppInbox from "./WhatsAppInbox";
 const navGroups = [
   {
     label: "Acquire",
@@ -1744,8 +1744,8 @@ export default function Dashboard() {
 
   const renderDashboardSection = () => {
     if (active === "WhatsApp") {
-      return <ComingSoonPage type="WhatsApp" />;
-    }
+  return <WhatsAppInbox key="whatsapp-inbox" />;
+}
 
     if (active === "Integrations") {
       return <MetaIntegrationPanel />;

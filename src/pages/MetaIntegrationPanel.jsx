@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { buildApiUrl } from "../config/api";
 
 const getToken = () => {
@@ -582,6 +582,9 @@ const MetaPageModal = ({
 export default function MetaIntegrationPanel() {
   const [loading, setLoading] = useState(true);
 
+    const whatsappSignupCodeRef = useRef("");
+  const whatsappSignupDetailsRef = useRef(null);
+  const whatsappSignupProcessingRef = useRef(false);
   const [metaConnected, setMetaConnected] = useState(false);
   const [metaPage, setMetaPage] = useState(null);
   const [metaPages, setMetaPages] = useState([]);
@@ -589,6 +592,9 @@ export default function MetaIntegrationPanel() {
   const [selectedMetaPage, setSelectedMetaPage] = useState("");
 
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [whatsappConnected, setWhatsappConnected] = useState(false);
+const [whatsappIntegration, setWhatsappIntegration] = useState(null);
+const [whatsappBusy, setWhatsappBusy] = useState(false);
   const [googleAccount, setGoogleAccount] = useState(null);
   const [googleAccounts, setGoogleAccounts] = useState([]);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -641,6 +647,103 @@ export default function MetaIntegrationPanel() {
       return false;
     }
   };
+
+  const loadWhatsAppStatus = async () => {
+  try {
+    const data = await api("/api/integrations/meta/whatsapp/status");
+
+    setWhatsappConnected(Boolean(data.connected));
+    setWhatsappIntegration(data.integration || null);
+  } catch (err) {
+    setWhatsappConnected(false);
+    setWhatsappIntegration(null);
+    console.error("WhatsApp status error:", err);
+  }
+  };
+  
+  const finishWhatsAppSignup = async () => {
+  const code = whatsappSignupCodeRef.current;
+  const details = whatsappSignupDetailsRef.current;
+
+  if (!code || !details || whatsappSignupProcessingRef.current) {
+    return;
+  }
+
+  whatsappSignupProcessingRef.current = true;
+  setWhatsappBusy(true);
+  setError("");
+  setMessage("");
+
+  try {
+    await api("/api/integrations/meta/whatsapp/complete-signup", {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        wabaId: details.wabaId,
+        phoneNumberId: details.phoneNumberId,
+      }),
+    });
+
+    whatsappSignupCodeRef.current = "";
+    whatsappSignupDetailsRef.current = null;
+
+    await loadWhatsAppStatus();
+
+    setMessage("WhatsApp Business connected successfully.");
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    whatsappSignupProcessingRef.current = false;
+    setWhatsappBusy(false);
+  }
+};
+
+const connectWhatsApp = () => {
+  setError("");
+  setMessage("");
+
+  const appId = import.meta.env.VITE_META_APP_ID;
+  const configId = import.meta.env.VITE_META_WHATSAPP_CONFIG_ID;
+
+  if (!appId || !configId) {
+    setError("Meta App ID or WhatsApp Config ID is missing.");
+    return;
+  }
+
+  if (!window.FB) {
+    setError("Meta SDK is still loading. Please try again.");
+    return;
+  }
+
+  whatsappSignupCodeRef.current = "";
+  whatsappSignupDetailsRef.current = null;
+  whatsappSignupProcessingRef.current = false;
+
+  window.FB.login(
+    (response) => {
+      const code = response?.authResponse?.code;
+
+      if (!code) {
+        setWhatsappBusy(false);
+        setError("WhatsApp signup was cancelled or authorization code was not returned.");
+        return;
+      }
+
+      whatsappSignupCodeRef.current = code;
+      finishWhatsAppSignup();
+    },
+    {
+      config_id: configId,
+      response_type: "code",
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: "whatsapp_business_app_onboarding",
+        sessionInfoVersion: "3",
+      },
+    }
+  );
+};
 
   const loadMetaPages = async () => {
     try {
@@ -806,6 +909,7 @@ export default function MetaIntegrationPanel() {
     setError("");
 
     await loadMetaStatus();
+    await loadWhatsAppStatus();
     await loadGoogleStatus();
     await loadWebsiteApiKeys();
 
@@ -1144,6 +1248,64 @@ export default function MetaIntegrationPanel() {
     }
   }, []);
 
+  useEffect(() => {
+  const appId = import.meta.env.VITE_META_APP_ID;
+
+  if (!appId) {
+    console.error("VITE_META_APP_ID is missing");
+    return;
+  }
+
+  window.fbAsyncInit = function () {
+    window.FB.init({
+      appId,
+      cookie: true,
+      xfbml: false,
+      version: "v25.0",
+    });
+  };
+
+  if (!document.getElementById("facebook-jssdk")) {
+    const script = document.createElement("script");
+    script.id = "facebook-jssdk";
+    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+  }
+
+  const handleWhatsAppMessage = (event) => {
+    if (event.origin !== "https://www.facebook.com") return;
+
+    const payload = event.data;
+
+    if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+
+    const data = payload.data || {};
+
+    const wabaId = data.waba_id;
+    const phoneNumberId = data.phone_number_id;
+
+    if (!wabaId || !phoneNumberId) {
+      setError("WhatsApp account details were not received from Meta.");
+      return;
+    }
+
+    whatsappSignupDetailsRef.current = {
+      wabaId,
+      phoneNumberId,
+    };
+
+    finishWhatsAppSignup();
+  };
+
+  window.addEventListener("message", handleWhatsAppMessage);
+
+  return () => {
+    window.removeEventListener("message", handleWhatsAppMessage);
+  };
+}, []);
+
   const websiteConnected = websiteApiKeys.some(
     (key) => key.isActive
   );
@@ -1458,12 +1620,28 @@ export default function MetaIntegrationPanel() {
               )}
           </SourceCard>
 
-          <SourceCard
-            title="WhatsApp"
-            status="Coming soon"
-            description="WhatsApp lead integration will be available soon."
-            disabled
-          />
+         <SourceCard
+          title="WhatsApp"
+          status={whatsappConnected ? "Connected" : "Not connected"}
+          description={
+            whatsappConnected
+              ? whatsappIntegration?.displayPhoneNumber ||
+                "WhatsApp Business connected successfully."
+              : "Connect your WhatsApp Business number to receive and reply to messages in SaleVitals."
+          }
+          actions={
+            <PrimaryButton
+              onClick={connectWhatsApp}
+              disabled={whatsappBusy}
+            >
+              {whatsappBusy
+                ? "Connecting..."
+                : whatsappConnected
+                ? "Reconnect WhatsApp"
+                : "Connect WhatsApp"}
+            </PrimaryButton>
+          }
+        />
         </div>
       </div>
 

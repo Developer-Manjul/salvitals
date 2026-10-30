@@ -18,11 +18,10 @@ const metaMessageSchema = new mongoose.Schema(
     },
 
     platform: {
-      type: String,
-      enum: ["facebook", "instagram"],
-      required: true,
-    },
-
+    type: String,
+    enum: ["facebook", "instagram", "whatsapp"],
+    required: true,
+  },
     externalMessageId: {
       type: String,
       default: "",

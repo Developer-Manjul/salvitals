@@ -59,9 +59,9 @@ exports.getConversations = async (req, res) => {
             .trim()
             .toLowerCase();
 
-        if (["facebook", "instagram"].includes(platform)) {
+        if (["facebook", "instagram", "whatsapp"].includes(platform)) {
             filter.platform = platform;
-        }
+            }
 
         const status = String(req.query.status || "")
             .trim()

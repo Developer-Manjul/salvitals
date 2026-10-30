@@ -606,3 +606,116 @@ exports.getMessagingParticipantProfile = async ({
     }
 };
 
+
+// ==========================================
+// WHATSAPP BUSINESS API
+// ==========================================
+
+exports.getWhatsAppBusinessAccount = async (
+  businessId,
+  accessToken
+) => {
+  if (!businessId || !accessToken) {
+    throw new Error("Business ID and access token are required");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(businessId)}/owned_whatsapp_business_accounts`,
+    {
+      params: {
+        fields: "id,name",
+        access_token: accessToken,
+      },
+    }
+  );
+};
+
+exports.getWhatsAppPhoneNumbers = async (
+  whatsappBusinessAccountId,
+  accessToken
+) => {
+  if (!whatsappBusinessAccountId || !accessToken) {
+    throw new Error("WhatsApp Business Account ID and access token are required");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(whatsappBusinessAccountId)}/phone_numbers`,
+    {
+      params: {
+        fields: "id,display_phone_number,verified_name,quality_rating",
+        access_token: accessToken,
+      },
+    }
+  );
+};
+
+exports.subscribeWhatsAppBusinessAccount = async (
+  whatsappBusinessAccountId,
+  accessToken
+) => {
+  if (!whatsappBusinessAccountId || !accessToken) {
+    throw new Error("WhatsApp Business Account ID and access token are required");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(whatsappBusinessAccountId)}/subscribed_apps`,
+    {
+      method: "POST",
+      params: {
+        access_token: accessToken,
+      },
+    }
+  );
+};
+
+exports.sendWhatsAppMessage = async ({
+  phoneNumberId,
+  accessToken,
+  to,
+  text,
+}) => {
+  if (!phoneNumberId || !accessToken || !to || !text) {
+    throw new Error("Missing required WhatsApp message fields");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(phoneNumberId)}/messages`,
+    {
+      method: "POST",
+      params: {
+        access_token: accessToken,
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "text",
+        text: {
+          body: text,
+        },
+      }),
+    }
+  );
+};
+
+// ==========================================
+// WHATSAPP EMBEDDED SIGNUP CODE EXCHANGE
+// ==========================================
+
+exports.exchangeWhatsAppSignupCode = async (code) => {
+  if (!code || !process.env.META_APP_ID || !process.env.META_APP_SECRET) {
+    throw new Error("WhatsApp signup code or Meta app credentials are missing");
+  }
+
+  return graphRequest("/oauth/access_token", {
+    params: {
+      client_id: process.env.META_APP_ID,
+      client_secret: process.env.META_APP_SECRET,
+      code,
+    },
+  });
+};
+

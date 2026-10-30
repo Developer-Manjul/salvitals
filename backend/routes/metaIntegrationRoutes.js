@@ -36,6 +36,16 @@ router.post(
   controller.resubscribeMessages
 );
 
+router.post(
+    "/whatsapp/complete-signup",
+    controller.completeWhatsAppSignup
+);
+
+router.get(
+    "/whatsapp/status",
+    controller.getWhatsAppStatus
+);
+
 router.get(
   "/debug/message-subscriptions",
   controller.verifyMessageSubscriptions

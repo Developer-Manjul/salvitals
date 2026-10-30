@@ -15,6 +15,7 @@ const Invoice = require("../models/Invoice");
 
 const MetaConversation = require("../models/MetaConversation");
 const MetaMessage = require("../models/MetaMessage");
+const WhatsAppIntegration = require("../models/WhatsAppIntegration");
 
 const {
     getWorkspaceContext,
@@ -1135,6 +1136,151 @@ exports.receiveWebhook = async (
                         "messages"
                     ) {
                         continue;
+                    }
+
+                    // ==========================================
+                    // WHATSAPP INCOMING MESSAGES - SOCIAL INBOX
+                    // ==========================================
+
+                    const incomingMessages = Array.isArray(value.messages)
+                        ? value.messages
+                        : [];
+
+                    const phoneNumberId = String(
+                        value.metadata?.phone_number_id || ""
+                    ).trim();
+
+                    if (incomingMessages.length && phoneNumberId) {
+                        const integration = await WhatsAppIntegration.findOne({
+                            phoneNumberId: phoneNumberId,
+                            whatsappBusinessAccountId: String(entry.id || ""),
+                            isActive: true,
+                        });
+
+                        if (!integration) {
+                            console.log("WHATSAPP INTEGRATION NOT FOUND:", {
+                                phoneNumberId,
+                                businessAccountId: entry.id,
+                            });
+                        } else {
+                            for (const waMessage of incomingMessages) {
+                                const senderId = String(waMessage.from || "").trim();
+                                const messageId = String(waMessage.id || "").trim();
+
+                                if (!senderId || !messageId) continue;
+
+                                const contact = (value.contacts || []).find(
+                                    item => String(item.wa_id) === senderId
+                                );
+
+                                const participantName = String(
+                                    contact?.profile?.name || senderId
+                                );
+
+                                const messageType = String(
+                                    waMessage.type || "other"
+                                );
+
+                                let text = "";
+                                let attachments = [];
+
+                                if (messageType === "text") {
+                                    text = String(waMessage.text?.body || "").trim();
+                                } else if (
+                                    ["image", "video", "audio", "document", "sticker"].includes(messageType)
+                                ) {
+                                    const media = waMessage[messageType] || {};
+
+                                    attachments = [{
+                                        type: messageType === "document" ? "file" : messageType,
+                                        url: "",
+                                        name: String(media.filename || media.id || ""),
+                                    }];
+
+                                    text = String(media.caption || "");
+                                }
+
+                                if (!text && !attachments.length) {
+                                    text = `[${messageType} message]`;
+                                }
+
+                                const sentAt = waMessage.timestamp
+                                    ? new Date(Number(waMessage.timestamp) * 1000)
+                                    : new Date();
+
+                                const conversation = await MetaConversation.findOneAndUpdate(
+                                    {
+                                        userId: integration.userId,
+                                        platform: "whatsapp",
+                                        pageId: phoneNumberId,
+                                        externalConversationId: senderId,
+                                    },
+                                    {
+                                        $set: {
+                                            participantId: senderId,
+                                            participantName,
+                                            lastMessageText: text || "Attachment",
+                                            lastMessageAt: sentAt,
+                                            lastMessageDirection: "inbound",
+                                        },
+                                        $setOnInsert: {
+                                            userId: integration.userId,
+                                            platform: "whatsapp",
+                                            pageId: phoneNumberId,
+                                            externalConversationId: senderId,
+                                            status: "open",
+                                        },
+                                        $inc: {
+                                            unreadCount: 1,
+                                        },
+                                    },
+                                    {
+                                        new: true,
+                                        upsert: true,
+                                        setDefaultsOnInsert: true,
+                                    }
+                                );
+
+                                const messageResult = await MetaMessage.updateOne(
+                                    {
+                                        userId: integration.userId,
+                                        externalMessageId: messageId,
+                                    },
+                                    {
+                                        $setOnInsert: {
+                                            userId: integration.userId,
+                                            conversationId: conversation._id,
+                                            platform: "whatsapp",
+                                            externalMessageId: messageId,
+                                            senderId,
+                                            recipientId: phoneNumberId,
+                                            direction: "inbound",
+                                            messageType: ["text", "image", "video", "audio", "sticker"].includes(messageType)
+                                                ? messageType
+                                                : "file",
+                                            text,
+                                            attachments,
+                                            sentAt,
+                                            deliveryStatus: "received",
+                                            rawEvent: waMessage,
+                                        },
+                                    },
+                                    { upsert: true }
+                                );
+
+                                if (
+                                    messageResult.upsertedCount === 1 ||
+                                    messageResult.upsertedId
+                                ) {
+                                    console.log("WHATSAPP INBOX MESSAGE SAVED:", {
+                                        userId: String(integration.userId),
+                                        phoneNumberId,
+                                        senderId,
+                                        messageId,
+                                    });
+                                }
+                            }
+                        }
                     }
 
                     const statuses =
@@ -2539,6 +2685,69 @@ exports.sendInboxMessage = async (req, res) => {
       });
     }
 
+    // ==========================================
+    // WHATSAPP REPLY
+    // ==========================================
+
+    if (conversation.platform === "whatsapp") {
+      const integration = await WhatsAppIntegration.findOne({
+        userId: context.workspaceOwnerId,
+        phoneNumberId: conversation.pageId,
+        isActive: true,
+    });
+
+      if (!integration) {
+        return res.status(409).json({
+          success: false,
+          message: "Connected WhatsApp Business number was not found.",
+        });
+      }
+
+      const accessToken = decrypt(
+        integration.accessTokenEncrypted
+      );
+
+      const result = await meta.sendWhatsAppMessage({
+          phoneNumberId: integration.phoneNumberId,
+          accessToken,
+        to: conversation.participantId,
+        text,
+      });
+
+      const externalMessageId = String(
+        result.messages?.[0]?.id || ""
+      );
+
+      const message = await MetaMessage.create({
+        userId: context.workspaceOwnerId,
+        conversationId: conversation._id,
+        platform: "whatsapp",
+        externalMessageId,
+        senderId: integration.phoneNumberId,
+        recipientId: conversation.participantId,
+        direction: "outbound",
+        messageType: "text",
+        text,
+        sentAt: new Date(),
+        deliveryStatus: "sent",
+      });
+
+      conversation.lastMessageText = text;
+      conversation.lastMessageAt = message.sentAt;
+      conversation.lastMessageDirection = "outbound";
+
+      await conversation.save();
+
+      return res.status(200).json({
+        success: true,
+        message,
+      });
+    }
+
+    // ==========================================
+    // FACEBOOK / INSTAGRAM REPLY
+    // ==========================================
+
     const integration = await MetaIntegration.findOne({
       userId: context.workspaceOwnerId,
       pageId: conversation.pageId,
@@ -2552,7 +2761,9 @@ exports.sendInboxMessage = async (req, res) => {
       });
     }
 
-    const accessToken = decrypt(integration.accessTokenEncrypted);
+    const accessToken = decrypt(
+      integration.accessTokenEncrypted
+    );
 
     const result = await meta.sendConversationMessage({
       pageId: integration.pageId,
@@ -2561,7 +2772,9 @@ exports.sendInboxMessage = async (req, res) => {
       accessToken,
     });
 
-    const externalMessageId = String(result.message_id || "");
+    const externalMessageId = String(
+      result.message_id || ""
+    );
 
     const message = await MetaMessage.create({
       userId: context.workspaceOwnerId,
@@ -2580,12 +2793,14 @@ exports.sendInboxMessage = async (req, res) => {
     conversation.lastMessageText = text;
     conversation.lastMessageAt = message.sentAt;
     conversation.lastMessageDirection = "outbound";
+
     await conversation.save();
 
     return res.status(200).json({
       success: true,
       message,
     });
+
   } catch (error) {
     console.error(
       "META INBOX SEND ERROR:",
@@ -2663,6 +2878,164 @@ exports.resubscribeLeadgen = async (req, res) => {
             success: false,
             message: "Leadgen resubscription failed",
             error: error.metaError || error.message,
+        });
+    }
+};
+
+// ==========================================
+// COMPLETE WHATSAPP EMBEDDED SIGNUP
+// ==========================================
+
+exports.completeWhatsAppSignup = async (req, res) => {
+    try {
+        const context = await getWorkspaceContext(req);
+
+        if (!context) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        if (!hasPermission(context, "inbox.view")) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have permission to connect WhatsApp.",
+            });
+        }
+
+        const code = String(req.body?.code || "").trim();
+        const wabaId = String(req.body?.wabaId || "").trim();
+        const phoneNumberId = String(req.body?.phoneNumberId || "").trim();
+
+        if (!code || !wabaId || !phoneNumberId) {
+            return res.status(400).json({
+                success: false,
+                message: "WhatsApp signup details are incomplete.",
+            });
+        }
+
+        const tokenResponse = await meta.exchangeWhatsAppSignupCode(code);
+        const accessToken = tokenResponse.access_token;
+
+        if (!accessToken) {
+            throw new Error("Meta did not return an access token.");
+        }
+
+        const graphVersion =
+            process.env.META_GRAPH_API_VERSION ||
+            process.env.META_GRAPH_VERSION ||
+            "v25.0";
+
+        const phoneResponse = await axios.get(
+            `https://graph.facebook.com/${graphVersion}/${phoneNumberId}`,
+            {
+                params: {
+                    fields: "id,display_phone_number,verified_name",
+                    access_token: accessToken,
+                },
+                timeout: 15000,
+            }
+        );
+
+        const phone = phoneResponse.data || {};
+
+        await meta.subscribeWhatsAppBusinessAccount(
+            wabaId,
+            accessToken
+        );
+
+        const integration = await WhatsAppIntegration.findOneAndUpdate(
+            {
+                userId: context.workspaceOwnerId,
+                phoneNumberId,
+            },
+            {
+                $set: {
+                    whatsappBusinessAccountId: wabaId,
+                    phoneNumberId,
+                    displayPhoneNumber: phone.display_phone_number || "",
+                    verifiedName: phone.verified_name || "",
+                    accessTokenEncrypted: encrypt(accessToken),
+                    isActive: true,
+                    connectedAt: new Date(),
+                },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            }
+        );
+
+        return res.json({
+            success: true,
+            message: "WhatsApp Business connected successfully.",
+            integration: {
+                phoneNumberId: integration.phoneNumberId,
+                displayPhoneNumber: integration.displayPhoneNumber,
+                verifiedName: integration.verifiedName,
+                isActive: integration.isActive,
+            },
+        });
+
+    } catch (error) {
+        console.error(
+            "WHATSAPP SIGNUP ERROR:",
+            error.response?.data || error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                error.response?.data?.error?.message ||
+                error.message ||
+                "Unable to connect WhatsApp Business.",
+        });
+    }
+};
+
+// ==========================================
+// GET WHATSAPP CONNECTION STATUS
+// ==========================================
+
+exports.getWhatsAppStatus = async (req, res) => {
+    try {
+        const context = await getWorkspaceContext(req);
+
+        if (!context) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        if (!hasPermission(context, "inbox.view")) {
+            return res.status(403).json({
+                success: false,
+                message: "Permission denied",
+            });
+        }
+
+        const integration = await WhatsAppIntegration.findOne({
+            userId: context.workspaceOwnerId,
+            isActive: true,
+        }).select(
+            "whatsappBusinessAccountId phoneNumberId displayPhoneNumber verifiedName isActive connectedAt"
+        );
+
+        return res.json({
+            success: true,
+            connected: Boolean(integration),
+            integration: integration || null,
+        });
+
+    } catch (error) {
+        console.error("WHATSAPP STATUS ERROR:", error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to fetch WhatsApp status",
         });
     }
 };
