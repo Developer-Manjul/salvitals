@@ -838,24 +838,12 @@ export default function Dashboard() {
       );
     }
 
-   if (
-  dashboardParams.get("metaSelectPage") === "true" ||
-  dashboardParams.get("metaError")
+  if (
+    dashboardParams.get("metaSelectPage") === "true" ||
+    dashboardParams.get("metaError")
 ) {
-  window.history.replaceState(
-    {
-      saleVitalsDashboard: DASHBOARD_HISTORY_KEY,
-      active: "Integrations",
-      selectedLeadId: null,
-      selectedContactId: null,
-    },
-    "",
-    window.location.pathname
-  );
-
-  setActive("Integrations");
+    setActive("Integrations");
 }
-
     if (savedUser) {
       try {
         const parsedUser =
