@@ -305,11 +305,10 @@ function buildSubscriptionFromOrder(order) {
     const period =
         Number(order.period) || 1;
 
-    const expiresAt =
-        new Date(startedAt);
+    const expiresAt = new Date(startedAt);
 
-    expiresAt.setMonth(
-        expiresAt.getMonth() + period
+    expiresAt.setDate(
+        expiresAt.getDate() + (period * 30)
     );
 
     if (

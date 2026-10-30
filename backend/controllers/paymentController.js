@@ -321,17 +321,22 @@ function addMonths(
     return result;
 }
 
+function addPlanDays(date, period) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + (Number(period) || 1) * 30);
+    return result;
+}
+
 function getSubscriptionDates(
     period
 ) {
     const startedAt =
         new Date();
 
-    const expiresAt =
-        addMonths(
-            startedAt,
-            Number(period) || 1
-        );
+    const expiresAt = addPlanDays(
+    startedAt,
+    Number(period) || 1
+    );
 
     return {
         startedAt,
@@ -448,16 +453,16 @@ async function activateSubscription(order) {
         normalizePlanId(previousSubscription.planId) === planId;
 
     const dates = isRenewal
-        ? (() => {
-              const expiresAt = addMonths(previousExpiry, period);
+    ? (() => {
+          const expiresAt = addPlanDays(previousExpiry, period);
 
-              return {
-                  startedAt: previousSubscription.startedAt || new Date(),
-                  expiresAt,
-                  nextBillingAt: expiresAt,
-              };
-          })()
-        : getSubscriptionDates(period);
+          return {
+              startedAt: previousSubscription.startedAt || new Date(),
+              expiresAt,
+              nextBillingAt: expiresAt,
+          };
+      })()
+    : getSubscriptionDates(period);
 
     const existingSetupFeePaid = Boolean(
         previousSubscription.setupFeePaid
