@@ -539,7 +539,7 @@ exports.callback = async (req, res) => {
 
         // 8. Redirect to page selection
         return res.redirect(
-            `${frontend}/dashboard?metaSelectPage=true`
+            `${frontend}/dashboard?tab=settings&section=integrations&metaSelectPage=true`
         );
 
     } catch (error) {
@@ -562,7 +562,7 @@ exports.callback = async (req, res) => {
         }
 
         return res.redirect(
-            `${frontend}/dashboard?metaError=Unable%20to%20load%20Meta%20Pages`
+            `${frontend}/dashboard?tab=settings&section=integrations&metaError=Unable%20to%20load%20Meta%20Pages`
         );
     }
 };
