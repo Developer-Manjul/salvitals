@@ -719,3 +719,24 @@ exports.exchangeWhatsAppSignupCode = async (code) => {
   });
 };
 
+exports.testWhatsAppConnection = async () => {
+  const phoneNumberId =
+    process.env.WHATSAPP_TEST_PHONE_NUMBER_ID;
+
+  const accessToken =
+    process.env.WHATSAPP_TEST_ACCESS_TOKEN;
+
+  if (!phoneNumberId || !accessToken) {
+    throw new Error("WhatsApp test credentials missing");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(phoneNumberId)}`,
+    {
+      params: {
+        fields: "id,display_phone_number,verified_name",
+        access_token: accessToken,
+      },
+    }
+  );
+};

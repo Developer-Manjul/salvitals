@@ -110,4 +110,8 @@ router.post(
   controller.resubscribeLeadgen
 );
 
+router.get(
+  "/whatsapp/test-connection",
+  controller.testWhatsAppConnection
+);
 module.exports = router;

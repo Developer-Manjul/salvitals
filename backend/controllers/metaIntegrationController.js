@@ -3039,3 +3039,27 @@ exports.getWhatsAppStatus = async (req, res) => {
         });
     }
 };
+
+
+exports.testWhatsAppConnection = async (req, res) => {
+  try {
+    const result = await meta.testWhatsAppConnection();
+
+    return res.json({
+      success: true,
+      message: "WhatsApp API connected successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error(
+      "WhatsApp API Test Error:",
+      error.metaError || error.message
+    );
+
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      error: error.metaError || null,
+    });
+  }
+};
