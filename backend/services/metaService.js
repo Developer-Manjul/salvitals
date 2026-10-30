@@ -141,154 +141,63 @@ exports.exchangeCodeForToken =
       }
     );
 
+
 exports.getPages = async (accessToken) => {
-  const pagesMap = new Map();
-
-  const addPages = (items = [], business = null) => {
-    for (const page of items) {
-      if (!page?.id) {
-        continue;
-      }
-
-      const existing = pagesMap.get(String(page.id));
-
-      pagesMap.set(String(page.id), {
-        ...(existing || {}),
-        ...page,
-        businessId:
-          page.business?.id ||
-          existing?.businessId ||
-          business?.id ||
-          "",
-        businessName:
-          page.business?.name ||
-          existing?.businessName ||
-          business?.name ||
-          "",
-      });
-    }
-  };
+  if (!accessToken) {
+    throw new Error("Meta access token is missing");
+  }
 
   try {
-    const directPages = await graphRequest(
-      "/me/accounts",
-      {
-        params: {
-          fields:
-            "id,name,access_token,instagram_business_account,business",
-          access_token: accessToken,
-          limit: 100,
-        },
-      }
-    );
+    console.log("META: Fetching directly assigned Facebook Pages");
 
-    addPages(directPages?.data || []);
+    const response = await graphRequest("/me/accounts", {
+      params: {
+        fields: "id,name,access_token,instagram_business_account",
+        access_token: accessToken,
+        limit: 100,
+      },
+    });
+
+    const pages = (response?.data || [])
+      .filter((page) => page?.id)
+      .map((page) => ({
+        id: String(page.id),
+        name: page.name || "",
+        access_token: page.access_token || accessToken,
+
+        instagram_business_account:
+          page.instagram_business_account || null,
+
+        businessId: "",
+        businessName: "",
+      }));
+
+    console.log("META DIRECT PAGES FETCHED:", pages.length);
 
     console.log(
-      "META DIRECT PAGES:",
-      (directPages?.data || []).map((page) => ({
+      "META FINAL PAGES:",
+      pages.map((page) => ({
         id: page.id,
         name: page.name,
         hasPageAccessToken: Boolean(page.access_token),
+        instagramAccountId:
+          page.instagram_business_account?.id || "",
       }))
     );
+
+    return {
+      data: pages,
+    };
   } catch (error) {
     console.error(
-      "META DIRECT PAGES ERROR:",
+      "META DIRECT PAGES FETCH ERROR:",
       error.metaError || error.message
     );
+
+    throw error;
   }
-
-  try {
-    const businesses = await graphRequest(
-      "/me/businesses",
-      {
-        params: {
-          fields: "id,name",
-          access_token: accessToken,
-          limit: 100,
-        },
-      }
-    );
-
-    console.log(
-      "META BUSINESSES:",
-      businesses?.data || []
-    );
-
-    for (const business of businesses?.data || []) {
-      for (const edge of ["owned_pages", "client_pages"]) {
-        try {
-          const businessPages =
-            await graphRequest(
-              `/${encodeURIComponent(
-                business.id
-              )}/${edge}`,
-              {
-                params: {
-                  fields:
-                    "id,name,access_token,instagram_business_account,business",
-                  access_token: accessToken,
-                  limit: 100,
-                },
-              }
-            );
-
-          console.log(
-            `META BUSINESS ${edge.toUpperCase()}:`,
-            business.id,
-            (businessPages?.data || []).map(
-              (page) => ({
-                id: page.id,
-                name: page.name,
-                hasPageAccessToken:
-                  Boolean(page.access_token),
-              })
-            )
-          );
-
-          addPages(
-            businessPages?.data || [],
-            business
-          );
-        } catch (error) {
-          console.error(
-            `META BUSINESS ${edge.toUpperCase()} ERROR:`,
-            business.id,
-            error.metaError || error.message
-          );
-        }
-      }
-    }
-  } catch (error) {
-    console.error(
-      "META BUSINESS LIST ERROR:",
-      error.metaError || error.message
-    );
-  }
-
-  const pages = Array.from(
-    pagesMap.values()
-  );
-
-  console.log(
-    "META FINAL PAGES:",
-    pages.map((page) => ({
-      id: page.id,
-      name: page.name,
-      hasPageAccessToken:
-        Boolean(page.access_token),
-      businessId:
-        page.businessId || "",
-      businessName:
-        page.businessName || "",
-    }))
-  );
-
-  return {
-    data: pages,
-  };
 };
+
 
 exports.getPageDetails =
   async (
