@@ -375,12 +375,21 @@ exports.callback = async (req, res) => {
         "http://localhost:5173"
     ).replace(/\/$/, "");
 
-    const stateRecord = await MetaOAuthState.findOne({
-        state: req.query.state,
-        expiresAt: {
-            $gt: new Date(),
-        },
-    });
+    let stateRecord;
+
+        try {
+            stateRecord = await MetaOAuthState.findOne({
+                state: req.query.state,
+                expiresAt: {
+                    $gt: new Date(),
+                },
+            }).maxTimeMS(10000);
+        } catch (error) {
+            console.error("META CALLBACK STATE LOOKUP ERROR:", error);
+            return res.redirect(
+                `${frontend}/dashboard?metaError=Unable%20to%20verify%20Meta%20authorization`
+            );
+        }
 
     if (!stateRecord) {
         return res.redirect(
@@ -409,9 +418,15 @@ exports.callback = async (req, res) => {
     }
 
     try {
-        const tokenData = await meta.exchangeCodeForToken(
-            req.query.code
-        );
+        const tokenData = await Promise.race([
+        meta.exchangeCodeForToken(req.query.code),
+        new Promise((_, reject) =>
+            setTimeout(
+                () => reject(new Error("Meta token exchange timeout")),
+                15000
+            )
+        ),
+    ]);
 
         console.log("========================================");
         console.log("META OAUTH USER TOKEN RECEIVED");
@@ -422,9 +437,15 @@ exports.callback = async (req, res) => {
         );
         console.log("========================================");
 
-        const pages = await meta.getPages(
-            tokenData.access_token
-        );
+        const pages = await Promise.race([
+        meta.getPages(tokenData.access_token),
+        new Promise((_, reject) =>
+            setTimeout(
+                () => reject(new Error("Meta pages fetch timeout")),
+                20000
+            )
+        ),
+    ]);
 
         console.log("META CALLBACK PAGES:");
 
