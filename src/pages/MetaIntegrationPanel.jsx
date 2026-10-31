@@ -862,45 +862,50 @@ const connectWhatsApp = () => {
   };
 
   const disconnectWebsite = async () => {
-    const activeKey = websiteApiKeys.find(
-      (key) => key.isActive
+  const confirmed = window.confirm(
+    "Are you sure you want to disconnect your Website integration?"
+  );
+  if (!confirmed) return;
+
+  const activeKey = websiteApiKeys.find(
+    (key) => key.isActive
+  );
+
+  if (!activeKey?._id && !activeKey?.id) {
+    setError("Active website API key was not found.");
+    return;
+  }
+
+  const keyId = activeKey._id || activeKey.id;
+
+  setWebsiteDisconnecting(true);
+  setError("");
+  setMessage("");
+
+  try {
+    await api(
+      `/api/integrations/website/api-key/${keyId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          isActive: false,
+        }),
+      }
     );
 
-    if (!activeKey?._id && !activeKey?.id) {
-      setError("Active website API key was not found.");
-      return;
-    }
+    setNewWebsiteKey("");
 
-    const keyId = activeKey._id || activeKey.id;
+    await loadWebsiteApiKeys();
 
-    setWebsiteDisconnecting(true);
-    setError("");
-    setMessage("");
-
-    try {
-      await api(
-        `/api/integrations/website/api-key/${keyId}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            isActive: false,
-          }),
-        }
-      );
-
-      setNewWebsiteKey("");
-
-      await loadWebsiteApiKeys();
-
-      setMessage(
-        "Website disconnected successfully. You can generate a new API key now."
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setWebsiteDisconnecting(false);
-    }
-  };
+    setMessage(
+      "Website disconnected successfully. You can generate a new API key now."
+    );
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setWebsiteDisconnecting(false);
+  }
+};
 
   const loadStatus = async () => {
     setLoading(true);
@@ -994,31 +999,36 @@ const connectWhatsApp = () => {
   };
 
   const disconnectMeta = async () => {
-    setDisconnectingMeta(true);
-    setError("");
-    setMessage("");
+  const confirmed = window.confirm(
+    "Are you sure you want to disconnect your Meta integration?"
+  );
+  if (!confirmed) return;
 
-    try {
-      await api(
-        "/api/integrations/meta/disconnect",
-        {
-          method: "POST",
-        }
-      );
+  setDisconnectingMeta(true);
+  setError("");
+  setMessage("");
 
-      setMetaConnected(false);
-      setMetaPage(null);
-      setMetaPages([]);
-      setSelectedMetaPage("");
-      setShowMetaPageModal(false);
+  try {
+    await api(
+      "/api/integrations/meta/disconnect",
+      {
+        method: "POST",
+      }
+    );
 
-      setMessage("Meta disconnected successfully.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDisconnectingMeta(false);
-    }
-  };
+    setMetaConnected(false);
+    setMetaPage(null);
+    setMetaPages([]);
+    setSelectedMetaPage("");
+    setShowMetaPageModal(false);
+
+    setMessage("Meta disconnected successfully.");
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setDisconnectingMeta(false);
+  }
+};
 
   const connectGoogleAds = async () => {
     setGoogleBusy(true);
@@ -1132,31 +1142,36 @@ const connectWhatsApp = () => {
   };
 
   const disconnectGoogleAds = async () => {
-    setGoogleDisconnecting(true);
-    setError("");
-    setMessage("");
+  const confirmed = window.confirm(
+    "Are you sure you want to disconnect your Google Ads integration?"
+  );
+  if (!confirmed) return;
 
-    try {
-      await api(
-        "/api/integrations/google/disconnect",
-        {
-          method: "POST",
-        }
-      );
+  setGoogleDisconnecting(true);
+  setError("");
+  setMessage("");
 
-      setGoogleConnected(false);
-      setGoogleAccount(null);
-      setSelectedGoogleAccount("");
+  try {
+    await api(
+      "/api/integrations/google/disconnect",
+      {
+        method: "POST",
+      }
+    );
 
-      setMessage(
-        "Google Ads disconnected successfully."
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGoogleDisconnecting(false);
-    }
-  };
+    setGoogleConnected(false);
+    setGoogleAccount(null);
+    setSelectedGoogleAccount("");
+
+    setMessage(
+      "Google Ads disconnected successfully."
+    );
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setGoogleDisconnecting(false);
+  }
+};
 
   useEffect(() => {
     loadStatus();

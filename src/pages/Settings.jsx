@@ -1671,30 +1671,32 @@ const [autoPayLoading, setAutoPayLoading] = useState(false);
   });
 
   const loadBilling = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  try {
+    setLoading(true);
+    setError("");
 
-      const response = await fetch(`${getApiBaseUrl()}/api/billing/current`, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-        },
-        cache: "no-store",
-      });
+    const response = await fetch(`${getApiBaseUrl()}/api/billing/current`, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+      cache: "no-store",
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Unable to load billing information.");
-      }
-
-      setBilling(data);
-    } catch (loadError) {
-      setError(loadError.message || "Unable to load billing information.");
-    } finally {
-      setLoading(false);
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Unable to load billing information.");
     }
-  };
+
+    console.log("BILLING API RESPONSE:", data);
+
+    setBilling(data);
+  } catch (loadError) {
+    setError(loadError.message || "Unable to load billing information.");
+  } finally {
+    setLoading(false);
+  }
+};
 
 
 const loadRazorpayScript = () => {
@@ -2129,6 +2131,97 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
   );
   const aiPercentage = getPercentage(aiUsed, aiLimit, aiUsage.percentage);
   const teamPercentage = getPercentage(teamUsed, teamLimit, null);
+  const contactAddon = billing?.addons?.contacts || {};
+const aiAddon = billing?.addons?.ai_chat || {};
+const pharmacyInvoiceAddon = billing?.addons?.pharmacy_invoice || {};
+const billingHistory = billing?.billingHistory || [];
+
+  const purchasedAddonUsage = [];
+
+  const whatsappAddon = billing?.addons?.whatsapp_leads || {};
+
+if (whatsappAddon.enabled) {
+  purchasedAddonUsage.push({
+    id: "whatsapp_leads",
+    title: "WhatsApp Lead Notifications",
+    used: Number(whatsappAddon.used || 0),
+    limit: Number(whatsappAddon.quota || 0),
+    remaining: Number(whatsappAddon.remaining || 0),
+    unit: "leads",
+  });
+  }
+  
+  if (pharmacyInvoiceAddon.enabled) {
+  purchasedAddonUsage.push({
+    id: "pharmacy_invoice",
+    title: "Pharmacy Invoice",
+    used: Number(pharmacyInvoiceAddon.used || 0),
+    limit: null,
+    remaining: pharmacyInvoiceAddon.remaining,
+    unit: "invoices",
+    unlimited: true,
+  });
+}
+
+  // Extra Contacts Add-on
+  if (Number(contactAddon?.quantity || 0) > 0) {
+    const addonLimit =
+      Number(contactAddon?.totalCapacity) ||
+      Number(contactAddon?.capacity) ||
+      Number(contactAddon?.quantity) * 1000;
+
+    const addonUsed = Number(contactAddon?.used || 0);
+    const addonRemaining =
+      contactAddon?.remaining !== undefined
+        ? Number(contactAddon.remaining)
+        : Math.max(addonLimit - addonUsed, 0);
+
+    const addonPercentage =
+      addonLimit > 0
+        ? Math.min((addonUsed / addonLimit) * 100, 100)
+        : 0;
+
+    purchasedAddonUsage.push({
+      id: "addon-contacts",
+      label: "Extra Contacts",
+      used: addonUsed,
+      limit: addonLimit,
+      remaining: addonRemaining,
+      percentage: addonPercentage,
+      icon: "▤",
+      tone: "blue",
+    });
+  }
+
+  // AI Chatbot Add-on
+  if (Number(aiAddon?.quantity || 0) > 0) {
+    const addonLimit =
+      Number(aiAddon?.totalCapacity) ||
+      Number(aiAddon?.capacity) ||
+      Number(aiAddon?.quantity) * 3000;
+
+    const addonUsed = Number(aiAddon?.used || 0);
+    const addonRemaining =
+      aiAddon?.remaining !== undefined
+        ? Number(aiAddon.remaining)
+        : Math.max(addonLimit - addonUsed, 0);
+
+    const addonPercentage =
+      addonLimit > 0
+        ? Math.min((addonUsed / addonLimit) * 100, 100)
+        : 0;
+
+    purchasedAddonUsage.push({
+      id: "addon-ai-chat",
+      label: "AI Chatbot Add-on",
+      used: addonUsed,
+      limit: addonLimit,
+      remaining: addonRemaining,
+      percentage: addonPercentage,
+      icon: "✦",
+      tone: "purple",
+    });
+  }
 
   const usageItems = [
     {
@@ -2163,6 +2256,13 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
     },
   ];
 
+  const allUsageItems = [
+  ...usageItems,
+  ...purchasedAddonUsage,
+];
+
+  
+
   const contactPercent = Math.round(contactPercentage);
   const aiPercent = Math.round(aiPercentage);
   const teamPercent = Math.round(teamPercentage);
@@ -2171,6 +2271,7 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
   const donutOffset = donutCircumference * (1 - contactPercentage / 100);
 
   const currentIndex = PLAN_ORDER.indexOf(currentPlanId);
+  
   const visiblePlans = PLAN_ORDER
     .filter((planId) => {
       const planIndex = PLAN_ORDER.indexOf(planId);
@@ -2180,10 +2281,6 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
     .map((planId) => PLANS[planId])
     .filter(Boolean);
 
-  const contactAddon = billing?.addons?.contacts || {};
-  const aiAddon = billing?.addons?.ai_chat || {};
-  const pharmacyInvoiceAddon = billing?.addons?.pharmacy_invoice || {};
-  const billingHistory = billing?.billingHistory || [];
 
   const addonCards = [
     {
@@ -2448,32 +2545,32 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
                   type="button"
                   disabled={loading}
                  onClick={() => {
-  const planId = billing?.subscription?.planId;
+                const planId = billing?.subscription?.planId;
 
-  if (!planId) {
-    setError("Current subscription plan not found. Please refresh and try again.");
-    return;
-  }
+                if (!planId) {
+                  setError("Current subscription plan not found. Please refresh and try again.");
+                  return;
+                }
 
-  const selectedPlan = PLANS[planId.toLowerCase()];
+                const selectedPlan = PLANS[planId.toLowerCase()];
 
-  if (!selectedPlan) {
-    setError("Current plan could not be identified. Please contact support.");
-    return;
-  }
+                if (!selectedPlan) {
+                  setError("Current plan could not be identified. Please contact support.");
+                  return;
+                }
 
-  localStorage.setItem(
-    "selectedPlan",
-    JSON.stringify({
-      ...selectedPlan,
-      planId: selectedPlan.id,
-      planName: selectedPlan.name,
-      billing: "monthly",
-    })
-  );
+                localStorage.setItem(
+                  "selectedPlan",
+                  JSON.stringify({
+                    ...selectedPlan,
+                    planId: selectedPlan.id,
+                    planName: selectedPlan.name,
+                    billing: "monthly",
+                  })
+                );
 
-  window.location.href = `/cart?plan=${encodeURIComponent(selectedPlan.id)}&renew=true`;
-}}
+                window.location.href = `/cart?plan=${encodeURIComponent(selectedPlan.id)}&renew=true`;
+              }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -2524,6 +2621,53 @@ console.log("AUTOPAY ORDER ID:", subscription?.orderId);
                   </div>
                   <div className="plan-billing-progress"><i style={{ width: `${contactPercentage}%` }} /></div>
                 </div>
+
+                {purchasedAddonUsage.length > 0 &&
+                purchasedAddonUsage.map((addon) => {
+                  const addonPercentage =
+                    addon.limit > 0
+                      ? Math.min(
+                          100,
+                          Math.round((addon.used / addon.limit) * 100)
+                        )
+                      : 0;
+
+                  return (
+                    <div className="plan-billing-usage" key={addon.id}>
+                      <div className="plan-billing-usage-head">
+                        <div>
+                          <span>{addon.title} usage</span>
+
+                          <strong>
+                            {addon.unlimited
+                              ? `${addon.used.toLocaleString("en-IN")} ${addon.unit} used`
+                              : `${addon.used.toLocaleString(
+                                  "en-IN"
+                                )} of ${addon.limit.toLocaleString(
+                                  "en-IN"
+                                )} ${addon.unit}`}
+                          </strong>
+                        </div>
+
+                        <b>
+                          {addon.unlimited
+                            ? "Unlimited"
+                            : `${addonPercentage}%`}
+                        </b>
+                      </div>
+
+                      <div className="plan-billing-progress">
+                        <i
+                          style={{
+                            width: addon.unlimited
+                              ? "100%"
+                              : `${addonPercentage}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </>
             ) : (
               <div className="plan-billing-no-plan">

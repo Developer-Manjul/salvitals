@@ -4,6 +4,7 @@ const Lead = require("../models/Lead");
 const Order = require("../models/Order");
 const TeamMember = require("../models/TeamMember");
 const AIUsage = require("../models/AIUsage");
+const PharmacyInvoice = require("../models/PharmacyInvoice");
 
 const {
     getContactLimit,
@@ -373,6 +374,10 @@ exports.getCurrentBilling = async (req, res) => {
         }
 
         const ownerId = context.workspaceOwnerId;
+
+        const pharmacyInvoiceUsed = await PharmacyInvoice.countDocuments({
+            userId: ownerId,
+        });
 
         let user = await User.findById(ownerId)
             .select("name email subscription addons")
@@ -859,6 +864,7 @@ exports.getCurrentBilling = async (req, res) => {
                         pharmacyInvoiceAddon,
                         isPlanActive
                     ),
+                        used: pharmacyInvoiceUsed,
                 },
 
                 whatsapp_leads: {
