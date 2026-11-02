@@ -1,647 +1,168 @@
-const GRAPH_VERSION =
-  process.env.META_GRAPH_API_VERSION ||
-  process.env.META_GRAPH_VERSION ||
-  "v25.0";
-
-const GRAPH_BASE =
-  `https://graph.facebook.com/${GRAPH_VERSION}`;
-
-const REQUIRED_PERMISSIONS = [
-  "leads_retrieval",
-  "pages_manage_metadata",
-  "pages_show_list",
-  "pages_read_engagement",
-  "ads_management",
-  "instagram_basic",
-  "instagram_manage_messages",
-  "pages_messaging",
-];
+const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || process.env.META_GRAPH_VERSION || "v25.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const REQUIRED_PERMISSIONS = ["leads_retrieval", "pages_manage_metadata", "pages_show_list", "pages_read_engagement", "ads_management", "instagram_basic", "instagram_manage_messages", "pages_messaging"];
 
 function isConfigured() {
-  return Boolean(
-    process.env.META_APP_ID &&
-    process.env.META_APP_SECRET &&
-    process.env.META_REDIRECT_URI &&
-    process.env.META_WEBHOOK_VERIFY_TOKEN &&
-    process.env.META_CONFIG_ID
-  );
+  return Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET && process.env.META_REDIRECT_URI && process.env.META_WEBHOOK_VERIFY_TOKEN && process.env.META_CONFIG_ID);
 }
 
 async function graphRequest(path, options = {}) {
-  const url = new URL(
-    path.startsWith("http")
-      ? path
-      : `${GRAPH_BASE}${path}`
-  );
-
+  const url = new URL(path.startsWith("http") ? path : `${GRAPH_BASE}${path}`);
   if (options.params) {
-    Object.entries(options.params).forEach(
-      ([key, value]) => {
-        if (
-          value !== undefined &&
-          value !== null &&
-          value !== ""
-        ) {
-          url.searchParams.set(
-            key,
-            String(value)
-          );
-        }
+    Object.entries(options.params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, String(value));
       }
-    );
+    });
   }
-
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers: options.headers || {},
-    body: options.body,
-  });
-
-  const data = await response
-    .json()
-    .catch(() => ({}));
-
+  const response = await fetch(url, { method: options.method || "GET", headers: options.headers || {}, body: options.body });
+  const data = await response.json().catch(() => ({}));
   if (!response.ok || data.error) {
-    const error = new Error(
-      data.error?.message ||
-        "Meta Graph API request failed"
-    );
-
-    error.status =
-      data.error?.code ||
-      response.status;
-
-    error.metaError =
-      data.error ||
-      null;
-
+    const error = new Error(data.error?.message || "Meta Graph API request failed");
+    error.status = data.error?.code || response.status;
+    error.metaError = data.error || null;
     throw error;
   }
-
   return data;
 }
 
 exports.isConfigured = isConfigured;
 
 exports.getAuthorizationUrl = (state) => {
-  const url = new URL(
-    `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`
-  );
-
-  url.searchParams.set(
-    "client_id",
-    process.env.META_APP_ID || ""
-  );
-
-  url.searchParams.set(
-    "redirect_uri",
-    process.env.META_REDIRECT_URI || ""
-  );
-
-  url.searchParams.set(
-    "config_id",
-    process.env.META_CONFIG_ID || ""
-  );
-
-  url.searchParams.set(
-    "state",
-    state
-  );
-
-  url.searchParams.set(
-    "response_type",
-    "code"
-  );
-
-  url.searchParams.set(
-    "override_default_response_type",
-    "true"
-  );
-
-
+  const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
+  url.searchParams.set("client_id", process.env.META_APP_ID || "");
+  url.searchParams.set("redirect_uri", process.env.META_REDIRECT_URI || "");
+  url.searchParams.set("config_id", process.env.META_CONFIG_ID || "");
+  url.searchParams.set("state", state);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("override_default_response_type", "true");
   return url.toString();
 };
-exports.exchangeCodeForToken =
-  (code) =>
-    graphRequest(
-      "/oauth/access_token",
-      {
-        params: {
-          client_id:
-            process.env.META_APP_ID,
 
-          client_secret:
-            process.env.META_APP_SECRET,
-
-          redirect_uri:
-            process.env.META_REDIRECT_URI,
-
-          code,
-        }, 
-      }
-    );
-
+exports.exchangeCodeForToken = (code) =>
+  graphRequest("/oauth/access_token", { params: { client_id: process.env.META_APP_ID, client_secret: process.env.META_APP_SECRET, redirect_uri: process.env.META_REDIRECT_URI, code } });
 
 exports.getPages = async (accessToken) => {
-  if (!accessToken) {
-    throw new Error("Meta access token is missing");
-  }
-
+  if (!accessToken) throw new Error("Meta access token is missing");
   try {
-    console.log("META: Fetching directly assigned Facebook Pages");
-
-    const response = await graphRequest("/me/accounts", {
-      params: {
-        fields: "id,name,access_token,instagram_business_account",
-        access_token: accessToken,
-        limit: 100,
-      },
-    });
-
-    const pages = (response?.data || [])
-      .filter((page) => page?.id)
-      .map((page) => ({
-        id: String(page.id),
-        name: page.name || "",
-        access_token: page.access_token || accessToken,
-
-        instagram_business_account:
-          page.instagram_business_account || null,
-
-        businessId: "",
-        businessName: "",
-      }));
-
-    console.log("META DIRECT PAGES FETCHED:", pages.length);
-
-    console.log(
-      "META FINAL PAGES:",
-      pages.map((page) => ({
-        id: page.id,
-        name: page.name,
-        hasPageAccessToken: Boolean(page.access_token),
-        instagramAccountId:
-          page.instagram_business_account?.id || "",
-      }))
-    );
-
-    return {
-      data: pages,
-    };
+    const response = await graphRequest("/me/accounts", { params: { fields: "id,name,access_token,instagram_business_account", access_token: accessToken, limit: 100 } });
+    const pages = (response?.data || []).filter((page) => page?.id).map((page) => ({
+      id: String(page.id),
+      name: page.name || "",
+      access_token: page.access_token || accessToken,
+      instagram_business_account: page.instagram_business_account || null,
+      businessId: "",
+      businessName: "",
+    }));
+    return { data: pages };
   } catch (error) {
-    console.error(
-      "META DIRECT PAGES FETCH ERROR:",
-      error.metaError || error.message
-    );
-
     throw error;
   }
 };
 
-
-exports.getPageDetails =
-  async (
-    pageId,
-    accessToken
-  ) => {
-    const details =
-      await graphRequest(
-        `/${encodeURIComponent(
-          pageId
-        )}`,
-        {
-          params: {
-            fields:
-              "id,name,instagram_business_account,business",
-
-            access_token:
-              accessToken,
-          },
-        }
-      );
-
-    const instagramAccountId =
-      details
-        ?.instagram_business_account
-        ?.id || "";
-
-    if (instagramAccountId) {
-      try {
-        const instagram =
-          await graphRequest(
-            `/${encodeURIComponent(
-              instagramAccountId
-            )}`,
-            {
-              params: {
-                fields:
-                  "id,username,name,profile_picture_url",
-
-                access_token:
-                  accessToken,
-              },
-            }
-          );
-
-        details.instagram_business_account = {
-          id:
-            instagram.id ||
-            instagramAccountId,
-
-          username:
-            instagram.username ||
-            "",
-
-          name:
-            instagram.name ||
-            "",
-
-          profile_picture_url:
-            instagram.profile_picture_url ||
-            "",
-        };
-      } catch (error) {
-        console.error(
-          "META INSTAGRAM PROFILE ERROR:",
-          error.metaError ||
-            error.message
-        );
-      }
-    }
-
-    console.log(
-      "META PAGE DETAILS:",
-      {
-        pageId:
-          details?.id ||
-          String(pageId),
-
-        instagramAccountId:
-          details
-            ?.instagram_business_account
-            ?.id || "",
-
-        instagramUsername:
-          details
-            ?.instagram_business_account
-            ?.username || "",
-      }
-    );
-
-    return details;
-  };
-
-exports.getLeadDetails =
-  (
-    leadId,
-    accessToken
-  ) =>
-    graphRequest(
-      `/${encodeURIComponent(
-        leadId
-      )}`,
-      {
-        params: {
-          fields:
-            "id,created_time,field_data,form_id,ad_id,campaign_id,platform",
-
-          access_token:
-            accessToken,
-        },
-      }
-    );
-
-exports.subscribePageToLeadgen = (
-  pageId,
-  pageAccessToken
-) =>
-  graphRequest(
-    `/${encodeURIComponent(
-      pageId
-    )}/subscribed_apps`,
-    {
-      method: "POST",
-
-      params: {
-        subscribed_fields:
-          "leadgen",
-
-        access_token:
-          pageAccessToken,
-      },
-    }
-  );
-
-
-exports.subscribePageToMessages = (
-  pageId,
-  pageAccessToken
-) =>
-  graphRequest(
-    `/${encodeURIComponent(pageId)}/subscribed_apps`,
-    {
-      method: "POST",
-      params: {
-        subscribed_fields: "messages",
-        access_token: pageAccessToken,
-      },
-    }
-  );
-
-  exports.getInstagramMessageSubscriptions = (
-    instagramAccountId,
-    accessToken
-) =>
-    graphRequest(
-        `/${encodeURIComponent(instagramAccountId)}/subscribed_apps`,
-        {
-            method: "GET",
-            params: {
-                access_token: accessToken,
-            },
-        }
-    );
-
-exports.getPageMessageSubscriptions = (
-    pageId,
-    pageAccessToken
-) =>
-    graphRequest(
-        `/${encodeURIComponent(pageId)}/subscribed_apps`,
-        {
-            method: "GET",
-            params: {
-                access_token: pageAccessToken,
-            },
-        }
-    );
-
-
-
-exports.getPageLeadgenSubscription =
-  (
-    pageId,
-    pageAccessToken
-  ) =>
-    graphRequest(
-      `/${encodeURIComponent(
-        pageId
-      )}/subscribed_apps`,
-      {
-        params: {
-          access_token:
-            pageAccessToken,
-        },
-      }
-    );
-
-exports.refreshConnection =
-  async (
-    integration,
-    accessToken
-  ) =>
-    exports.getPageDetails(
-      integration.pageId,
-      accessToken
-    );
-
-exports.graphRequest =
-  graphRequest;
-
-exports.requiredPermissions =
-  REQUIRED_PERMISSIONS;
-
-  
-exports.sendConversationMessage = async ({
-  pageId,
-  recipientId,
-  text,
-  accessToken,
-}) => {
-  if (!pageId || !recipientId || !text || !accessToken) {
-    throw new Error("Missing required Meta message fields");
-  }
-
-  return graphRequest(
-    `/${encodeURIComponent(pageId)}/messages`,
-    {
-      method: "POST",
-      params: {
-        access_token: accessToken,
-      },
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        recipient: { id: recipientId },
-        message: { text },
-        messaging_type: "RESPONSE",
-      }),
-    }
-  );
-};
-
-exports.getMessagingParticipantProfile = async ({
-    platform,
-    participantId,
-    pageAccessToken,
-}) => {
-    if (!participantId || !pageAccessToken) {
-        console.warn("META PARTICIPANT PROFILE SKIPPED:", {
-            platform,
-            hasParticipantId: Boolean(participantId),
-            hasAccessToken: Boolean(pageAccessToken),
-        });
-        return null;
-    }
-
-    const isInstagram = platform === "instagram";
-
+exports.getPageDetails = async (pageId, accessToken) => {
+  const details = await graphRequest(`/${encodeURIComponent(pageId)}`, { params: { fields: "id,name,instagram_business_account,business", access_token: accessToken } });
+  const instagramAccountId = details?.instagram_business_account?.id || "";
+  if (instagramAccountId) {
     try {
-        const fields = isInstagram
-            ? "name,username,profile_picture_url"
-            : "first_name,last_name,profile_pic";
-
-        const profile = await graphRequest(
-            `/${encodeURIComponent(participantId)}`,
-            {
-                params: {
-                    fields,
-                    access_token: pageAccessToken,
-                },
-            }
-        );
-
-        // Facebook and Instagram return different picture fields.
-        const name = isInstagram
-            ? profile.username || profile.name || ""
-            : [profile.first_name, profile.last_name]
-                  .filter(Boolean)
-                  .join(" ");
-
-        const picture = isInstagram
-            ? profile.profile_picture_url || ""
-            : profile.profile_pic || "";
-
-        const result = {
-            name: String(name).trim(),
-            picture: String(picture).trim(),
-        };
-
-        console.log("META PARTICIPANT PROFILE RESULT:", {
-            platform,
-            participantId,
-            hasName: Boolean(result.name),
-            hasPicture: Boolean(result.picture),
-        });
-
-        return result;
-    } catch (error) {
-        console.error(
-            "META PARTICIPANT PROFILE FETCH ERROR:",
-            JSON.stringify({
-                platform,
-                participantId,
-                status: error.status,
-                metaError: error.metaError,
-            }, null, 2)
-        );
-
-        return null;
-    }
+      const instagram = await graphRequest(`/${encodeURIComponent(instagramAccountId)}`, { params: { fields: "id,username,name,profile_picture_url", access_token: accessToken } });
+      details.instagram_business_account = { id: instagram.id || instagramAccountId, username: instagram.username || "", name: instagram.name || "", profile_picture_url: instagram.profile_picture_url || "" };
+    } catch (error) {}
+  }
+  return details;
 };
 
+exports.getLeadDetails = (leadId, accessToken) => graphRequest(`/${encodeURIComponent(leadId)}`, { params: { fields: "id,created_time,field_data,form_id,ad_id,campaign_id,platform", access_token: accessToken } });
 
-// ==========================================
-// WHATSAPP BUSINESS API
-// ==========================================
+exports.subscribePageToLeadgen = (pageId, pageAccessToken) => graphRequest(`/${encodeURIComponent(pageId)}/subscribed_apps`, { method: "POST", params: { subscribed_fields: "leadgen", access_token: pageAccessToken } });
 
-exports.getWhatsAppBusinessAccount = async (
-  businessId,
-  accessToken
-) => {
-  if (!businessId || !accessToken) {
-    throw new Error("Business ID and access token are required");
-  }
+exports.subscribePageToMessages = (pageId, pageAccessToken) => graphRequest(`/${encodeURIComponent(pageId)}/subscribed_apps`, { method: "POST", params: { subscribed_fields: "messages", access_token: pageAccessToken } });
 
-  return graphRequest(
-    `/${encodeURIComponent(businessId)}/owned_whatsapp_business_accounts`,
-    {
-      params: {
-        fields: "id,name",
-        access_token: accessToken,
-      },
-    }
-  );
+exports.getInstagramMessageSubscriptions = (instagramAccountId, accessToken) => graphRequest(`/${encodeURIComponent(instagramAccountId)}/subscribed_apps`, { method: "GET", params: { access_token: accessToken } });
+
+exports.getPageMessageSubscriptions = (pageId, pageAccessToken) => graphRequest(`/${encodeURIComponent(pageId)}/subscribed_apps`, { method: "GET", params: { access_token: pageAccessToken } });
+
+exports.getPageLeadgenSubscription = (pageId, pageAccessToken) => graphRequest(`/${encodeURIComponent(pageId)}/subscribed_apps`, { params: { access_token: pageAccessToken } });
+
+exports.refreshConnection = async (integration, accessToken) => exports.getPageDetails(integration.pageId, accessToken);
+
+exports.graphRequest = graphRequest;
+exports.requiredPermissions = REQUIRED_PERMISSIONS;
+
+exports.sendConversationMessage = async ({ pageId, recipientId, text, accessToken }) => {
+  if (!pageId || !recipientId || !text || !accessToken) throw new Error("Missing required Meta message fields");
+  return graphRequest(`/${encodeURIComponent(pageId)}/messages`, { method: "POST", params: { access_token: accessToken }, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text }, messaging_type: "RESPONSE" }) });
 };
 
-exports.getWhatsAppPhoneNumbers = async (
-  whatsappBusinessAccountId,
-  accessToken
-) => {
-  if (!whatsappBusinessAccountId || !accessToken) {
-    throw new Error("WhatsApp Business Account ID and access token are required");
+// FIX: Updated getMessagingParticipantProfile to handle Instagram profile fetching correctly
+exports.getMessagingParticipantProfile = async ({ platform, participantId, pageAccessToken }) => {
+  if (!participantId || !pageAccessToken) {
+    return null;
   }
-
-  return graphRequest(
-    `/${encodeURIComponent(whatsappBusinessAccountId)}/phone_numbers`,
-    {
-      params: {
-        fields: "id,display_phone_number,verified_name,quality_rating",
-        access_token: accessToken,
-      },
-    }
-  );
-};
-
-exports.subscribeWhatsAppBusinessAccount = async (
-  whatsappBusinessAccountId,
-  accessToken
-) => {
-  if (!whatsappBusinessAccountId || !accessToken) {
-    throw new Error("WhatsApp Business Account ID and access token are required");
-  }
-
-  return graphRequest(
-    `/${encodeURIComponent(whatsappBusinessAccountId)}/subscribed_apps`,
-    {
-      method: "POST",
-      params: {
-        access_token: accessToken,
-      },
-    }
-  );
-};
-
-exports.sendWhatsAppMessage = async ({
-  phoneNumberId,
-  accessToken,
-  to,
-  text,
-}) => {
-  if (!phoneNumberId || !accessToken || !to || !text) {
-    throw new Error("Missing required WhatsApp message fields");
-  }
-
-  return graphRequest(
-    `/${encodeURIComponent(phoneNumberId)}/messages`,
-    {
-      method: "POST",
-      params: {
-        access_token: accessToken,
-      },
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to,
-        type: "text",
-        text: {
-          body: text,
+  const isInstagram = platform === "instagram";
+  try {
+    if (isInstagram) {
+      // For Instagram, we must use the IG User ID endpoint
+      // Note: Instagram messaging profiles often require specific scopes or return limited data.
+      // We will attempt to fetch 'name,profile_pic' which is standard for the Instagram messaging API.
+      const profile = await graphRequest(`/${encodeURIComponent(participantId)}`, {
+        params: {
+          fields: "name,profile_pic", // Changed from profile_picture_url to profile_pic for IG Messaging API
+          access_token: pageAccessToken,
         },
-      }),
+      });
+      return {
+        name: profile.name || "",
+        picture: profile.profile_pic || "",
+      };
+    } else {
+      // For Facebook Messenger
+      const profile = await graphRequest(`/${encodeURIComponent(participantId)}`, {
+        params: {
+          fields: "first_name,last_name,profile_pic",
+          access_token: pageAccessToken,
+        },
+      });
+      const name = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
+      return {
+        name: String(name).trim(),
+        picture: String(profile.profile_pic || "").trim(),
+      };
     }
-  );
+  } catch (error) {
+    console.error("META PARTICIPANT PROFILE FETCH ERROR:", JSON.stringify({ platform, participantId, status: error.status, metaError: error.metaError }, null, 2));
+    return null;
+  }
 };
 
-// ==========================================
-// WHATSAPP EMBEDDED SIGNUP CODE EXCHANGE
-// ==========================================
+exports.getWhatsAppBusinessAccount = async (businessId, accessToken) => {
+  if (!businessId || !accessToken) throw new Error("Business ID and access token are required");
+  return graphRequest(`/${encodeURIComponent(businessId)}/owned_whatsapp_business_accounts`, { params: { fields: "id,name", access_token: accessToken } });
+};
+
+exports.getWhatsAppPhoneNumbers = async (whatsappBusinessAccountId, accessToken) => {
+  if (!whatsappBusinessAccountId || !accessToken) throw new Error("WhatsApp Business Account ID and access token are required");
+  return graphRequest(`/${encodeURIComponent(whatsappBusinessAccountId)}/phone_numbers`, { params: { fields: "id,display_phone_number,verified_name,quality_rating", access_token: accessToken } });
+};
+
+exports.subscribeWhatsAppBusinessAccount = async (whatsappBusinessAccountId, accessToken) => {
+  if (!whatsappBusinessAccountId || !accessToken) throw new Error("WhatsApp Business Account ID and access token are required");
+  return graphRequest(`/${encodeURIComponent(whatsappBusinessAccountId)}/subscribed_apps`, { method: "POST", params: { access_token: accessToken } });
+};
+
+exports.sendWhatsAppMessage = async ({ phoneNumberId, accessToken, to, text }) => {
+  if (!phoneNumberId || !accessToken || !to || !text) throw new Error("Missing required WhatsApp message fields");
+  return graphRequest(`/${encodeURIComponent(phoneNumberId)}/messages`, { method: "POST", params: { access_token: accessToken }, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { body: text } }) });
+};
 
 exports.exchangeWhatsAppSignupCode = async (code) => {
-  if (!code || !process.env.META_APP_ID || !process.env.META_APP_SECRET) {
-    throw new Error("WhatsApp signup code or Meta app credentials are missing");
-  }
-
-  return graphRequest("/oauth/access_token", {
-    params: {
-      client_id: process.env.META_APP_ID,
-      client_secret: process.env.META_APP_SECRET,
-      code,
-    },
-  });
+  if (!code || !process.env.META_APP_ID || !process.env.META_APP_SECRET) throw new Error("WhatsApp signup code or Meta app credentials are missing");
+  return graphRequest("/oauth/access_token", { params: { client_id: process.env.META_APP_ID, client_secret: process.env.META_APP_SECRET, code } });
 };
 
 exports.testWhatsAppConnection = async () => {
-  const phoneNumberId =
-    process.env.WHATSAPP_TEST_PHONE_NUMBER_ID;
-
-  const accessToken =
-    process.env.WHATSAPP_TEST_ACCESS_TOKEN;
-
-  if (!phoneNumberId || !accessToken) {
-    throw new Error("WhatsApp test credentials missing");
-  }
-
-  return graphRequest(
-    `/${encodeURIComponent(phoneNumberId)}`,
-    {
-      params: {
-        fields: "id,display_phone_number,verified_name",
-        access_token: accessToken,
-      },
-    }
-  );
+  const phoneNumberId = process.env.WHATSAPP_TEST_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_TEST_ACCESS_TOKEN;
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp test credentials missing");
+  return graphRequest(`/${encodeURIComponent(phoneNumberId)}`, { params: { fields: "id,display_phone_number,verified_name", access_token: accessToken } });
 };
