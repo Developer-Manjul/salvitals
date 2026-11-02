@@ -1127,72 +1127,45 @@ function detectMetaLeadSource(
     return "Facebook";
 }
 
-exports.receiveWebhook = async (
-    req,
-    res
-) => {
+exports.receiveWebhook = async (req, res) => {
+    // FIX: META KO TURANT 200 OK BHEJNA ZAROORI HAI WARNA WEBHOOK BLOCK HO JATA HAI
+    res.status(200).send("EVENT_RECEIVED");
 
     console.log("META WEBHOOK RECEIVED:", JSON.stringify({
-    object: req.body?.object,
-    entries: (req.body?.entry || []).map(entry => ({
-        id: entry.id,
-        messagingCount: entry.messaging?.length || 0,
-        changes: (entry.changes || []).map(change => ({
-            field: change.field,
-            hasMessage: !!change.value?.message,
-            hasSender: !!change.value?.sender,
-            hasRecipient: !!change.value?.recipient
+        object: req.body?.object,
+        entries: (req.body?.entry || []).map(entry => ({
+            id: entry.id,
+            messagingCount: entry.messaging?.length || 0,
+            changes: (entry.changes || []).map(change => ({
+                field: change.field,
+                hasMessage: !!change.value?.message,
+                hasSender: !!change.value?.sender,
+                hasRecipient: !!change.value?.recipient
+            }))
         }))
-    }))
-}));
+    }));
 
     try {
-        const webhookObject =
-            String(
-                req.body?.object || ""
-            );
+        const webhookObject = String(req.body?.object || "");
 
-        if (
-            webhookObject ===
-            "whatsapp_business_account"
-        ) {
-            console.log(
-                "========================================"
-            );
+        // ==========================================
+        // WHATSAPP WEBHOOK PROCESSING
+        // ==========================================
+        if (webhookObject === "whatsapp_business_account") {
+            console.log("========================================");
+            console.log("WHATSAPP WEBHOOK RECEIVED");
 
-            console.log(
-                "WHATSAPP WEBHOOK RECEIVED"
-            );
+            for (const entry of req.body?.entry || []) {
+                for (const change of entry.changes || []) {
+                    const value = change.value || {};
 
-            for (
-                const entry of
-                req.body?.entry || []
-            ) {
-                for (
-                    const change of
-                    entry.changes || []
-                ) {
-                    const value =
-                        change.value || {};
-
-                    if (
-                        change.field !==
-                        "messages"
-                    ) {
+                    if (change.field !== "messages") {
                         continue;
                     }
 
-                    // ==========================================
-                    // WHATSAPP INCOMING MESSAGES - SOCIAL INBOX
-                    // ==========================================
-
-                    const incomingMessages = Array.isArray(value.messages)
-                        ? value.messages
-                        : [];
-
-                    const phoneNumberId = String(
-                        value.metadata?.phone_number_id || ""
-                    ).trim();
+                    // WHATSAPP INCOMING MESSAGES
+                    const incomingMessages = Array.isArray(value.messages) ? value.messages : [];
+                    const phoneNumberId = String(value.metadata?.phone_number_id || "").trim();
 
                     if (incomingMessages.length && phoneNumberId) {
                         const integration = await WhatsAppIntegration.findOne({
@@ -1217,30 +1190,21 @@ exports.receiveWebhook = async (
                                     item => String(item.wa_id) === senderId
                                 );
 
-                                const participantName = String(
-                                    contact?.profile?.name || senderId
-                                );
-
-                                const messageType = String(
-                                    waMessage.type || "other"
-                                );
+                                const participantName = String(contact?.profile?.name || senderId);
+                                const messageType = String(waMessage.type || "other");
 
                                 let text = "";
                                 let attachments = [];
 
                                 if (messageType === "text") {
                                     text = String(waMessage.text?.body || "").trim();
-                                } else if (
-                                    ["image", "video", "audio", "document", "sticker"].includes(messageType)
-                                ) {
+                                } else if (["image", "video", "audio", "document", "sticker"].includes(messageType)) {
                                     const media = waMessage[messageType] || {};
-
                                     attachments = [{
                                         type: messageType === "document" ? "file" : messageType,
                                         url: "",
                                         name: String(media.filename || media.id || ""),
                                     }];
-
                                     text = String(media.caption || "");
                                 }
 
@@ -1274,15 +1238,9 @@ exports.receiveWebhook = async (
                                             externalConversationId: senderId,
                                             status: "open",
                                         },
-                                        $inc: {
-                                            unreadCount: 1,
-                                        },
+                                        $inc: { unreadCount: 1 },
                                     },
-                                    {
-                                        new: true,
-                                        upsert: true,
-                                        setDefaultsOnInsert: true,
-                                    }
+                                    { new: true, upsert: true, setDefaultsOnInsert: true }
                                 );
 
                                 const messageResult = await MetaMessage.updateOne(
@@ -1312,10 +1270,7 @@ exports.receiveWebhook = async (
                                     { upsert: true }
                                 );
 
-                                if (
-                                    messageResult.upsertedCount === 1 ||
-                                    messageResult.upsertedId
-                                ) {
+                                if (messageResult.upsertedCount === 1 || messageResult.upsertedId) {
                                     console.log("WHATSAPP INBOX MESSAGE SAVED:", {
                                         userId: String(integration.userId),
                                         phoneNumberId,
@@ -1327,217 +1282,55 @@ exports.receiveWebhook = async (
                         }
                     }
 
-                    const statuses =
-                        Array.isArray(
-                            value.statuses
-                        )
-                            ? value.statuses
-                            : [];
+                    // WHATSAPP MESSAGE STATUS
+                    const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+                    if (!statuses.length) continue;
 
-                    if (
-                        !statuses.length
-                    ) {
-                        continue;
-                    }
+                    for (const statusData of statuses) {
+                        const messageId = String(statusData?.id || "").trim();
+                        const status = String(statusData?.status || "").trim().toLowerCase();
+                        const recipientId = String(statusData?.recipient_id || "").trim();
 
-                    for (
-                        const statusData of
-                        statuses
-                    ) {
-                        const messageId =
-                            String(
-                                statusData?.id ||
-                                    ""
-                            ).trim();
+                        console.log("WHATSAPP MESSAGE STATUS:", status);
 
-                        const status =
-                            String(
-                                statusData?.status ||
-                                    ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        const recipientId =
-                            String(
-                                statusData?.recipient_id ||
-                                    ""
-                            ).trim();
-
-                        console.log(
-                            "WHATSAPP MESSAGE STATUS:",
-                            status
-                        );
-
-                        console.log(
-                            "WhatsApp Message ID:",
-                            messageId
-                        );
-
-                        console.log(
-                            "WhatsApp Recipient:",
-                            recipientId
-                        );
-
-                        if (
-                            status ===
-                                "failed" &&
-                            Array.isArray(
-                                statusData?.errors
-                            )
-                        ) {
-                            for (
-                                const errorItem of
-                                statusData.errors
-                            ) {
-                                console.error(
-                                    "WHATSAPP DELIVERY FAILED"
-                                );
-
-                                console.error(
-                                    "Error Code:",
-                                    errorItem?.code ||
-                                        ""
-                                );
-
-                                console.error(
-                                    "Error Title:",
-                                    errorItem?.title ||
-                                        ""
-                                );
-
-                                console.error(
-                                    "Error Message:",
-                                    errorItem?.message ||
-                                        ""
-                                );
-
-                                if (
-                                    errorItem
-                                        ?.error_data
-                                        ?.details
-                                ) {
-                                    console.error(
-                                        "Error Details:",
-                                        errorItem
-                                            .error_data
-                                            .details
-                                    );
-                                }
+                        if (status === "failed" && Array.isArray(statusData?.errors)) {
+                            for (const errorItem of statusData.errors) {
+                                console.error("WHATSAPP DELIVERY FAILED");
+                                console.error("Error Code:", errorItem?.code || "");
+                                console.error("Error Message:", errorItem?.message || "");
                             }
                         }
 
-                        if (!messageId) {
-                            continue;
-                        }
+                        if (!messageId) continue;
 
-                        const invoice =
-                            await Invoice.findOne({
-                                whatsappMessageId:
-                                    messageId,
-                            });
+                        const invoice = await Invoice.findOne({ whatsappMessageId: messageId });
+                        if (!invoice) continue;
 
-                        if (!invoice) {
-                            console.log(
-                                "WHATSAPP STATUS INVOICE NOT FOUND:",
-                                messageId
-                            );
-
-                            continue;
-                        }
-
-                        console.log(
-                            "WHATSAPP STATUS INVOICE FOUND:",
-                            invoice.invoiceNumber
-                        );
-
-                        if (
-                            status ===
-                            "sent"
-                        ) {
-                            console.log(
-                                "WHATSAPP MESSAGE SENT TO META:",
-                                invoice.invoiceNumber
-                            );
-                        }
-
-                        if (
-                            status ===
-                            "delivered"
-                        ) {
-                            console.log(
-                                "WHATSAPP INVOICE DELIVERED:",
-                                invoice.invoiceNumber
-                            );
-                        }
-
-                        if (
-                            status ===
-                            "read"
-                        ) {
-                            console.log(
-                                "WHATSAPP INVOICE READ:",
-                                invoice.invoiceNumber
-                            );
-                        }
-
-                        if (
-                            status ===
-                            "failed"
-                        ) {
-                            console.error(
-                                "WHATSAPP INVOICE DELIVERY FAILED:",
-                                invoice.invoiceNumber
-                            );
-
-                            console.error(
-                                "Customer:",
-                                invoice.customerName
-                            );
-
-                            console.error(
-                                "Customer Phone:",
-                                invoice.customerPhone
-                            );
+                        if (status === "failed") {
+                            console.error("WHATSAPP INVOICE DELIVERY FAILED:", invoice.invoiceNumber);
                         }
                     }
                 }
             }
-
-            console.log(
-                "WHATSAPP WEBHOOK PROCESSING COMPLETE"
-            );
-
-            console.log(
-                "========================================"
-            );
-
+            console.log("WHATSAPP WEBHOOK PROCESSING COMPLETE");
+            console.log("========================================");
             return;
         }
 
-               // FACEBOOK / INSTAGRAM MESSAGING WEBHOOK
-        if (
-            webhookObject === "page" ||
-            webhookObject === "instagram"
-        ) {
+        // ==========================================
+        // FACEBOOK / INSTAGRAM MESSAGING WEBHOOK
+        // ==========================================
+        if (webhookObject === "page" || webhookObject === "instagram") {
             for (const entry of req.body?.entry || []) {
                 const isInstagram = webhookObject === "instagram";
                 const accountId = String(entry.id || "").trim();
 
-                const events = [
-                    ...(Array.isArray(entry.messaging)
-                        ? entry.messaging
-                        : []),
-                ];
+                const events = [...(Array.isArray(entry.messaging) ? entry.messaging : [])];
 
                 for (const change of entry.changes || []) {
-                    if (
-                        change.field !== "messages" ||
-                        !change.value?.message
-                    ) {
+                    if (change.field !== "messages" || !change.value?.message) {
                         continue;
                     }
-
                     events.push({
                         sender: change.value.sender,
                         recipient: change.value.recipient,
@@ -1546,34 +1339,19 @@ exports.receiveWebhook = async (
                     });
                 }
 
-                if (!events.length) {
-                    continue;
-                }
+                if (!events.length) continue;
 
                 if (!accountId || accountId === "0") {
-                    console.log(
-                        "META SAMPLE/INVALID ACCOUNT EVENT IGNORED:",
-                        webhookObject,
-                        accountId
-                    );
+                    console.log("META SAMPLE/INVALID ACCOUNT EVENT IGNORED:", webhookObject, accountId);
                     continue;
                 }
 
                 const integrations = await MetaIntegration.find({
                     isActive: true,
-                    ...(isInstagram
-                        ? { instagramAccountId: accountId }
-                        : { pageId: accountId }),
+                    ...(isInstagram ? { instagramAccountId: accountId } : { pageId: accountId }),
                 });
 
                 if (integrations.length !== 1) {
-                    console.log(
-                        "META MESSAGING INTEGRATION NOT UNIQUE:",
-                        webhookObject,
-                        accountId,
-                        "MATCHES:",
-                        integrations.length
-                    );
                     continue;
                 }
 
@@ -1582,149 +1360,76 @@ exports.receiveWebhook = async (
                 for (const event of events) {
                     const message = event.message || {};
 
-                    if (!message.mid) {
-            console.log("META MESSAGE SKIPPED: NO MESSAGE ID", {
-            platform: isInstagram ? "instagram" : "facebook",
-                message: JSON.stringify(message),
-            });
-            continue;
-         }
+                    if (!message.mid) continue;
 
                     const isEcho = message.is_echo === true;
-                    console.log("META MESSAGE EVENT DEBUG:", {
-    platform: isInstagram ? "instagram" : "facebook",
-    isEcho,
-    messageId: message.mid || null,
-    text: message.text || "",
-    senderId: event.sender?.id || null,
-    recipientId: event.recipient?.id || null,
-});
+                    
+                    const senderId = String((isEcho ? event.recipient?.id : event.sender?.id) || "").trim();
+                    const recipientId = String((isEcho ? event.sender?.id : event.recipient?.id) || "").trim();
 
-                    const senderId = String(
-                        (isEcho
-                            ? event.recipient?.id
-                            : event.sender?.id) || ""
-                    ).trim();
-
-                    const recipientId = String(
-                        (isEcho
-                            ? event.sender?.id
-                            : event.recipient?.id) || ""
-                    ).trim();
-
-                    if (!senderId || !recipientId) {
-                        continue;
-                    }
+                    if (!senderId || !recipientId) continue;
 
                     const direction = isEcho ? "outbound" : "inbound";
                     const participantId = isEcho ? recipientId : senderId;
-                    console.log("META PROFILE ID CHECK:", {
-                    platform: isInstagram ? "instagram" : "facebook",
-                    pageId: integration.pageId,
-                    senderId,
-                    recipientId,
-                    participantId,
-                });
                     const text = String(message.text || "").trim();
 
-                    const attachments = (
-                        Array.isArray(message.attachments)
-                            ? message.attachments
-                            : []
-                    ).map((attachment) => ({
+                    const attachments = (Array.isArray(message.attachments) ? message.attachments : []).map((attachment) => ({
                         type: String(attachment.type || "file"),
                         url: String(attachment.payload?.url || ""),
                         name: "",
                     }));
 
-                    if (!text && !attachments.length) {
-    console.log("META MESSAGE SKIPPED: EMPTY CONTENT", {
-        platform: isInstagram ? "instagram" : "facebook",
-        messageId: message.mid,
-        message: JSON.stringify(message),
-    });
-    continue;
-}
+                    if (!text && !attachments.length) continue;
 
-                    const messageType = text
-                        ? "text"
-                        : attachments[0]?.type === "image"
-                          ? "image"
-                          : attachments[0]?.type === "video"
-                            ? "video"
-                            : attachments[0]?.type === "audio"
-                              ? "audio"
-                              : "file";
+                    const messageType = text ? "text"
+                        : attachments[0]?.type === "image" ? "image"
+                        : attachments[0]?.type === "video" ? "video"
+                        : attachments[0]?.type === "audio" ? "audio"
+                        : "file";
 
-                    const sentAt = event.timestamp
-                        ? new Date(Number(event.timestamp))
-                        : new Date();
+                    const sentAt = event.timestamp ? new Date(Number(event.timestamp)) : new Date();
 
-                  const conversation = await MetaConversation.findOneAndUpdate(
-                    {
-                        userId: integration.userId,
-                        platform: isInstagram ? "instagram" : "facebook",
-                        pageId: integration.pageId,
-                        externalConversationId: participantId,
-                    },
-                    {
-                        $set: {
-                            participantId: participantId,
-                        },
-                        $setOnInsert: {
+                    const conversation = await MetaConversation.findOneAndUpdate(
+                        {
                             userId: integration.userId,
                             platform: isInstagram ? "instagram" : "facebook",
                             pageId: integration.pageId,
                             externalConversationId: participantId,
-                            status: "open",
                         },
-                    },
-                    {
-                        new: true,
-                        upsert: true,
-                        setDefaultsOnInsert: true,
-                    }
-                );
+                        {
+                            $set: { participantId: participantId },
+                            $setOnInsert: {
+                                userId: integration.userId,
+                                platform: isInstagram ? "instagram" : "facebook",
+                                pageId: integration.pageId,
+                                externalConversationId: participantId,
+                                status: "open",
+                            },
+                        },
+                        { new: true, upsert: true, setDefaultsOnInsert: true }
+                    );
 
-                // Fetch customer name and profile picture
-                if (
-                    !conversation.participantName ||
-                    conversation.participantName === "Instagram/Facebook user" ||
-                    !conversation.participantProfilePicture
-                ) {
-                    try {
-                        const profile = await meta.getMessagingParticipantProfile({
+                    // Fetch customer name and profile picture
+                    if (!conversation.participantName || conversation.participantName === "Instagram/Facebook user" || !conversation.participantProfilePicture) {
+                        try {
+                            const profile = await meta.getMessagingParticipantProfile({
+                                platform: isInstagram ? "instagram" : "facebook",
+                                participantId,
+                                pageAccessToken: decrypt(integration.accessTokenEncrypted),
+                            });
                             
-                            platform: isInstagram ? "instagram" : "facebook",
-                            participantId,
-                            pageAccessToken: decrypt(
-                                integration.accessTokenEncrypted
-                            ),
-                        });
-                        console.log("META CUSTOMER PROFILE RESPONSE:", profile);
-                        if (profile) {
-                            if (profile.name) {
-                                conversation.participantName = profile.name;
+                            if (profile) {
+                                if (profile.name) conversation.participantName = profile.name;
+                                if (profile.picture) conversation.participantProfilePicture = profile.picture;
+                                await conversation.save();
                             }
-
-                            if (profile.picture) {
-                                conversation.participantProfilePicture = profile.picture;
-                            }
-
-                            await conversation.save();
+                        } catch (profileError) {
+                            console.error("META CONTACT PROFILE ERROR:", profileError.metaError || profileError.message);
                         }
-                    } catch (profileError) {
-                        console.error(
-                            "META CONTACT PROFILE ERROR:",
-                            profileError.metaError || profileError.message
-                        );
                     }
-                }
-
-                let messageResult;
 
                     try {
-                        messageResult = await MetaMessage.updateOne(
+                        const messageResult = await MetaMessage.updateOne(
                             {
                                 userId: integration.userId,
                                 externalMessageId: String(message.mid),
@@ -1733,9 +1438,7 @@ exports.receiveWebhook = async (
                                 $setOnInsert: {
                                     userId: integration.userId,
                                     conversationId: conversation._id,
-                                    platform: isInstagram
-                                        ? "instagram"
-                                        : "facebook",
+                                    platform: isInstagram ? "instagram" : "facebook",
                                     externalMessageId: String(message.mid),
                                     senderId,
                                     recipientId,
@@ -1744,392 +1447,126 @@ exports.receiveWebhook = async (
                                     text,
                                     attachments,
                                     sentAt,
-                                    deliveryStatus: direction === "inbound"
-                                        ? "received"
-                                        : "sent",
+                                    deliveryStatus: direction === "inbound" ? "received" : "sent",
                                 },
                             },
                             { upsert: true }
                         );
+
+                        const isNewMessage = messageResult.upsertedCount === 1 || Boolean(messageResult.upsertedId);
+
+                        if (isNewMessage) {
+                            await MetaConversation.updateOne(
+                                { _id: conversation._id },
+                                {
+                                    $set: {
+                                        instagramAccountId: integration.instagramAccountId || "",
+                                        participantId,
+                                        lastMessageText: text || (attachments.length ? "Attachment" : ""),
+                                        lastMessageAt: sentAt,
+                                        lastMessageDirection: direction,
+                                    },
+                                    ...(direction === "inbound" ? { $inc: { unreadCount: 1 } } : {}),
+                                }
+                            );
+                        }
                     } catch (error) {
-                        if (error.code === 11000) {
-                            continue;
-                        }
-
-                        throw error;
+                        if (error.code !== 11000) throw error;
                     }
-
-                    const isNewMessage =
-                        messageResult.upsertedCount === 1 ||
-                        Boolean(messageResult.upsertedId);
-
-                    if (!isNewMessage) {
-                        continue;
-                    }
-
-                    await MetaConversation.updateOne(
-                        { _id: conversation._id },
-                        {
-                            $set: {
-                                instagramAccountId:
-                                    integration.instagramAccountId || "",
-                                participantId,
-                                lastMessageText:
-                                    text ||
-                                    (attachments.length ? "Attachment" : ""),
-                                lastMessageAt: sentAt,
-                                lastMessageDirection: direction,
-                            },
-                            ...(direction === "inbound"
-                                ? { $inc: { unreadCount: 1 } }
-                                : {}),
-                        }
-                    );
-
-                    console.log("META INBOX MESSAGE SAVED:", {
-                        platform: isInstagram ? "instagram" : "facebook",
-                        messageId: String(message.mid),
-                        direction,
-                        userId: String(integration.userId),
-                    });
                 }
             }
-
-            if (webhookObject === "instagram") {
-                return;
-            }
-
+            if (webhookObject === "instagram") return;
         }
 
-        for (
-            const entry of
-            req.body?.entry || []
-        ) {
-            const pageId =
-                String(
-                    entry.id || ""
-                );
+        // ==========================================
+        // FACEBOOK LEADGEN WEBHOOK
+        // ==========================================
+        for (const entry of req.body?.entry || []) {
+            const pageId = String(entry.id || "");
+            if (!pageId) continue;
 
-            if (!pageId) {
-                continue;
-            }
+            const integrations = await MetaIntegration.find({ pageId, isActive: true });
+            if (integrations.length === 0) continue;
+            if (integrations.length > 1) continue;
 
-            const integrations =
-                await MetaIntegration.find({
-                    pageId,
-                    isActive: true,
-                });
+            const integration = integrations[0];
 
-            if (
-                integrations.length ===
-                0
-            ) {
-                console.log(
-                    "META WEBHOOK PAGE NOT CONNECTED:",
-                    pageId
-                );
+            for (const change of entry.changes || []) {
+                const value = change.value || {};
+                const leadId = value.leadgen_id || value.lead_id;
 
-                continue;
-            }
+                if (!leadId) continue;
 
-            if (
-                integrations.length >
-                1
-            ) {
-                console.error(
-                    "META WEBHOOK DUPLICATE ACTIVE PAGE INTEGRATIONS:",
-                    pageId,
-                    integrations.map(
-                        (item) =>
-                            String(
-                                item.userId
-                            )
-                    )
-                );
+                const token = decrypt(integration.accessTokenEncrypted);
+                const metaLead = await meta.getLeadDetails(leadId, token);
+                const allowedFrom = getAllowedMetaLeadStart();
+                const metaCreatedAt = new Date(metaLead?.created_time || "");
 
-                continue;
-            }
-
-            const integration =
-                integrations[0];
-
-            for (
-                const change of
-                entry.changes || []
-            ) {
-                const value =
-                    change.value || {};
-
-                const leadId =
-                    value.leadgen_id ||
-                    value.lead_id;
-
-                if (!leadId) {
+                if (!Number.isNaN(metaCreatedAt.getTime()) && metaCreatedAt < allowedFrom) {
                     continue;
                 }
 
-                console.log(
-                    "META WEBHOOK LEAD RECEIVED:",
-                    leadId,
-                    "PAGE:",
-                    pageId,
-                    "USER:",
-                    integration.userId
-                );
+                const fields = fieldMap(metaLead.field_data);
+                const adId = String(metaLead?.ad_id || value?.ad_id || "").trim();
+                const campaignId = String(metaLead?.campaign_id || value?.campaign_id || "").trim();
 
-                const token =
-                    decrypt(
-                        integration
-                            .accessTokenEncrypted
-                    );
+                const campaignResult = await getMetaCampaignName(campaignId, adId, token);
+                const resolvedCampaignId = campaignResult.campaignId;
+                const serviceName = campaignResult.serviceName;
 
-                const metaLead =
-                    await meta.getLeadDetails(
-                        leadId,
-                        token
-                    );
-
-                const allowedFrom =
-                    getAllowedMetaLeadStart();
-
-                const metaCreatedAt =
-                    new Date(
-                        metaLead?.created_time ||
-                            ""
-                    );
-
-                if (
-                    !Number.isNaN(
-                        metaCreatedAt.getTime()
-                    ) &&
-                    metaCreatedAt <
-                        allowedFrom
-                ) {
-                    console.log(
-                        "OLD META LEAD IGNORED:",
-                        leadId,
-                        metaLead.created_time
-                    );
-
-                    continue;
-                }
-
-                if (
-                    Number.isNaN(
-                        metaCreatedAt.getTime()
-                    )
-                ) {
-                    console.log(
-                        "META LEAD CREATED TIME MISSING:",
-                        leadId
-                    );
-                }
-
-                const fields =
-                    fieldMap(
-                        metaLead.field_data
-                    );
-
-                const adId =
-                    String(
-                        metaLead?.ad_id ||
-                            value?.ad_id ||
-                            ""
-                    ).trim();
-
-                const campaignId =
-                    String(
-                        metaLead?.campaign_id ||
-                            value?.campaign_id ||
-                            ""
-                    ).trim();
-
-                const campaignResult =
-                    await getMetaCampaignName(
-                        campaignId,
-                        adId,
-                        token
-                    );
-
-                const resolvedCampaignId =
-                    campaignResult.campaignId;
-
-                const serviceName =
-                    campaignResult.serviceName;
-
-                const existing =
-                    await Lead.findOne({
-                        userId:
-                            integration.userId,
-
-                        metaLeadId:
-                            String(leadId),
-                    });
+                const existing = await Lead.findOne({ userId: integration.userId, metaLeadId: String(leadId) });
 
                 if (existing) {
-                    let changed =
-                        false;
-
-                    if (
-                        serviceName &&
-                        !String(
-                            existing.service ||
-                                ""
-                        ).trim()
-                    ) {
-                        existing.service =
-                            serviceName;
-
+                    let changed = false;
+                    if (serviceName && !String(existing.service || "").trim()) {
+                        existing.service = serviceName;
                         changed = true;
                     }
-
-                    if (
-                        resolvedCampaignId &&
-                        !String(
-                            existing.metaCampaignId ||
-                                ""
-                        ).trim()
-                    ) {
-                        existing.metaCampaignId =
-                            resolvedCampaignId;
-
+                    if (resolvedCampaignId && !String(existing.metaCampaignId || "").trim()) {
+                        existing.metaCampaignId = resolvedCampaignId;
                         changed = true;
                     }
-
-                    if (
-                        adId &&
-                        !String(
-                            existing.metaAdId ||
-                                ""
-                        ).trim()
-                    ) {
-                        existing.metaAdId =
-                            adId;
-
+                    if (adId && !String(existing.metaAdId || "").trim()) {
+                        existing.metaAdId = adId;
                         changed = true;
                     }
-
-                    if (changed) {
-                        await existing.save();
-                    }
-
-                    await processNewLead(
-                        existing
-                    );
-
-                    console.log(
-                        "META WEBHOOK DUPLICATE LEAD:",
-                        leadId
-                    );
-
+                    if (changed) await existing.save();
+                    await processNewLead(existing);
                     continue;
                 }
 
-                const source =
-                    detectMetaLeadSource(
-                        value,
-                        req,
-                        metaLead
-                    );
+                const source = detectMetaLeadSource(value, req, metaLead);
+                const name = fields.full_name || [fields.first_name, fields.last_name].filter(Boolean).join(" ") || "Unknown";
+                const phone = fields.phone_number || fields.phone || "";
+                const email = fields.email || "";
+                const service = serviceName || fields.service || fields.treatment || "";
+                const landingPage = fields.form_name || integration.pageName || "";
 
-                const name =
-                    fields.full_name ||
-                    [
-                        fields.first_name,
-                        fields.last_name,
-                    ]
-                        .filter(Boolean)
-                        .join(" ") ||
-                    "Unknown";
-
-                const phone =
-                    fields.phone_number ||
-                    fields.phone ||
-                    "";
-
-                const email =
-                    fields.email ||
-                    "";
-
-                const service =
-                    serviceName ||
-                    fields.service ||
-                    fields.treatment ||
-                    "";
-
-                const landingPage =
-                    fields.form_name ||
-                    integration.pageName ||
-                    "";
-
-                const lead =
-                    await Lead.create({
-                        userId:
-                            integration.userId,
-
-                        metaLeadId:
-                            String(leadId),
-
-                        metaPageId:
-                            pageId,
-
-                        metaFormId:
-                            metaLead.form_id ||
-                            value.form_id ||
-                            "",
-
-                        metaAdId:
-                            adId,
-
-                        metaCampaignId:
-                            resolvedCampaignId,
-
-                        name,
-                        email,
-                        phone,
-
-                        source,
-                        stage: "New",
-                        service,
-                        landingPage,
-
-                        pageUrl:
-                            fields.page_url ||
-                            fields.website ||
-                            "",
-
-                        utmSource:
-                            source.toLowerCase(),
-
-                        utmMedium:
-                            "paid_social",
-
-                        firstNote:
-                            `Lead received from ${source} Lead Ads`,
-                    });
-
-                await processNewLead(
-                    lead
-                );
-
-                console.log(
-                    "META WEBHOOK LEAD SAVED:",
-                    leadId,
-                    "SOURCE:",
+                const lead = await Lead.create({
+                    userId: integration.userId,
+                    metaLeadId: String(leadId),
+                    metaPageId: pageId,
+                    metaFormId: metaLead.form_id || value.form_id || "",
+                    metaAdId: adId,
+                    metaCampaignId: resolvedCampaignId,
+                    name,
+                    email,
+                    phone,
                     source,
-                    "PAGE:",
-                    pageId,
-                    "USER:",
-                    integration.userId
-                );
+                    stage: "New",
+                    service,
+                    landingPage,
+                    pageUrl: fields.page_url || fields.website || "",
+                    utmSource: source.toLowerCase(),
+                    utmMedium: "paid_social",
+                    firstNote: `Lead received from ${source} Lead Ads`,
+                });
+
+                await processNewLead(lead);
             }
         }
     } catch (error) {
-        console.error(
-            "META/WHATSAPP WEBHOOK PROCESSING ERROR:",
-            error.response?.data ||
-                error.message
-        );
+        console.error("META/WHATSAPP WEBHOOK PROCESSING ERROR:", error.response?.data || error.message);
     }
 };
 
