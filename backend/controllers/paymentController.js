@@ -1649,6 +1649,7 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
+        // Verify Razorpay signature
         const generatedSignature = crypto
             .createHmac(
                 "sha256",
@@ -1666,6 +1667,7 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
+        // Find the order using Razorpay order ID
         const order = await Order.findOne({
             razorpayOrderId: razorpay_order_id,
         });
@@ -1677,6 +1679,10 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
+        /**
+         * Mark voucher as used safely.
+         * This function is retry-safe.
+         */
         const markVoucherUsed = async (paidOrder) => {
             if (
                 paidOrder.orderType !== "subscription" ||
@@ -1687,20 +1693,29 @@ exports.verifyPayment = async (req, res) => {
 
             const normalizedCode = String(
                 paidOrder.voucherCode
-            ).trim().toUpperCase();
+            )
+                .trim()
+                .toUpperCase();
 
-            if (!["SV-FIRST01", "SV-RENEW500"].includes(normalizedCode)) {
-                console.error("UNEXPECTED VOUCHER CODE:", normalizedCode);
+            if (
+                !["SV-FIRST01", "SV-RENEW500"].includes(
+                    normalizedCode
+                )
+            ) {
+                console.error(
+                    "UNEXPECTED VOUCHER CODE:",
+                    normalizedCode
+                );
+
                 return false;
             }
 
-            // Renewal voucher: usage is tracked through the paid order itself.
-            // The createOrder validation checks prior paid orders for this code.
+            // Renewal voucher is tracked by paid orders.
             if (normalizedCode === "SV-RENEW500") {
                 return true;
             }
 
-            // First-purchase voucher: consume the assigned voucher atomically.
+            // First purchase voucher
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: paidOrder.userId,
@@ -1711,55 +1726,93 @@ exports.verifyPayment = async (req, res) => {
                     $set: {
                         "assignedVoucher.isUsed": true,
                         "assignedVoucher.usedAt": new Date(),
-                        "assignedVoucher.orderId": paidOrder._id,
+                        "assignedVoucher.orderId":
+                            paidOrder._id,
                     },
                 },
-                { new: true }
+                {
+                    new: true,
+                }
             );
 
             if (updatedUser) {
                 return true;
             }
 
-            // Allow retries for the same already-recorded order.
-            const alreadyUsedByThisOrder = await User.findOne({
-                _id: paidOrder.userId,
-                "assignedVoucher.code": normalizedCode,
-                "assignedVoucher.isUsed": true,
-                "assignedVoucher.orderId": paidOrder._id,
-            });
+            // If this same order already consumed the voucher,
+            // allow the verification retry.
+            const alreadyUsedByThisOrder =
+                await User.findOne({
+                    _id: paidOrder.userId,
+                    "assignedVoucher.code":
+                        normalizedCode,
+                    "assignedVoucher.isUsed": true,
+                    "assignedVoucher.orderId":
+                        paidOrder._id,
+                });
 
             if (alreadyUsedByThisOrder) {
                 return true;
             }
 
-            console.error("FIRST VOUCHER USAGE NOT RECORDED:", {
-                orderId: String(paidOrder._id),
-                userId: String(paidOrder.userId),
-                voucherCode: normalizedCode,
-            });
+            console.error(
+                "FIRST VOUCHER USAGE NOT RECORDED:",
+                {
+                    orderId: String(paidOrder._id),
+                    userId: String(paidOrder.userId),
+                    voucherCode: normalizedCode,
+                }
+            );
 
             return false;
         };
 
-        // Idempotent retry for already-paid orders.
+        /**
+         * IMPORTANT:
+         * If this exact payment has already been processed,
+         * do not create/process it again.
+         */
         if (order.paymentStatus === "paid") {
+            // Safety check: another payment ID for an already
+            // paid order should not overwrite the original one.
+            if (
+                order.razorpayPaymentId &&
+                order.razorpayPaymentId !==
+                    razorpay_payment_id
+            ) {
+                console.error(
+                    "DUPLICATE PAYMENT ATTEMPT DETECTED:",
+                    {
+                        orderId: String(order._id),
+                        razorpayOrderId:
+                            razorpay_order_id,
+                        existingPaymentId:
+                            order.razorpayPaymentId,
+                        receivedPaymentId:
+                            razorpay_payment_id,
+                    }
+                );
+
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        "This order has already been paid.",
+                });
+            }
+
+            // Recover failed/pending add-on activation
             if (
                 order.orderType === "addon" &&
-                order.addonActivationStatus !== "activated"
+                order.addonActivationStatus !==
+                    "activated"
             ) {
                 try {
                     await activateAddon(order);
 
-                    order.addonActivationStatus = "activated";
-                    await order.save();
+                    order.addonActivationStatus =
+                        "activated";
 
-                    return res.status(200).json({
-                        success: true,
-                        message: "Add-on activation completed",
-                        order,
-                        orderType: order.orderType,
-                    });
+                    await order.save();
                 } catch (error) {
                     console.error(
                         "ADD-ON RETRY ACTIVATION ERROR:",
@@ -1774,11 +1827,13 @@ exports.verifyPayment = async (req, res) => {
                 }
             }
 
+            // Retry-safe voucher confirmation
             if (
                 order.orderType === "subscription" &&
                 order.voucherCode
             ) {
-                const voucherMarked = await markVoucherUsed(order);
+                const voucherMarked =
+                    await markVoucherUsed(order);
 
                 if (!voucherMarked) {
                     console.error(
@@ -1788,16 +1843,25 @@ exports.verifyPayment = async (req, res) => {
                 }
             }
 
-            // Recover a paid subscription order if payment was saved but
-            // activation failed before the previous request completed.
-            if (order.orderType === "subscription") {
-                const paidUser = await User.findById(order.userId);
+            // Recover subscription activation only if required
+            let user = await User.findById(
+                order.userId
+            );
+
+            if (
+                order.orderType === "subscription"
+            ) {
                 const alreadyActivated =
-                    paidUser?.subscription?.status === "active" &&
-                    String(paidUser.subscription.orderId || "") === String(order._id);
+                    user?.subscription?.status ===
+                        "active" &&
+                    String(
+                        user?.subscription?.orderId || ""
+                    ) === String(order._id);
 
                 if (!alreadyActivated) {
-                    await activatePaidOrder(order);
+                    user = await activatePaidOrder(
+                        order
+                    );
                 }
             }
 
@@ -1809,15 +1873,20 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
-        const currentYear = new Date().getFullYear();
+        /**
+         * Generate invoice number before marking payment paid.
+         */
+        const currentYear =
+            new Date().getFullYear();
 
         if (!order.invoiceNumber) {
-            const paidOrdersCount = await Order.countDocuments({
-                paymentStatus: "paid",
-                invoiceNumber: {
-                    $regex: `^SV_${currentYear}_`,
-                },
-            });
+            const paidOrdersCount =
+                await Order.countDocuments({
+                    paymentStatus: "paid",
+                    invoiceNumber: {
+                        $regex: `^SV_${currentYear}_`,
+                    },
+                });
 
             const invoiceSequence = String(
                 paidOrdersCount + 1
@@ -1827,13 +1896,21 @@ exports.verifyPayment = async (req, res) => {
                 `SV_${currentYear}_${invoiceSequence}`;
         }
 
+        /**
+         * Mark this order as paid.
+         * Only this existing order document is updated.
+         */
         order.paymentStatus = "paid";
-        order.razorpayPaymentId = razorpay_payment_id;
-        order.razorpaySignature = razorpay_signature;
+        order.razorpayPaymentId =
+            razorpay_payment_id;
+        order.razorpaySignature =
+            razorpay_signature;
 
         await order.save();
 
-        let user = await User.findById(order.userId);
+        let user = await User.findById(
+            order.userId
+        );
 
         if (!user) {
             return res.status(404).json({
@@ -1842,35 +1919,64 @@ exports.verifyPayment = async (req, res) => {
             });
         }
 
+        /**
+         * SUBSCRIPTION FLOW
+         */
         if (
-            order.orderType === "subscription" &&
-            order.voucherCode
+            order.orderType === "subscription"
         ) {
-            const voucherMarked = await markVoucherUsed(order);
+            if (order.voucherCode) {
+                const voucherMarked =
+                    await markVoucherUsed(order);
 
-            if (!voucherMarked) {
-                console.error(
-                    "Voucher usage could not be confirmed for paid order:",
-                    order._id
-                );
+                if (!voucherMarked) {
+                    console.error(
+                        "Voucher usage could not be confirmed for paid order:",
+                        order._id
+                    );
+                }
             }
+
+            user = await activatePaidOrder(
+                order
+            );
         }
 
-        user = await activatePaidOrder(order);
-
+        /**
+         * ADD-ON FLOW
+         */
         if (order.orderType === "addon") {
-            order.addonActivationStatus = "activated";
-            await order.save();
+            try {
+                user = await activateAddon(order);
+
+                order.addonActivationStatus =
+                    "activated";
+
+                await order.save();
+            } catch (error) {
+                console.error(
+                    "ADD-ON ACTIVATION ERROR:",
+                    error.message
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Payment was successful, but add-on activation failed.",
+                });
+            }
         }
 
         await sendInvoiceIfNeeded(order);
 
         return res.status(200).json({
             success: true,
+
             message:
                 order.orderType === "addon"
                     ? "Add-on payment verified successfully"
                     : "Payment verified successfully",
+
             order,
             orderType: order.orderType,
 
@@ -1879,65 +1985,134 @@ exports.verifyPayment = async (req, res) => {
                     ? {
                         type: order.addonType,
                         name: order.addonName,
+
                         quantity: Math.max(
                             1,
                             Math.round(
-                                Number(order.addonQuota || 0) /
                                 Number(
-                                    ADDONS[order.addonType]
-                                        ?.quotaPerMonth || 1
-                                )
+                                    order.addonQuota || 0
+                                ) /
+                                    Number(
+                                        ADDONS[
+                                            order.addonType
+                                        ]?.quotaPerMonth || 1
+                                    )
                             )
                         ),
+
                         months: 1,
-                        quota: order.addonQuota,
+
+                        quota:
+                            order.addonQuota || 0,
+
                         used:
-                            user?.addons?.[order.addonType]?.used || 0,
+                            user?.addons?.[
+                                order.addonType
+                            ]?.used || 0,
+
                         startsAt:
-                            user?.addons?.[order.addonType]?.startsAt ||
-                            order.addonStartsAt,
+                            user?.addons?.[
+                                order.addonType
+                            ]?.startsAt ||
+                            order.addonStartsAt ||
+                            null,
+
                         expiresAt:
-                            user?.addons?.[order.addonType]?.expiresAt ||
-                            order.addonExpiresAt,
+                            user?.addons?.[
+                                order.addonType
+                            ]?.expiresAt ||
+                            order.addonExpiresAt ||
+                            null,
                     }
                     : null,
 
             purchasedAddons:
                 order.orderType === "subscription"
-                    ? (order.addons || []).map((addon) => ({
-                        type: addon.addonType,
-                        quantity: addon.quantity,
-                        quota: addon.quota,
-                        unitPrice: addon.unitPrice,
-                        amount: addon.amount,
-                        months: 1,
-                        startsAt:
-                            user?.addons?.[addon.addonType]?.startsAt || null,
-                        expiresAt:
-                            user?.addons?.[addon.addonType]?.expiresAt || null,
-                    }))
+                    ? (order.addons || []).map(
+                          (addon) => ({
+                              type:
+                                  addon.addonType,
+
+                              quantity:
+                                  addon.quantity,
+
+                              quota:
+                                  addon.quota,
+
+                              unitPrice:
+                                  addon.unitPrice,
+
+                              amount:
+                                  addon.amount,
+
+                              months: 1,
+
+                              startsAt:
+                                  user?.addons?.[
+                                      addon.addonType
+                                  ]?.startsAt || null,
+
+                              expiresAt:
+                                  user?.addons?.[
+                                      addon.addonType
+                                  ]?.expiresAt || null,
+                          })
+                      )
                     : [],
 
-            subscription: user?.subscription
-                ? {
-                    planId: user.subscription.planId || "",
-                    planName: user.subscription.planName || "",
-                    status: user.subscription.status || "active",
-                    billingCycle: user.subscription.billingCycle || "",
-                    startedAt: user.subscription.startedAt || null,
-                    expiresAt: user.subscription.expiresAt || null,
-                    nextBillingAt:
-                        user.subscription.nextBillingAt || null,
-                    amount: Number(user.subscription.amount || 0),
-                    currency: user.subscription.currency || "INR",
-                    setupFeePaid: Boolean(
-                        user.subscription.setupFeePaid
-                    ),
-                }
-                : null,
+            subscription:
+                user?.subscription
+                    ? {
+                          planId:
+                              user.subscription
+                                  .planId || "",
+
+                          planName:
+                              user.subscription
+                                  .planName || "",
+
+                          status:
+                              user.subscription
+                                  .status || "active",
+
+                          billingCycle:
+                              user.subscription
+                                  .billingCycle || "",
+
+                          startedAt:
+                              user.subscription
+                                  .startedAt || null,
+
+                          expiresAt:
+                              user.subscription
+                                  .expiresAt || null,
+
+                          nextBillingAt:
+                              user.subscription
+                                  .nextBillingAt || null,
+
+                          amount: Number(
+                              user.subscription
+                                  .amount || 0
+                          ),
+
+                          currency:
+                              user.subscription
+                                  .currency || "INR",
+
+                          setupFeePaid:
+                              Boolean(
+                                  user.subscription
+                                      .setupFeePaid
+                              ),
+                      }
+                    : null,
         });
     } catch (error) {
-        console.error("VERIFY PAYMENT ERROR:", error);
+        console.error(
+            "VERIFY PAYMENT ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,

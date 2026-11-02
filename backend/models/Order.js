@@ -112,6 +112,11 @@ const orderSchema = new mongoose.Schema(
             default: 0,
         },
 
+        amountInINR: {
+        type: Number,
+        default: 0,
+    },
+
         planAmount: {
             type: Number,
             default: 0,

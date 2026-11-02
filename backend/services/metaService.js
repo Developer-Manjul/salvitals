@@ -137,7 +137,7 @@ exports.exchangeCodeForToken =
             process.env.META_REDIRECT_URI,
 
           code,
-        },
+        }, 
       }
     );
 
