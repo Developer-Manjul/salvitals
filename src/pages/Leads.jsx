@@ -298,6 +298,7 @@ function getLeadOwner(lead, isHealthcare, user) {
   if (!lead) return "—";
 
   return (
+    lead.preferredDoctor ||
     lead.owner ||
     user?.name ||
     "Unassigned"
@@ -1817,13 +1818,13 @@ const exportAllLeads = () => {
         <div className="lead-header-actions">
 
           <button
-  type="button"
-  className="dash-btn"
-  onClick={exportAllLeads}
-  disabled={loadingLeads || leads.length === 0}
->
-  Export
-</button>
+          type="button"
+          className="dash-btn"
+          onClick={exportAllLeads}
+          disabled={loadingLeads || leads.length === 0}
+        >
+          Export
+        </button>
 
           <button
             type="button"

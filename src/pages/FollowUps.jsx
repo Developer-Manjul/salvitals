@@ -165,8 +165,7 @@ function normalizeFollowUp(lead, followUp, index) {
       "",
     owner:
       followUp?.assignedTo ||
-      lead.owner ||
-      "Unassigned",
+      "ILSS- Ashwani Hospital",
     date: followUp?.date,
     createdAt:
       followUp?.createdAt ||
@@ -627,7 +626,10 @@ function FollowUpDetails({
   const terminal = isCompleted({ status });
   const scheduledDate = item?.date;
   const createdAt = item?.createdAt || item?.created_at;
-  const ownerName = item?.owner || item?.assignedTo || "Unassigned";
+  const ownerName =
+    item?.assignedTo ||
+    item?.owner ||
+    "ILSS- Ashwani Hospital";
 
   return (
     <div className="followup-detail-page lead-details-page">
@@ -907,6 +909,9 @@ export default function FollowUps({
   const [services, setServices] =
     useState([]);
 
+  const [doctors, setDoctors] =
+    useState([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -997,6 +1002,7 @@ export default function FollowUps({
       const [
         leadsResponse,
         servicesResponse,
+        doctorsResponse,
       ] = await Promise.all([
         fetch(
           buildApiUrl("/api/leads"),
@@ -1014,6 +1020,15 @@ export default function FollowUps({
               Authorization: `Bearer ${token}`,
               "Content-Type":
                 "application/json",
+            },
+          }
+        ),
+
+        fetch(
+          buildApiUrl("/api/team-members?type=doctor"),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
             },
           }
         ),
@@ -1048,6 +1063,17 @@ export default function FollowUps({
         );
       } else {
         setServices([]);
+      }
+
+      if (doctorsResponse.ok) {
+        const doctorsData = await doctorsResponse.json();
+        setDoctors(
+          (Array.isArray(doctorsData?.members) ? doctorsData.members : [])
+            .filter((doctor) => String(doctor?.status || "").toLowerCase() === "active")
+            .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+        );
+      } else {
+        setDoctors([]);
       }
     } catch (err) {
       console.error(
@@ -3100,6 +3126,26 @@ export default function FollowUps({
                       required
                     />
                   </div>
+                </div>
+
+                <div className="followup-form-group">
+                  <label>
+                    Select Doctor
+                  </label>
+
+                  <select
+                    value={form.assignedTo}
+                    onChange={(event) =>
+                      updateForm("assignedTo", event.target.value)
+                    }
+                  >
+                    <option value="">ILSS- Ashwani Hospital</option>
+                    {doctors.map((doctor) => (
+                      <option key={doctor._id} value={doctor.name}>
+                        {doctor.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="followup-form-group">

@@ -21,7 +21,6 @@ const baseSettingsGroups = [
   {
   label: "COMMUNICATION",
   items: [
-    "WhatsApp",
     "WhatsApp Lead Notifications",
     "Integrations",
     "Notification Settings",
@@ -29,7 +28,7 @@ const baseSettingsGroups = [
 },
   {
     label: "BILLING",
-    items: ["Invoice Settings", "Plan & Billing"],
+    items: ["Plan & Billing"],
   },
 ];
 
@@ -89,12 +88,9 @@ const SETTINGS_PERMISSION_MAP = {
 
     "Pharmacy": ["pharmacy.view", "pharmacy.create"],
 
-  WhatsApp: ["whatsapp.view", "whatsapp.use"],
-
   "WhatsApp Lead Notifications": ["leads.view"],
   Integrations: ["integrations.view"],
   "Notification Settings": ["notifications.view"],
-  "Invoice Settings": ["invoices.view"],
   "Plan & Billing": ["billing.view"],
 };
 
@@ -3017,16 +3013,6 @@ export default function Settings({
       case "Lead Stages":
         return <LeadStagesContent />;
 
-      case "WhatsApp":
-        return (
-          <ComingSoonContent
-            title="WhatsApp"
-            description="Connect and manage your WhatsApp lead communication from one place."
-            icon="◔"
-            whatsapp
-          />
-        );
-
       case "WhatsApp Lead Notifications":
   return hasWhatsAppLeadsAddon
     ? <LeadWhatsAppSettings />
@@ -3047,15 +3033,6 @@ export default function Settings({
             title="AI Settings"
             description="Manage AI-powered CRM assistance and automation from one place."
             icon="✦"
-          />
-        );
-
-      case "Invoice Settings":
-        return (
-          <ComingSoonContent
-            title="Invoice Settings"
-            description="Configure invoice preferences, business details and billing documents."
-            icon="▤"
           />
         );
 

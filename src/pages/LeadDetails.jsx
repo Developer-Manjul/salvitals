@@ -265,8 +265,10 @@ function getActivities(lead) {
       createdAt,
       completed,
       user:
+        followUp.assignedTo ||
         followUp.userName ||
         followUp.createdByName,
+      assignedTo: followUp.assignedTo || "",
     });
   });
 
@@ -385,6 +387,12 @@ export default function LeadDetails({
   const [followUpNote, setFollowUpNote] =
     useState("");
 
+  const [doctors, setDoctors] =
+    useState([]);
+
+  const [assignedDoctor, setAssignedDoctor] =
+    useState("");
+
   const [saving, setSaving] =
     useState(false);
 
@@ -459,6 +467,44 @@ export default function LeadDetails({
   useEffect(() => {
     loadLead();
   }, [leadId]);
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          buildApiUrl("/api/team-members?type=doctor"),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setDoctors(
+            (Array.isArray(data.members) ? data.members : [])
+              .filter(
+                (doctor) =>
+                  String(doctor?.status || "").toLowerCase() === "active"
+              )
+              .sort((a, b) =>
+                String(a.name || "").localeCompare(String(b.name || ""))
+              )
+          );
+        }
+      } catch (doctorError) {
+        console.error("LOAD DOCTORS ERROR:", doctorError);
+      }
+    };
+
+    loadDoctors();
+  }, []);
 
   useEffect(() => {
     const loadStages = async () => {
@@ -568,6 +614,17 @@ export default function LeadDetails({
     () => getNextFollowUp(lead),
     [lead]
   );
+
+  const displayedDoctor =
+    nextFollowUp?.assignedTo ||
+    lead?.preferredDoctor ||
+    "";
+
+  const displayedOwner =
+    nextFollowUp?.assignedTo ||
+    lead?.owner ||
+    user?.name ||
+    "—";
 
   const latestNote =
     savedNotes.length > 0
@@ -925,6 +982,8 @@ export default function LeadDetails({
               selectedDate.toISOString(),
             note:
               followUpNote.trim(),
+            assignedTo:
+              assignedDoctor.trim(),
           }),
         }
       );
@@ -961,6 +1020,7 @@ export default function LeadDetails({
     setNotice("");
     setFollowUpDate("");
     setFollowUpNote("");
+    setAssignedDoctor("");
     setShowFollowUp(true);
   };
 
@@ -1064,15 +1124,11 @@ export default function LeadDetails({
               </span>
 
               <span>
-                {lead.preferredDoctor ||
-                  "—"}
+                {displayedDoctor || "—"}
               </span>
 
               <span>
-                {getOwner(
-                  lead,
-                  user
-                )}
+                {displayedOwner}
               </span>
             </div>
           </div>
@@ -1540,6 +1596,9 @@ export default function LeadDetails({
                               {
                                 activity.detail
                               }
+                              {activity.assignedTo
+                                ? ` · Doctor: ${activity.assignedTo}`
+                                : " · ILSS- Ashwani Hospital"}
                             </p>
 
                             <small
@@ -1608,14 +1667,11 @@ export default function LeadDetails({
               ],
               [
                 "Doctor / Preferred doctor",
-                lead.preferredDoctor,
+                displayedDoctor,
               ],
               [
                 "Assigned staff / Owner",
-                getOwner(
-                  lead,
-                  user
-                ),
+                displayedOwner,
               ],
               [
                 "Priority",
@@ -1941,6 +1997,49 @@ export default function LeadDetails({
                   }
                   required
                 />
+              </label>
+
+              <label>
+                <span>
+                  Select Doctor
+                </span>
+
+                <select
+                  className="lead-follow-up-doctor-select"
+                  value={assignedDoctor}
+                  onChange={(event) =>
+                    setAssignedDoctor(event.target.value)
+                  }
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    minHeight: "44px",
+                    padding: "0 40px 0 13px",
+                    border: "1px solid #d7e2ef",
+                    borderRadius: "9px",
+                    backgroundColor: "#ffffff",
+                    color: "#243247",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    cursor: "pointer",
+                    appearance: "auto",
+                  }}
+                >
+                  <option value="">
+                    {getOwner(lead, user)}
+                  </option>
+                  {doctors.map((doctor) => (
+                    <option
+                      key={doctor._id}
+                      value={doctor.name}
+                    >
+                      {doctor.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label>
