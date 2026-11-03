@@ -719,13 +719,20 @@ const connectWhatsApp = () => {
   whatsappSignupDetailsRef.current = null;
   whatsappSignupProcessingRef.current = false;
 
+  setWhatsappBusy(true);
+
   window.FB.login(
     (response) => {
+      console.log("WHATSAPP FB LOGIN RESPONSE:", response);
+      console.log("WHATSAPP AUTH RESPONSE:", response?.authResponse);
+
       const code = response?.authResponse?.code;
 
       if (!code) {
         setWhatsappBusy(false);
-        setError("WhatsApp signup was cancelled or authorization code was not returned.");
+        setError(
+          `WhatsApp authorization code missing. Status: ${response?.status || "unknown"}`
+        );
         return;
       }
 
@@ -737,8 +744,8 @@ const connectWhatsApp = () => {
       response_type: "code",
       override_default_response_type: true,
       extras: {
-      version: "v4",
-    },
+        version: "v4",
+      },
     }
   );
 };
@@ -1288,29 +1295,51 @@ const connectWhatsApp = () => {
   }
 
   const handleWhatsAppMessage = (event) => {
-    if (event.origin !== "https://www.facebook.com") return;
+  if (
+    event.origin !== "https://www.facebook.com" &&
+    event.origin !== "https://web.facebook.com"
+  ) {
+    return;
+  }
 
-    const payload = event.data;
+  let payload = event.data;
 
-    if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
-
-    const data = payload.data || {};
-
-    const wabaId = data.waba_id;
-    const phoneNumberId = data.phone_number_id;
-
-    if (!wabaId || !phoneNumberId) {
-      setError("WhatsApp account details were not received from Meta.");
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch (error) {
+      console.warn("Unable to parse WhatsApp signup event:", error);
       return;
     }
+  }
 
-    whatsappSignupDetailsRef.current = {
-      wabaId,
-      phoneNumberId,
-    };
+  console.log("WHATSAPP EMBEDDED SIGNUP EVENT:", payload);
 
-    finishWhatsAppSignup();
+  if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+
+  const data = payload.data || {};
+
+  const wabaId = data.waba_id;
+  const phoneNumberId = data.phone_number_id;
+
+  if (!wabaId || !phoneNumberId) {
+    console.error("WhatsApp account details missing:", data);
+    setError("WhatsApp account details were not received from Meta.");
+    return;
+  }
+
+  whatsappSignupDetailsRef.current = {
+    wabaId,
+    phoneNumberId,
   };
+
+  console.log("WHATSAPP SIGNUP DETAILS RECEIVED:", {
+    wabaId,
+    phoneNumberId,
+  });
+
+  finishWhatsAppSignup();
+};
 
   window.addEventListener("message", handleWhatsAppMessage);
 
