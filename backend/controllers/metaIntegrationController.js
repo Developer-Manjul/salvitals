@@ -1163,26 +1163,33 @@ exports.receiveWebhook = async (req, res) => {
 
                     const incomingMessages = Array.isArray(value.messages) ? value.messages : [];
                     const phoneNumberId = String(value.metadata?.phone_number_id || "").trim();
+                    // ==========================================
                     // SALEVITALS OFFICIAL WHATSAPP IDENTIFICATION
-                    const isPlatformWhatsApp =
-                        phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim() &&
-                        String(entry.id || "").trim() ===
-                        String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
+                    // ==========================================
+
+                    const entryWabaId = String(entry.id || "").trim();
+                    const configuredWabaId = String(
+                        process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || ""
+                    ).trim();
+
+                    const configuredPhoneId = String(
+                        process.env.WHATSAPP_PHONE_NUMBER_ID || ""
+                    ).trim();
+
+                    const isPhoneMatched = phoneNumberId === configuredPhoneId;
+                    const isWabaMatched = entryWabaId === configuredWabaId;
+
+                    const isPlatformWhatsApp = isPhoneMatched && isWabaMatched;
 
                     console.log("PLATFORM WHATSAPP CHECK:", {
                         isPlatformWhatsApp,
-
-                        phoneNumberMatched:
-                            phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
-
-                        businessAccountMatched:
-                            String(entry.id || "").trim() ===
-                            String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim(),
-
-                        // DEBUG VALUES
-                        entryIdRaw: JSON.stringify(entry.id),
-                        wabaEnvRaw: JSON.stringify(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID),
-                        wabaEnvLength: String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").length,
+                        phoneNumberMatched: isPhoneMatched,
+                        businessAccountMatched: isWabaMatched,
+                        entryWabaId,
+                        configuredWabaId,
+                        entryWabaLength: entryWabaId.length,
+                        configuredWabaLength: configuredWabaId.length,
+                        incomingMessageCount: incomingMessages.length,
                     });
                     // ==========================================
                     // SALEVITALS OFFICIAL WHATSAPP INBOX
