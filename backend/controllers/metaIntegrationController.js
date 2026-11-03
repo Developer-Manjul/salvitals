@@ -17,6 +17,9 @@ const MetaConversation = require("../models/MetaConversation");
 const MetaMessage = require("../models/MetaMessage");
 const WhatsAppIntegration = require("../models/WhatsAppIntegration");
 
+const PlatformWhatsAppConversation = require("../models/PlatformWhatsAppConversation");
+const PlatformWhatsAppMessage = require("../models/PlatformWhatsAppMessage");
+
 const {
     getWorkspaceContext,
     hasPermission,
@@ -1128,7 +1131,6 @@ function detectMetaLeadSource(
 }
 
 exports.receiveWebhook = async (req, res) => {
-    // FIX: META KO TURANT 200 OK BHEJNA ZAROORI HAI WARNA WEBHOOK BLOCK HO JATA HAI
     res.status(200).send("EVENT_RECEIVED");
 
     console.log("META WEBHOOK RECEIVED:", JSON.stringify({
@@ -1147,10 +1149,6 @@ exports.receiveWebhook = async (req, res) => {
 
     try {
         const webhookObject = String(req.body?.object || "");
-
-        // ==========================================
-        // WHATSAPP WEBHOOK PROCESSING
-        // ==========================================
         if (webhookObject === "whatsapp_business_account") {
             console.log("========================================");
             console.log("WHATSAPP WEBHOOK RECEIVED");
@@ -1163,11 +1161,126 @@ exports.receiveWebhook = async (req, res) => {
                         continue;
                     }
 
-                    // WHATSAPP INCOMING MESSAGES
                     const incomingMessages = Array.isArray(value.messages) ? value.messages : [];
                     const phoneNumberId = String(value.metadata?.phone_number_id || "").trim();
+                    // SALEVITALS OFFICIAL WHATSAPP IDENTIFICATION
+                    const isPlatformWhatsApp =
+                        phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim() &&
+                        String(entry.id || "").trim() ===
+                        String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
 
-                    if (incomingMessages.length && phoneNumberId) {
+                    console.log("PLATFORM WHATSAPP CHECK:", {
+                        isPlatformWhatsApp,
+                        phoneNumberMatched: phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
+                        businessAccountMatched:
+                            String(entry.id || "").trim() ===
+                            String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim(),
+                    });
+                    // ==========================================
+                    // SALEVITALS OFFICIAL WHATSAPP INBOX
+                    // ==========================================
+                    if (isPlatformWhatsApp && incomingMessages.length) {
+                        for (const waMessage of incomingMessages) {
+                            const senderId = String(waMessage.from || "").trim();
+                            const messageId = String(waMessage.id || "").trim();
+
+                            if (!senderId || !messageId) continue;
+
+                            const contact = (value.contacts || []).find(
+                                item => String(item.wa_id) === senderId
+                            );
+
+                            const participantName = String(
+                                contact?.profile?.name || senderId
+                            );
+
+                            const messageType = String(waMessage.type || "other");
+
+                            let text = "";
+                            let attachments = [];
+
+                            if (messageType === "text") {
+                                text = String(waMessage.text?.body || "").trim();
+                            } else if (
+                                ["image", "video", "audio", "document", "sticker"].includes(messageType)
+                            ) {
+                                const media = waMessage[messageType] || {};
+
+                                attachments = [{
+                                    type: messageType === "document" ? "file" : messageType,
+                                    url: "",
+                                    name: String(media.filename || media.id || ""),
+                                    mediaId: String(media.id || ""),
+                                }];
+
+                                text = String(media.caption || "");
+                            }
+
+                            if (!text && !attachments.length) {
+                                text = `[${messageType} message]`;
+                            }
+
+                            const sentAt = waMessage.timestamp
+                                ? new Date(Number(waMessage.timestamp) * 1000)
+                                : new Date();
+
+                            const conversation =
+                                await PlatformWhatsAppConversation.findOneAndUpdate(
+                                    { externalConversationId: senderId },
+                                    {
+                                        $set: {
+                                            participantId: senderId,
+                                            participantName,
+                                            lastMessageText: text || "Attachment",
+                                            lastMessageAt: sentAt,
+                                            lastMessageDirection: "inbound",
+                                        },
+                                        $setOnInsert: {
+                                            externalConversationId: senderId,
+                                            status: "open",
+                                        },
+                                        $inc: { unreadCount: 1 },
+                                    },
+                                    {
+                                        new: true,
+                                        upsert: true,
+                                        setDefaultsOnInsert: true,
+                                    }
+                                );
+
+                            const messageResult =
+                                await PlatformWhatsAppMessage.updateOne(
+                                    { externalMessageId: messageId },
+                                    {
+                                        $setOnInsert: {
+                                            conversationId: conversation._id,
+                                            externalMessageId: messageId,
+                                            senderId,
+                                            recipientId: phoneNumberId,
+                                            direction: "inbound",
+                                            messageType,
+                                            text,
+                                            attachments,
+                                            sentAt,
+                                            deliveryStatus: "received",
+                                            rawEvent: waMessage,
+                                        },
+                                    },
+                                    { upsert: true }
+                                );
+
+                            if (messageResult.upsertedCount === 1) {
+                                console.log("SALE VITALS OFFICIAL WHATSAPP MESSAGE SAVED:", {
+                                    senderId,
+                                    messageId,
+                                    conversationId: String(conversation._id),
+                                });
+                            }
+                        }
+                    }
+
+
+                   if (incomingMessages.length && phoneNumberId && !isPlatformWhatsApp) {
                         const integration = await WhatsAppIntegration.findOne({
                             phoneNumberId: phoneNumberId,
                             whatsappBusinessAccountId: String(entry.id || ""),
@@ -1284,6 +1397,28 @@ exports.receiveWebhook = async (req, res) => {
 
                     // WHATSAPP MESSAGE STATUS
                     const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+                    
+                    for (const statusData of statuses) {
+                        const messageId = String(statusData?.id || "").trim();
+                        const status = String(statusData?.status || "").trim();
+
+                        if (!messageId) continue;
+
+                        await PlatformWhatsAppMessage.updateOne(
+                            { externalMessageId: messageId },
+                            {
+                                $set: {
+                                    deliveryStatus: status,
+                                },
+                            }
+                        );
+
+                        console.log("PLATFORM WHATSAPP STATUS UPDATED:", {
+                            messageId,
+                            status,
+                        });
+                    }
+
                     if (!statuses.length) continue;
 
                     for (const statusData of statuses) {
