@@ -1171,10 +1171,18 @@ exports.receiveWebhook = async (req, res) => {
 
                     console.log("PLATFORM WHATSAPP CHECK:", {
                         isPlatformWhatsApp,
-                        phoneNumberMatched: phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
+
+                        phoneNumberMatched:
+                            phoneNumberId === String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
+
                         businessAccountMatched:
                             String(entry.id || "").trim() ===
                             String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim(),
+
+                        // DEBUG VALUES
+                        entryIdRaw: JSON.stringify(entry.id),
+                        wabaEnvRaw: JSON.stringify(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID),
+                        wabaEnvLength: String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").length,
                     });
                     // ==========================================
                     // SALEVITALS OFFICIAL WHATSAPP INBOX
