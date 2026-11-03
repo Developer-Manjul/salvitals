@@ -265,9 +265,9 @@ function getActivities(lead) {
       createdAt,
       completed,
       user:
-        followUp.assignedTo ||
+        followUp.createdByName ||
         followUp.userName ||
-        followUp.createdByName,
+        "",
       assignedTo: followUp.assignedTo || "",
     });
   });
@@ -615,13 +615,13 @@ export default function LeadDetails({
     [lead]
   );
 
+  // Doctor assigned to the next follow-up is separate from the lead owner.
   const displayedDoctor =
     nextFollowUp?.assignedTo ||
     lead?.preferredDoctor ||
-    "";
+    "—";
 
   const displayedOwner =
-    nextFollowUp?.assignedTo ||
     lead?.owner ||
     user?.name ||
     "—";
@@ -1598,7 +1598,9 @@ export default function LeadDetails({
                               }
                               {activity.assignedTo
                                 ? ` · Doctor: ${activity.assignedTo}`
-                                : " · ILSS- Ashwani Hospital"}
+                                : lead?.preferredDoctor
+                                  ? ` · Doctor: ${lead.preferredDoctor}`
+                                  : ""}
                             </p>
 
                             <small

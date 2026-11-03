@@ -165,7 +165,11 @@ function normalizeFollowUp(lead, followUp, index) {
       "",
     owner:
       followUp?.assignedTo ||
-      "ILSS- Ashwani Hospital",
+      lead?.owner ||
+      lead?.assignedTo ||
+      lead?.preferredDoctor ||
+      lead?.assignedStaff ||
+      "Unassigned",
     date: followUp?.date,
     createdAt:
       followUp?.createdAt ||
@@ -629,7 +633,11 @@ function FollowUpDetails({
   const ownerName =
     item?.assignedTo ||
     item?.owner ||
-    "ILSS- Ashwani Hospital";
+    lead?.owner ||
+    lead?.assignedTo ||
+    lead?.preferredDoctor ||
+    lead?.assignedStaff ||
+    "Unassigned";
 
   return (
     <div className="followup-detail-page lead-details-page">
@@ -3139,7 +3147,7 @@ export default function FollowUps({
                       updateForm("assignedTo", event.target.value)
                     }
                   >
-                    <option value="">ILSS- Ashwani Hospital</option>
+                    <option value="">Use lead owner</option>
                     {doctors.map((doctor) => (
                       <option key={doctor._id} value={doctor.name}>
                         {doctor.name}
