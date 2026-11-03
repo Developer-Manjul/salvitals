@@ -1294,7 +1294,7 @@ const connectWhatsApp = () => {
     document.body.appendChild(script);
   }
 
-  const handleWhatsAppMessage = (event) => {
+ const handleWhatsAppMessage = (event) => {
   console.log("META MESSAGE RECEIVED:", {
     origin: event.origin,
     data: event.data,
@@ -1304,36 +1304,43 @@ const connectWhatsApp = () => {
     event.origin !== "https://www.facebook.com" &&
     event.origin !== "https://web.facebook.com"
   ) {
-    console.warn("WhatsApp event ignored. Unknown origin:", event.origin);
     return;
   }
 
   let payload = event.data;
 
-  // Parse event if Meta sends JSON string
+  // Parse outer JSON
   if (typeof payload === "string") {
     try {
       payload = JSON.parse(payload);
     } catch (error) {
-      console.warn("Unable to parse WhatsApp signup event:", error);
+      console.warn("Unable to parse Meta event:", error);
       return;
     }
   }
 
+  if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+
   console.log("WHATSAPP EMBEDDED SIGNUP EVENT:", payload);
 
-  if (payload?.type !== "WA_EMBEDDED_SIGNUP") {
-    return;
-  }
+  let data = payload.data || {};
 
-  const data = payload.data || {};
+  // IMPORTANT: Meta can send payload.data as a JSON string
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch (error) {
+      console.error("Unable to parse WhatsApp account details:", error);
+      setError("Unable to read WhatsApp account details from Meta.");
+      return;
+    }
+  }
 
   const wabaId = data.waba_id;
   const phoneNumberId = data.phone_number_id;
 
   if (!wabaId || !phoneNumberId) {
     console.error("WhatsApp account details missing:", data);
-
     setError("WhatsApp account details were not received from Meta.");
     return;
   }
@@ -1348,7 +1355,6 @@ const connectWhatsApp = () => {
     phoneNumberId,
   });
 
-  // Complete signup when authorization code is also available
   finishWhatsAppSignup();
 };
 
