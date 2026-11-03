@@ -1,8 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "../styles/WhatsAppInbox.scss";
-
-// CRM API — client-wise inbox, not SaleVitals official inbox.
 const API_BASE = (
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_API_BASE_URL ||
@@ -131,7 +129,6 @@ export default function WhatsAppInbox() {
     const [filter, setFilter] = useState("All");
     const [search, setSearch] = useState("");
     const [draft, setDraft] = useState("");
-    const [statusMenuOpen, setStatusMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("Reply");
     const [note, setNote] = useState("");
     const [refreshing, setRefreshing] = useState(false);
@@ -275,13 +272,6 @@ export default function WhatsAppInbox() {
         ).length,
     }), [conversations]);
 
-    const changeStatus = (status) => {
-        // Status is managed by the CRM inbox workflow.
-        // No unsupported status API is called here.
-        setStatusMenuOpen(false);
-        setError("Status update API is not configured yet.");
-    };
-
     const sendMessage = async () => {
         const text = draft.trim();
 
@@ -319,24 +309,9 @@ export default function WhatsAppInbox() {
 
     const selectConversation = (id) => {
         setSelectedId(id);
-        setStatusMenuOpen(false);
         setActiveTab("Reply");
         setError("");
         setSuccess("");
-    };
-
-    const addTag = () => {
-        setError("Tag management is not connected to this inbox API yet.");
-    };
-
-    const removeTag = () => {
-        setError("Tag management is not connected to this inbox API yet.");
-    };
-
-    const copyNumber = () => {
-        if (selected?.phone) {
-            navigator.clipboard?.writeText(selected.phone);
-        }
     };
 
     return (
@@ -483,72 +458,17 @@ export default function WhatsAppInbox() {
                                     <h2>{selected.name}</h2>
                                     <p>
                                         {selected.phone}
-                                        <button
-                                            type="button"
-                                            title="Copy number"
-                                            onClick={copyNumber}
-                                        >
-                                            ▢
-                                        </button>
                                     </p>
                                 </div>
 
-                                <div className="wa-status-wrap">
-                                    <button
-                                        type="button"
-                                        className={`wa-status-pill ${statusClass(selected.status)}`}
-                                        onClick={() => setStatusMenuOpen((v) => !v)}
-                                    >
-                                        <i /> {selected.status}
-                                        <span>⌄</span>
-                                    </button>
+                                <div className="wa-status-wrap"><span className={`wa-status-pill ${statusClass(selected.status)}`}><i /> {selected.status}</span></div>
 
-                                    {statusMenuOpen && (
-                                        <div className="wa-status-menu">
-                                            {["Open", "Closed"].map((status) => (
-                                                <button
-                                                    key={status}
-                                                    type="button"
-                                                    onClick={() => changeStatus(status)}
-                                                >
-                                                    <i className={statusClass(status)} />
-                                                    {status}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <button
-                                    className="wa-more-btn"
+                                <button className="wa-more-btn"
                                     type="button"
                                     title="More options"
                                     onClick={() => setError("More actions are not configured yet.")}
                                 >
                                     ⋮
-                                </button>
-                            </div>
-
-                            <div className="wa-tag-strip">
-                                {(selected.tags || []).slice(0, 3).map((tag) => (
-                                    <span className="wa-tag" key={tag}>
-                                        {tag}
-                                        <button
-                                            type="button"
-                                            onClick={() => removeTag(tag)}
-                                            aria-label={`Remove ${tag}`}
-                                        >
-                                            ×
-                                        </button>
-                                    </span>
-                                ))}
-
-                                <button
-                                    className="wa-add-tag"
-                                    type="button"
-                                    onClick={addTag}
-                                >
-                                    ＋ Add Tag
                                 </button>
                             </div>
 
@@ -785,20 +705,11 @@ export default function WhatsAppInbox() {
                             <section className="wa-side-section">
                                 <div className="wa-side-title">
                                     <h3>Tags</h3>
-                                    <button type="button" onClick={addTag}>
-                                        ＋ Add Tag
-                                    </button>
                                 </div>
                                 <div className="wa-side-tags">
                                     {(selected.tags || []).map((tag) => (
                                         <span key={tag}>
                                             {tag}
-                                            <button
-                                                type="button"
-                                                onClick={() => removeTag(tag)}
-                                            >
-                                                ×
-                                            </button>
                                         </span>
                                     ))}
                                 </div>
@@ -807,12 +718,6 @@ export default function WhatsAppInbox() {
                             <section className="wa-side-section wa-notes-section">
                                 <div className="wa-side-title">
                                     <h3>Notes</h3>
-                                    <button
-                                        type="button"
-                                        onClick={() => setError("Notes API is not connected yet.")}
-                                    >
-                                        ＋ Add Note
-                                    </button>
                                 </div>
                                 <textarea
                                     value={note}
