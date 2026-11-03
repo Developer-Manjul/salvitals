@@ -1295,15 +1295,22 @@ const connectWhatsApp = () => {
   }
 
   const handleWhatsAppMessage = (event) => {
+  console.log("META MESSAGE RECEIVED:", {
+    origin: event.origin,
+    data: event.data,
+  });
+
   if (
     event.origin !== "https://www.facebook.com" &&
     event.origin !== "https://web.facebook.com"
   ) {
+    console.warn("WhatsApp event ignored. Unknown origin:", event.origin);
     return;
   }
 
   let payload = event.data;
 
+  // Parse event if Meta sends JSON string
   if (typeof payload === "string") {
     try {
       payload = JSON.parse(payload);
@@ -1315,7 +1322,9 @@ const connectWhatsApp = () => {
 
   console.log("WHATSAPP EMBEDDED SIGNUP EVENT:", payload);
 
-  if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+  if (payload?.type !== "WA_EMBEDDED_SIGNUP") {
+    return;
+  }
 
   const data = payload.data || {};
 
@@ -1324,13 +1333,14 @@ const connectWhatsApp = () => {
 
   if (!wabaId || !phoneNumberId) {
     console.error("WhatsApp account details missing:", data);
+
     setError("WhatsApp account details were not received from Meta.");
     return;
   }
 
   whatsappSignupDetailsRef.current = {
-    wabaId,
-    phoneNumberId,
+    wabaId: String(wabaId),
+    phoneNumberId: String(phoneNumberId),
   };
 
   console.log("WHATSAPP SIGNUP DETAILS RECEIVED:", {
@@ -1338,6 +1348,7 @@ const connectWhatsApp = () => {
     phoneNumberId,
   });
 
+  // Complete signup when authorization code is also available
   finishWhatsAppSignup();
 };
 
