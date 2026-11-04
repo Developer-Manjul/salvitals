@@ -111,6 +111,10 @@ function isYes(text) {
   const value =
     normalizeMessage(text);
 
+  if (isNo(value)) {
+    return false;
+  }
+
   if (
     /\b(haan|ha|han|yes|yup|yeah|sure|ok|okay)\b/i.test(value) &&
     /\b(book|appointment|kar|kr|do|de|please)\b/i.test(value)
@@ -147,6 +151,17 @@ function isYes(text) {
 function isNo(text) {
   const value =
     normalizeMessage(text);
+
+  if (
+    /\b(just information|sirf information|only information|information chahiye)\b/i.test(value) ||
+    /\b(abhi nahi|abhi nahin|filhal nahi|filhal nahin)\b/i.test(value) ||
+    /\babhi\b.*\b(?:nahi|nahin)\b/i.test(value) ||
+    /\b(?:nahi|nahin)\s+(?:appointment\s+)?(?:nahi\s+)?(?:chahiye|chaahiye)\b/i.test(value) ||
+    /\b(?:nahi|nahin)\s+(?:abhi\s+)?(?:appointment\s+)?(?:nahi\s+)?(?:chahiye|chaahiye)\b/i.test(value) ||
+    /\b(not now|no need)\b/i.test(value)
+  ) {
+    return true;
+  }
 
   if (
     /^(no|nahi|nahin|n)\s+(abhi nahi|thanks?|thank you)$/i.test(value) ||
@@ -1483,6 +1498,30 @@ exports.publicMessage =
       
       
       if (
+        conversation.contactOfferPending &&
+        isYes(messageText)
+      ) {
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
+              "Sure. Please share your name first.",
+          });
+
+        conversation.contactOfferPending =
+          false;
+        await conversation.save();
+
+        return res.json({
+          success: true,
+          message: reply,
+          conversation,
+          visitorMessage,
+        });
+      }
+
+      if (
         conversation.appointmentOfferPending &&
         isYes(messageText)
       ) {
@@ -1518,32 +1557,6 @@ exports.publicMessage =
       }
 
       if (
-        conversation.contactOfferPending &&
-        isYes(messageText) &&
-        !conversation.visitorName &&
-        !conversation.visitorPhone
-      ) {
-        const reply =
-          await saveAIReply({
-            assistant,
-            conversation,
-            text:
-              "Sure. Please share your name first.",
-          });
-
-        conversation.contactOfferPending =
-          false;
-        await conversation.save();
-
-        return res.json({
-          success: true,
-          message: reply,
-          conversation,
-          visitorMessage,
-        });
-      }
-
-      if (
         conversation.appointmentOfferPending &&
         isNo(messageText)
       ) {
@@ -1551,15 +1564,13 @@ exports.publicMessage =
           false;
         conversation.appointmentOfferDeclined =
           true;
-        conversation.messagesAfterAppointmentOffer =
-          0;
+        conversation.appointmentFormOpen =
+          false;
         await conversation.save();
       } else if (
         isNo(messageText) &&
         conversation.appointmentOfferDeclined
       ) {
-        conversation.messagesAfterAppointmentOffer =
-          0;
         await conversation.save();
       }
 
@@ -1827,6 +1838,7 @@ exports.publicMessage =
       }
 
       if (
+        !isNo(messageText) &&
         isDirectAppointmentRequest(
           messageText
         )
@@ -1860,6 +1872,7 @@ exports.publicMessage =
       }
 
       if (
+        conversation.appointmentOfferPending &&
         hasAppointmentOffer(
           previousMessages
         )

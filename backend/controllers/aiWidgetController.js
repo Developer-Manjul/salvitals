@@ -1862,13 +1862,28 @@ body.scrollTop = body.scrollHeight;
         state.conversation;
 
       if (data.message) {
+        var appointmentFormActionValid =
+          data.action === "open_appointment_form" &&
+          data.conversation &&
+          data.conversation.appointmentFormOpen === true;
+
         if (
           data.action === "open_appointment_form" &&
+          appointmentFormActionValid &&
           !data.message.metadata
         ) {
           data.message.metadata = {
             type: "appointment_form",
           };
+        }
+
+        if (
+          data.action === "open_appointment_form" &&
+          !appointmentFormActionValid &&
+          data.message.metadata &&
+          data.message.metadata.type === "appointment_form"
+        ) {
+          delete data.message.metadata.type;
         }
 
         if (
