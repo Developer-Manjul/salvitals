@@ -1,4 +1,5 @@
 const Lead = require("../models/Lead");
+const Contact = require("../models/Contact");
 const User = require("../models/User");
 const { processNewLead } = require("../services/leadProcessingService");
 
@@ -326,6 +327,32 @@ exports.updateLead = async (req, res) => {
                 message:
                     "Lead not found",
             });
+        }
+
+        const updatedStage =
+            String(stage || lead.stage || "")
+                .toLowerCase()
+                .replace(/[_-]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        if (
+            updatedStage === "junk" ||
+            updatedStage === "junk lead"
+        ) {
+            await Contact.updateMany(
+                {
+                    userId:
+                        context.workspaceOwnerId,
+                    leadId: lead._id,
+                    deletedAt: null,
+                },
+                {
+                    $set: {
+                        deletedAt: new Date(),
+                    },
+                }
+            );
         }
 
         return res.status(200).json({

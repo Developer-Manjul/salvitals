@@ -623,10 +623,39 @@ exports.getCurrentBilling = async (req, res) => {
                 : 0,
         };
 
+        const junkLeads =
+            await Lead.find({
+                userId: ownerId,
+            })
+                .select("_id stage leadStage status")
+                .lean();
+        const junkLeadIds =
+            junkLeads
+                .filter((lead) => {
+                    const stage =
+                        String(
+                            lead.stage ||
+                            lead.leadStage ||
+                            lead.status ||
+                            ""
+                        )
+                            .toLowerCase()
+                            .replace(/[_-]+/g, " ")
+                            .replace(/\s+/g, " ")
+                            .trim();
+
+                    return stage === "junk" ||
+                        stage === "junk lead";
+                })
+                .map((lead) => lead._id);
+
         const [contactCount, leadCount] = await Promise.all([
             Contact.countDocuments({
                 userId: ownerId,
                 deletedAt: null,
+                leadId: {
+                    $nin: junkLeadIds,
+                },
             }),
 
             Lead.countDocuments({

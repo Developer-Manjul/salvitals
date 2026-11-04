@@ -24,6 +24,27 @@ function contactPayloadFromLead(lead) {
   };
 }
 
+function normalizeEmail(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePhone(value) {
+  return String(value || "")
+    .replace(/\D/g, "");
+}
+
+function addNormalizedIdentity(payload) {
+  return {
+    ...payload,
+    email: String(payload.email || "").trim(),
+    phone: String(payload.phone || "").trim(),
+    normalizedEmail: normalizeEmail(payload.email),
+    normalizedPhone: normalizePhone(payload.phone),
+  };
+}
+
 function contactPayloadFromInput(input, userId) {
   return {
     userId,
@@ -119,10 +140,23 @@ async function getContactUsage(
   const activePlan =
     plan || await getActivePlan(userId);
 
+  const junkContacts =
+    await Lead.find({
+      userId,
+    }).select("_id stage leadStage status").lean();
+
+  const junkLeadIds =
+    junkContacts
+      .filter(isJunkLead)
+      .map((lead) => lead._id);
+
   const contactCount =
     await Contact.countDocuments({
       userId,
       deletedAt: null,
+      leadId: {
+        $nin: junkLeadIds,
+      },
     });
 
   const used = contactCount;
@@ -150,6 +184,24 @@ async function getContactUsage(
   };
 }
 
+async function getAuthoritativeContactCount(userId) {
+  const junkLeads = await Lead.find({
+    userId,
+  }).select("_id stage leadStage status").lean();
+
+  const junkLeadIds = junkLeads
+    .filter(isJunkLead)
+    .map((lead) => lead._id);
+
+  return Contact.countDocuments({
+    userId,
+    deletedAt: null,
+    leadId: {
+      $nin: junkLeadIds,
+    },
+  });
+}
+
 /*
 |--------------------------------------------------------------------------
 | Create Contact With Quota
@@ -160,6 +212,7 @@ async function createContactWithQuota(
   payload,
   userId
 ) {
+  payload = addNormalizedIdentity(payload);
   const session =
     await mongoose.startSession();
 
@@ -191,23 +244,61 @@ async function createContactWithQuota(
               }).session(session)
             : null;
 
-        if (existing) {
+        let matchingContact = existing;
+
+        if (!matchingContact && payload.normalizedPhone) {
+          const phoneMatches =
+            await Contact.find({
+              userId,
+            }).select("_id leadId phone email normalizedPhone normalizedEmail leadCreatedAt").session(session);
+
+          matchingContact = phoneMatches.find((contact) =>
+            normalizePhone(contact.normalizedPhone || contact.phone) === payload.normalizedPhone
+          ) || null;
+        }
+
+        if (!matchingContact && payload.normalizedEmail) {
+          const emailMatches =
+            await Contact.find({
+              userId,
+            }).select("_id leadId phone email normalizedPhone normalizedEmail leadCreatedAt").session(session);
+
+          matchingContact = emailMatches.find((contact) =>
+            normalizeEmail(contact.normalizedEmail || contact.email) === payload.normalizedEmail
+          ) || null;
+        }
+
+        if (matchingContact) {
+          matchingContact.deletedAt = null;
+          matchingContact.normalizedEmail =
+            payload.normalizedEmail;
+          matchingContact.normalizedPhone =
+            payload.normalizedPhone;
+
           if (
-            !existing.leadCreatedAt &&
+            payload.leadId &&
+            !matchingContact.leadId
+          ) {
+            matchingContact.leadId =
+              payload.leadId;
+          }
+
+          if (
+            !matchingContact.leadCreatedAt &&
             payload.leadCreatedAt
           ) {
-            existing.leadCreatedAt =
+            matchingContact.leadCreatedAt =
               payload.leadCreatedAt;
-
-            await existing.save({
-              session,
-            });
           }
+
+          await matchingContact.save({
+            session,
+          });
 
           result = {
             created: false,
             duplicate: true,
-            contact: existing,
+            contact: matchingContact,
           };
 
           return;
@@ -216,10 +307,23 @@ async function createContactWithQuota(
         const plan =
           await getActivePlan(userId);
 
+        const junkLeads =
+          await Lead.find({
+            userId,
+          }).select("_id stage leadStage status").lean();
+
+        const junkLeadIds =
+          junkLeads
+            .filter(isJunkLead)
+            .map((lead) => lead._id);
+
         const contactCount =
         await Contact.countDocuments({
           userId,
           deletedAt: null,
+          leadId: {
+            $nin: junkLeadIds,
+          },
         }).session(session);
 
       const used = contactCount;
@@ -283,6 +387,42 @@ async function createContactWithQuota(
     }
 
     return result;
+  } catch (error) {
+    if (
+      error?.code === 11000 ||
+      error?.code === 11001
+    ) {
+      const duplicate = payload.leadId
+        ? await Contact.findOne({
+            userId,
+            leadId: payload.leadId,
+            deletedAt: null,
+          })
+        : payload.normalizedPhone
+          ? await Contact.findOne({
+              userId,
+              deletedAt: null,
+              normalizedPhone: payload.normalizedPhone,
+            })
+          : payload.normalizedEmail
+            ? await Contact.findOne({
+                userId,
+                deletedAt: null,
+                normalizedEmail: payload.normalizedEmail,
+              })
+            : null;
+
+      if (duplicate) {
+        return {
+          created: false,
+          duplicate: true,
+          contact: duplicate,
+          usage: await getContactUsage(userId),
+        };
+      }
+    }
+
+    throw error;
   } finally {
     await session.endSession();
   }
@@ -298,6 +438,14 @@ async function createContactFromLead(
   lead
 ) {
   try {
+    if (isJunkLead(lead)) {
+      return {
+        created: false,
+        skipped: true,
+        reason: "junk",
+      };
+    }
+
     const result =
       await createContactWithQuota(
         contactPayloadFromLead(
@@ -335,5 +483,7 @@ module.exports = {
   createContactFromLead,
   createContactWithQuota,
   getContactUsage,
+  getAuthoritativeContactCount,
   contactPayloadFromInput,
+  addNormalizedIdentity,
 };

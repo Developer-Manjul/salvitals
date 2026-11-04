@@ -353,6 +353,8 @@ function ArrowIcon() {
 }
 export default function Contacts({ user }) {
   const [contacts, setContacts] = useState([]);
+  const [authoritativeTotal, setAuthoritativeTotal] =
+    useState(0);
   const [doctorOptions, setDoctorOptions] = useState([]);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -405,6 +407,12 @@ export default function Contacts({ user }) {
           ? data.contacts
           : []
       );
+      setAuthoritativeTotal(
+        Number(data.total ?? data.count ??
+          (Array.isArray(data.contacts)
+            ? data.contacts.length
+            : 0))
+      );
       setUsage(data.usage || null);
       setCurrentPage(1);
     } catch (error) {
@@ -454,7 +462,7 @@ useEffect(() => {
   const visibleContacts = useMemo(() => {
     return contacts.filter((contact) => !isJunkLead(contact));
   }, [contacts]);
-  const totalPages = Math.max(1, Math.ceil(visibleContacts.length / contactsPerPage));
+  const totalPages = Math.max(1, Math.ceil(authoritativeTotal / contactsPerPage));
   const paginatedContacts = useMemo(() => {
     const start = (currentPage - 1) * contactsPerPage;
     return visibleContacts.slice(start, start + contactsPerPage);
@@ -983,7 +991,7 @@ useEffect(() => {
       ) : null}
       <section className="contacts-table-card">
         <div className="contacts-table-meta">
-          {visibleContacts.length} records
+          {authoritativeTotal} records
         </div>
         <div className="contacts-table-wrap">
           <table className="contacts-table">
@@ -1152,7 +1160,7 @@ useEffect(() => {
       {visibleContacts.length > 0 && (
         <div className="contacts-pagination">
           <div className="contacts-pagination-info">
-            Showing {((currentPage - 1) * contactsPerPage) + 1}–{Math.min(currentPage * contactsPerPage, visibleContacts.length)} of {visibleContacts.length}
+            Showing {((currentPage - 1) * contactsPerPage) + 1}–{Math.min(currentPage * contactsPerPage, authoritativeTotal)} of {authoritativeTotal}
           </div>
           <div className="contacts-pagination-controls">
             <button type="button" className="contacts-pagination-btn" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>Previous</button>

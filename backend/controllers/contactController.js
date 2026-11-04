@@ -4,6 +4,7 @@ const Lead = require("../models/Lead");
 const {
   createContactWithQuota,
   getContactUsage,
+  getAuthoritativeContactCount,
   contactPayloadFromInput,
 } = require("../services/contactService");
 
@@ -139,90 +140,51 @@ exports.getContacts = async (req, res) => {
 
     const workspaceOwnerId = context.workspaceOwnerId;
 
-    const [contacts, leads, usage] = await Promise.all([
+    const junkLeadIds = (await Lead.find({
+      userId: workspaceOwnerId,
+    }).select("_id stage leadStage status").lean())
+      .filter((lead) => isJunkLead(lead))
+      .map((lead) => lead._id);
+
+    if (junkLeadIds.length) {
+      await Contact.updateMany(
+        {
+          userId: workspaceOwnerId,
+          leadId: { $in: junkLeadIds },
+          deletedAt: null,
+        },
+        {
+          $set: {
+            deletedAt: new Date(),
+          },
+        }
+      );
+    }
+
+    const [contacts, usage, total] = await Promise.all([
       Contact.find({
         userId: workspaceOwnerId,
         deletedAt: null,
-      })
-        .sort({
-          createdAt: -1,
-        })
-        .lean(),
-
-      Lead.find({
-        userId: workspaceOwnerId,
-      })
-        .sort({
-          createdAt: -1,
-        })
-        .lean(),
-
+      }).sort({ createdAt: -1 }).lean(),
       getUsage(workspaceOwnerId),
+      getAuthoritativeContactCount(workspaceOwnerId),
     ]);
 
-    const junkLeadIds = new Set(
-      leads
-        .filter((lead) => isJunkLead(lead))
-        .map((lead) => String(lead._id))
-    );
-
-    const convertedLeadIds = new Set(
-      contacts
-        .map((contact) =>
-          contact.leadId ? String(contact.leadId) : null
-        )
-        .filter(Boolean)
-    );
-
-    const normalizedContacts = contacts
-      .filter((contact) => {
-        if (!contact.leadId) {
-          return true;
-        }
-
-        return !junkLeadIds.has(String(contact.leadId));
-      })
-      .map((contact) => ({
-        ...contact,
-        recordType: "contact",
-        sourceRecord: "contact",
-        leadCreatedAt:
-          contact.leadCreatedAt ||
-          contact.createdAt ||
-          null,
-      }));
-
-    const normalizedLeads = leads
-      .filter((lead) => {
-        return (
-          !convertedLeadIds.has(String(lead._id)) &&
-          !isJunkLead(lead)
-        );
-      })
-      .map((lead) => mapLeadToContactRecord(lead));
-
-    const combined = [
-      ...normalizedContacts,
-      ...normalizedLeads,
-    ].sort((a, b) => {
-      const dateA = new Date(
-        a.leadCreatedAt ||
-          a.createdAt ||
-          0
-      ).getTime();
-
-      const dateB = new Date(
-        b.leadCreatedAt ||
-          b.createdAt ||
-          0
-      ).getTime();
-
-      return dateB - dateA;
-    });
+    const normalizedContacts = contacts.map((contact) => ({
+      ...contact,
+      recordType: "contact",
+      sourceRecord: "contact",
+      leadCreatedAt:
+        contact.leadCreatedAt ||
+        contact.createdAt ||
+        null,
+    }));
 
     return res.json({
       success: true,
-      contacts: combined,
+      contacts: normalizedContacts,
+      total,
+      count: total,
       usage,
     });
   } catch (error) {

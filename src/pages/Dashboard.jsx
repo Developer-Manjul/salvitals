@@ -1134,7 +1134,12 @@ export default function Dashboard() {
 
       if (contactsResponse.ok) {
         setContactCount(
-          Number(contactsData?.usage?.used ?? 0)
+          Number(
+            contactsData?.total ??
+            contactsData?.count ??
+            contactsData?.usage?.used ??
+            0
+          )
         );
       }
 
