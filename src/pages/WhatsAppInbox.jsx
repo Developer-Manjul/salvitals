@@ -111,6 +111,7 @@ const mapConversation = (item) => ({
     created: formatFullDate(item.createdAt),
     lastMessage: formatFullDate(item.lastMessageAt),
     tags: item.tags || [],
+    aiPaused: Boolean(item.aiPaused),
 });
 
 const mapMessage = (message) => ({
@@ -136,6 +137,16 @@ export default function WhatsAppInbox() {
     const [loadingMessages, setLoadingMessages] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [automationOpen, setAutomationOpen] = useState(false);
+    const [automationSaving, setAutomationSaving] = useState(false);
+    const [automation, setAutomation] = useState({
+        welcomeEnabled: true,
+        welcomeMessage: "",
+        aiReplyEnabled: true,
+        appointmentEnabled: true,
+        leadSyncEnabled: true,
+        humanTakeoverEnabled: true,
+    });
 
     const selected = conversations.find(
         (item) => item.id === selectedId
@@ -216,6 +227,11 @@ export default function WhatsAppInbox() {
 
     useEffect(() => {
         fetchConversations();
+        apiRequest("/api/integrations/meta/whatsapp/automation/settings")
+            .then((data) => {
+                if (data.settings) setAutomation(data.settings);
+            })
+            .catch(() => {});
 
         const interval = window.setInterval(() => {
             fetchConversations(true);
@@ -314,6 +330,42 @@ export default function WhatsAppInbox() {
         setSuccess("");
     };
 
+    const saveAutomation = async () => {
+        setAutomationSaving(true);
+        setError("");
+        try {
+            const data = await apiRequest(
+                "/api/integrations/meta/whatsapp/automation/settings",
+                {
+                    method: "PUT",
+                    body: JSON.stringify(automation),
+                }
+            );
+            setAutomation(data.settings);
+            setSuccess("WhatsApp AI automation settings saved.");
+            setAutomationOpen(false);
+        } catch (err) {
+            setError(err.message || "Unable to save automation settings.");
+        } finally {
+            setAutomationSaving(false);
+        }
+    };
+
+    const resumeAutomation = async () => {
+        if (!selected) return;
+        try {
+            await apiRequest(
+                `/api/integrations/meta/whatsapp/automation/inbox/${selected.id}/resume`,
+                { method: "POST" }
+            );
+            setSuccess("AI automation resumed for this conversation.");
+            await fetchMessages(selected.id, true);
+            await fetchConversations(true);
+        } catch (err) {
+            setError(err.message || "Unable to resume AI automation.");
+        }
+    };
+
     return (
         <main className="wa-inbox-page">
             <header className="wa-page-header">
@@ -330,15 +382,24 @@ export default function WhatsAppInbox() {
                     </p>
                 </div>
 
-                <button
-                    className="wa-refresh-btn"
-                    onClick={() => fetchConversations()}
-                    type="button"
-                    disabled={refreshing}
-                >
-                    <span className={refreshing ? "wa-spin" : ""}>↻</span>
-                    {refreshing ? "Refreshing…" : "Refresh"}
-                </button>
+                <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                        className="wa-refresh-btn"
+                        onClick={() => setAutomationOpen(true)}
+                        type="button"
+                    >
+                        AI &amp; Automation
+                    </button>
+                    <button
+                        className="wa-refresh-btn"
+                        onClick={() => fetchConversations()}
+                        type="button"
+                        disabled={refreshing}
+                    >
+                        <span className={refreshing ? "wa-spin" : ""}>↻</span>
+                        {refreshing ? "Refreshing…" : "Refresh"}
+                    </button>
+                </div>
             </header>
 
             {(error || success) && (
@@ -354,6 +415,52 @@ export default function WhatsAppInbox() {
                     }}
                 >
                     {error || success}
+                </div>
+            )}
+
+            {automationOpen && (
+                <div className="wa-automation-backdrop" role="presentation" onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setAutomationOpen(false);
+                }}>
+                    <section className="wa-automation-panel" role="dialog" aria-modal="true" aria-labelledby="wa-automation-title">
+                        <div className="wa-automation-header">
+                            <div>
+                                <span>WHATSAPP AUTOMATION</span>
+                                <h2 id="wa-automation-title">AI &amp; Automation</h2>
+                            </div>
+                            <button type="button" onClick={() => setAutomationOpen(false)}>×</button>
+                        </div>
+                        <div className="wa-automation-body">
+                            <label className="wa-automation-toggle">
+                                <div><strong>Custom welcome message</strong><span>Send automatically on the patient's first message.</span></div>
+                                <input type="checkbox" checked={automation.welcomeEnabled} onChange={(e) => setAutomation({ ...automation, welcomeEnabled: e.target.checked })} />
+                            </label>
+                            <textarea
+                                className="wa-automation-welcome"
+                                value={automation.welcomeMessage}
+                                onChange={(e) => setAutomation({ ...automation, welcomeMessage: e.target.value })}
+                                disabled={!automation.welcomeEnabled}
+                                maxLength={2000}
+                            />
+                            {[
+                                ["aiReplyEnabled", "AI auto-reply", "Answer patient questions from your clinic knowledge base."],
+                                ["appointmentEnabled", "Appointment booking", "Collect the patient's name and mobile number in WhatsApp."],
+                                ["leadSyncEnabled", "WhatsApp lead creation", "Create or update SaleVitals leads with WhatsApp as the source."],
+                                ["humanTakeoverEnabled", "Human takeover", "Pause AI whenever an agent sends a manual reply."],
+                            ].map(([key, title, description]) => (
+                                <label className="wa-automation-toggle" key={key}>
+                                    <div><strong>{title}</strong><span>{description}</span></div>
+                                    <input type="checkbox" checked={Boolean(automation[key])} onChange={(e) => setAutomation({ ...automation, [key]: e.target.checked })} />
+                                </label>
+                            ))}
+                        </div>
+                        <footer className="wa-automation-footer">
+                            <button type="button" onClick={() => setAutomationOpen(false)}>Cancel</button>
+                            <button type="button" className="primary" disabled={automationSaving} onClick={saveAutomation}>
+                                {automationSaving ? "Saving…" : "Save automation"}
+                            </button>
+                        </footer>
+                    </section>
                 </div>
             )}
 
@@ -460,6 +567,15 @@ export default function WhatsAppInbox() {
                                         {selected.phone}
                                     </p>
                                 </div>
+                                {selected.aiPaused && (
+                                    <button
+                                        type="button"
+                                        className="wa-resume-ai"
+                                        onClick={resumeAutomation}
+                                    >
+                                        Resume AI
+                                    </button>
+                                )}
 
                                 <div className="wa-status-wrap"><span className={`wa-status-pill ${statusClass(selected.status)}`}><i /> {selected.status}</span></div>
 

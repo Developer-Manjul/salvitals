@@ -1,5 +1,135 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+.wa-automation-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(15, 35, 58, .32);
+    backdrop-filter: blur(3px);
+}
+
+.wa-automation-panel {
+    width: min(560px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(15, 35, 58, .22);
+}
+
+.wa-automation-header,
+.wa-automation-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e6edf4;
+}
+
+.wa-automation-header span {
+    color: #08b878;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.wa-automation-header h2 {
+    margin: 3px 0 0;
+    font-size: 19px;
+}
+
+.wa-automation-header button,
+.wa-automation-footer button {
+    border: 1px solid #dce7f2;
+    border-radius: 8px;
+    background: #fff;
+    padding: 9px 12px;
+    cursor: pointer;
+}
+
+.wa-automation-header button {
+    border: 0;
+    font-size: 22px;
+}
+
+.wa-automation-footer {
+    justify-content: flex-end;
+    border-top: 1px solid #e6edf4;
+    border-bottom: 0;
+}
+
+.wa-automation-footer button.primary {
+    border-color: #08b878;
+    background: #08b878;
+    color: #fff;
+    font-weight: 700;
+}
+
+.wa-automation-body {
+    overflow-y: auto;
+    padding: 8px 18px 18px;
+}
+
+.wa-automation-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 14px 0;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.wa-automation-toggle div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wa-automation-toggle strong {
+    font-size: 13px;
+}
+
+.wa-automation-toggle span {
+    color: #71869e;
+    font-size: 11px;
+}
+
+.wa-automation-toggle input {
+    width: 38px;
+    height: 20px;
+    accent-color: #08b878;
+}
+
+.wa-automation-welcome {
+    width: 100%;
+    min-height: 78px;
+    margin: 10px 0 2px;
+    resize: vertical;
+    border: 1px solid #dce7f2;
+    border-radius: 8px;
+    padding: 10px;
+    font: inherit;
+    font-size: 12px;
+}
+
+.wa-resume-ai {
+    margin-left: auto;
+    border: 1px solid #08b878;
+    border-radius: 8px;
+    background: #ecfff6;
+    color: #008d60;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .wa-inbox-page {
     --wa-green: #08b878;
     --wa-green-dark: #009f68;

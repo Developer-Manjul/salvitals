@@ -2,6 +2,7 @@ const express = require("express");
 
 const controller = require("../controllers/metaIntegrationController");
 const inboxController = require("../controllers/metaInboxController");
+const whatsappAutomationController = require("../controllers/whatsappAutomationController");
 
 const router = express.Router();
 
@@ -103,6 +104,21 @@ router.patch(
 router.post(
   "/inbox/:id/messages",
   controller.sendInboxMessage
+);
+
+router.get(
+  "/whatsapp/automation/settings",
+  whatsappAutomationController.getSettings
+);
+
+router.put(
+  "/whatsapp/automation/settings",
+  whatsappAutomationController.updateSettings
+);
+
+router.post(
+  "/whatsapp/automation/inbox/:id/resume",
+  whatsappAutomationController.resumeConversation
 );
 
 router.post(

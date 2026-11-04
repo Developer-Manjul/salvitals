@@ -79,6 +79,28 @@ const metaConversationSchema = new mongoose.Schema(
       enum: ["open", "closed"],
       default: "open",
     },
+
+    aiPaused: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    aiPausedAt: {
+      type: Date,
+      default: null,
+    },
+
+    aiBookingState: {
+      type: String,
+      enum: ["idle", "awaiting_name", "awaiting_phone"],
+      default: "idle",
+    },
+
+    aiBookingName: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );

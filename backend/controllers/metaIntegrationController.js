@@ -16,9 +16,11 @@ const Invoice = require("../models/Invoice");
 const MetaConversation = require("../models/MetaConversation");
 const MetaMessage = require("../models/MetaMessage");
 const WhatsAppIntegration = require("../models/WhatsAppIntegration");
+const WhatsAppAutomationSettings = require("../models/WhatsAppAutomationSettings");
 
 const PlatformWhatsAppConversation = require("../models/PlatformWhatsAppConversation");
 const PlatformWhatsAppMessage = require("../models/PlatformWhatsAppMessage");
+const { processIncomingWhatsApp } = require("../services/whatsappAutomationService");
 
 const {
     getWorkspaceContext,
@@ -1405,6 +1407,20 @@ exports.receiveWebhook = async (req, res) => {
                                         senderId,
                                         messageId,
                                     });
+
+                                    try {
+                                        await processIncomingWhatsApp({
+                                            integration,
+                                            conversation,
+                                            inboundText: text,
+                                            accessToken: decrypt(integration.accessTokenEncrypted),
+                                        });
+                                    } catch (automationError) {
+                                        console.error(
+                                            "WHATSAPP AI AUTOMATION ERROR:",
+                                            automationError.message
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -2368,6 +2384,17 @@ exports.sendInboxMessage = async (req, res) => {
       conversation.lastMessageDirection = "outbound";
 
       await conversation.save();
+
+      if (conversation.platform === "whatsapp") {
+        const automationSettings = await WhatsAppAutomationSettings.findOne({
+          userId: context.workspaceOwnerId,
+        });
+        if (!automationSettings || automationSettings.humanTakeoverEnabled === true) {
+          conversation.aiPaused = true;
+          conversation.aiPausedAt = new Date();
+          await conversation.save();
+        }
+      }
 
       return res.status(200).json({
         success: true,
