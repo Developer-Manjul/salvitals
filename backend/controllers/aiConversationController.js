@@ -2014,6 +2014,16 @@ exports.publicSubmitAppointment =
           160
         );
 
+      const knownTreatmentMatch =
+        treatment.match(
+          /(breast augmentation|rhinoplasty|liposuction|hair transplant|facial plastic surgery|plastic surgery|cosmetic surgery)/i
+        );
+
+      const normalizedTreatment =
+        knownTreatmentMatch
+          ? knownTreatmentMatch[0]
+          : treatment;
+
       const doctor =
         safeText(
           req.body?.doctor ||
@@ -2024,7 +2034,7 @@ exports.publicSubmitAppointment =
       const appointmentNote =
         [
           "Appointment request submitted from AI Chat widget.",
-          treatment ? `Treatment/Problem: ${treatment}` : "",
+          normalizedTreatment ? `Treatment/Problem: ${normalizedTreatment}` : "",
           doctor ? `Preferred doctor: ${doctor}` : "",
           transcript ? `\nConversation transcript:\n${transcript}` : "",
         ]
@@ -2042,7 +2052,7 @@ exports.publicSubmitAppointment =
             preferredDoctor: doctor,
             appointmentNote,
           },
-          service: treatment,
+          service: normalizedTreatment,
         });
 
       if (!lead) {

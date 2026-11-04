@@ -497,16 +497,24 @@ const apiOrigin = "https://salevitals.com";
 
 .ai-appointment-card label {
   display: block;
-  margin-top: 12px;
+  margin-bottom: 6px;
   color: #334155;
   font-size: 12px;
   font-weight: 700;
 }
 
+.ai-appointment-field {
+  display: block;
+  margin-top: 14px;
+}
+
+.ai-appointment-field:first-of-type {
+  margin-top: 0;
+}
+
 .ai-appointment-card input {
   width: 100%;
   height: 42px;
-  margin-top: 6px;
   border: 1px solid #d9dee7;
   border-radius: 10px;
   padding: 0 12px;
@@ -1259,6 +1267,11 @@ function showPopupMessage() {
         .slice(-8)
         .join(" ");
 
+    var treatmentMatch =
+      visitorMessages.match(
+        /(breast augmentation|rhinoplasty|liposuction|hair transplant|facial plastic surgery|plastic surgery|cosmetic surgery)/gi
+      );
+
     try {
       var response =
         await fetch(
@@ -1275,7 +1288,11 @@ function showPopupMessage() {
               sessionId: sessionId,
               name: name,
               phone: phone,
-              treatment: visitorMessages,
+              treatment:
+                treatmentMatch
+                  ? treatmentMatch
+                      .join(", ")
+                  : visitorMessages,
             }),
           }
         );
@@ -1320,10 +1337,14 @@ function showPopupMessage() {
         '<span>Book Your Appointment</span>' +
       '</div>' +
       '<p class="ai-appointment-description">Please share your details so our team can assist you.</p>' +
-      '<label>Full Name</label>' +
-      '<input name="name" autocomplete="name" maxlength="120" placeholder="Enter your full name">' +
-      '<label>Mobile Number</label>' +
-      '<input name="phone" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Enter your mobile number">' +
+      '<div class="ai-appointment-field">' +
+        '<label for="aiAppointmentName">Full Name</label>' +
+        '<input id="aiAppointmentName" name="name" autocomplete="name" maxlength="120" placeholder="Enter your full name">' +
+      '</div>' +
+      '<div class="ai-appointment-field">' +
+        '<label for="aiAppointmentPhone">Mobile Number</label>' +
+        '<input id="aiAppointmentPhone" name="phone" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Enter your mobile number">' +
+      '</div>' +
       '<p class="ai-appointment-error"></p>' +
       '<button type="button" class="ai-appointment-submit">Confirm Appointment Request</button>';
 

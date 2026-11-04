@@ -516,10 +516,7 @@ const directAppointmentRequest =
 
 const shouldAskAppointment =
   !appointmentAlreadyAsked &&
-  (
-    directAppointmentRequest ||
-    currentQuestionCount >= 2
-  );
+  directAppointmentRequest;
 
   const systemPrompt =
     buildSystemPrompt({
@@ -533,7 +530,7 @@ const shouldAskAppointment =
 
   if (shouldAskAppointment) {
     currentTurnInstruction = `
-This is the visitor's second meaningful question or later.
+This is an explicit appointment request.
 
 Answer the visitor's current question first.
 
