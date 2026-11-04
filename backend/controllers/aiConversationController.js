@@ -182,6 +182,14 @@ function isDirectAppointmentRequest(text) {
     return false;
   }
 
+  // Questions are informational unless they clearly confirm booking.
+  if (
+    /\b(can i|could i|kya.*sakta hoon|kya.*sakta hai|may i)\b/i.test(value) ||
+    /\?\s*$/.test(String(text || "").trim())
+  ) {
+    return false;
+  }
+
   const appointmentWords = [
     "appointment",
     "booking",
@@ -191,7 +199,6 @@ function isDirectAppointmentRequest(text) {
     "schedule appointment",
     "schedule a appointment",
     "schedule an appointment",
-    "consult",
     "appointment book",
     "appointment booking",
     "appointment chahiye",
@@ -372,20 +379,21 @@ function hasAppointmentOffer(
     return false;
   }
 
-  return messages.some(
-    (message) => {
-      if (
-        message?.sender !==
-        "ai"
-      ) {
-        return false;
-      }
+  for (
+    let index = messages.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const message = messages[index];
 
+    if (message?.sender === "ai") {
       return isAppointmentOfferText(
         message?.message
       );
     }
-  );
+  }
+
+  return false;
 }
 
 function getLastAIMessage(
@@ -1355,88 +1363,6 @@ exports.publicMessage =
         );
       
       
-            // =============================
-      // INDEPENDENT CONTACT CAPTURE
-      // =============================
-      const extractedName =
-        extractVisitorName(messageText);
-
-      const extractedPhones =
-        extractPhoneNumbers(messageText);
-
-      let contactUpdated = false;
-
-      if (extractedName) {
-        conversation.visitorName =
-          safeText(extractedName, 120);
-
-        contactUpdated = true;
-      }
-
-      if (extractedPhones.length) {
-        conversation.visitorPhone =
-          extractedPhones[0];
-
-        contactUpdated = true;
-      }
-
-      if (contactUpdated) {
-        await conversation.save();
-
-        if (
-          conversation.visitorName &&
-          conversation.visitorPhone
-        ) {
-          await syncAILead({
-            ownerId: assistant.ownerId,
-            conversation:
-              conversation.toObject(),
-            service: safeText(
-              req.body?.service,
-              160
-            ),
-          });
-        }
-
-        let contactReply;
-
-        if (
-          conversation.visitorName &&
-          conversation.visitorPhone
-        ) {
-          contactReply =
-            `Thanks, ${conversation.visitorName}. We already have your contact details. Our team will contact you shortly.`;
-        } else if (
-          conversation.visitorName
-        ) {
-          contactReply =
-            `Thanks, ${conversation.visitorName}. Please share your mobile number so our team can contact you.`;
-        } else {
-          contactReply =
-            "Thanks. Please share your name so our team can contact you.";
-        }
-
-        const reply =
-          await saveAIReply({
-            assistant,
-            conversation,
-            text: contactReply,
-          });
-
-        const updatedConversation =
-          await AIConversation.findById(
-            conversation._id
-          ).lean();
-
-        return res.json({
-          success: true,
-          message: reply,
-          conversation:
-            updatedConversation,
-          visitorMessage,
-        });
-      }
-
       if (
         isGreeting(
           messageText
@@ -1476,7 +1402,7 @@ exports.publicMessage =
             assistant,
             conversation,
             text:
-              getAskNameMessage(),
+              "Please complete the appointment request below.",
             metadata: {
               type: "appointment_form",
             },
@@ -1503,98 +1429,6 @@ exports.publicMessage =
         )
       ) {
 
-        // =============================
-// INDEPENDENT CONTACT CAPTURE
-// =============================
-const extractedName =
-  extractVisitorName(messageText);
-
-const extractedPhones =
-  extractPhoneNumbers(messageText);
-
-let contactUpdated = false;
-
-if (extractedName) {
-  conversation.visitorName =
-    safeText(
-      extractedName,
-      120
-    );
-
-  contactUpdated = true;
-}
-
-if (extractedPhones.length) {
-  conversation.visitorPhone =
-    extractedPhones[0];
-
-  contactUpdated = true;
-}
-
-if (contactUpdated) {
-  await conversation.save();
-
-  // Create/update lead immediately
-  // when both name and phone are available.
-  if (
-    conversation.visitorName &&
-    conversation.visitorPhone
-  ) {
-    await syncAILead({
-      ownerId:
-        assistant.ownerId,
-      conversation:
-        conversation.toObject(),
-      service:
-        safeText(
-          req.body?.service,
-          160
-        ),
-    });
-  }
-
-  let contactReply;
-
-  if (
-    conversation.visitorName &&
-    conversation.visitorPhone
-  ) {
-    contactReply =
-      "Thanks, " +
-      conversation.visitorName +
-      ". Our team will contact you shortly.";
-      } else if (
-        conversation.visitorName
-      ) {
-        contactReply =
-          "Thanks, " +
-          conversation.visitorName +
-          ". Please share your mobile number so our team can contact you.";
-      } else {
-        contactReply =
-          "Thanks. Please share your name so our team can contact you.";
-      }
-
-      const reply =
-        await saveAIReply({
-          assistant,
-          conversation,
-          text: contactReply,
-        });
-
-      const updatedConversation =
-        await AIConversation.findById(
-          conversation._id
-        ).lean();
-
-      return res.json({
-        success: true,
-        message: reply,
-        conversation:
-          updatedConversation,
-        visitorMessage,
-      });
-    }
         if (
         isYes(
           messageText
@@ -1607,19 +1441,15 @@ if (contactUpdated) {
           conversation.visitorPhone
         ) {
           contactMessage =
-            "Thanks, " +
-            conversation.visitorName +
-            ". We already have your contact details. Our team will contact you shortly to confirm the appointment.";
+            "Please complete the appointment request below.";
         } else if (
           conversation.visitorName
         ) {
           contactMessage =
-            "Thanks, " +
-            conversation.visitorName +
-            ". Please share your mobile number so our team can contact you and confirm the appointment.";
+            "Please complete the appointment request below.";
         } else {
           contactMessage =
-            getAskNameMessage();
+            "Please complete the appointment request below.";
         }
 
         const reply =
@@ -1668,109 +1498,6 @@ if (contactUpdated) {
                 getNoAppointmentMessage(
                   contactNumber
                 ),
-            });
-
-          const updatedConversation =
-            await AIConversation.findById(
-              conversation._id
-            ).lean();
-
-          return res.json({
-            success: true,
-            message: reply,
-            conversation:
-              updatedConversation,
-            visitorMessage,
-          });
-        }
-      }
-
-      if (
-        hasNameRequest(
-          previousMessages
-        ) &&
-        looksLikeName(
-          messageText
-        )
-      ) {
-        conversation.visitorName =
-          safeText(
-            messageText,
-            120
-          );
-
-        await conversation.save();
-
-        const reply =
-          await saveAIReply({
-            assistant,
-            conversation,
-            text:
-              getAskPhoneMessage(),
-          });
-
-        await syncAILead({
-          ownerId:
-            assistant.ownerId,
-          conversation:
-            conversation.toObject(),
-          service:
-            safeText(
-              req.body?.service,
-              160
-            ),
-        });
-
-        const updatedConversation =
-          await AIConversation.findById(
-            conversation._id
-          ).lean();
-
-        return res.json({
-          success: true,
-          message: reply,
-          conversation:
-            updatedConversation,
-          visitorMessage,
-        });
-      }
-
-      if (
-        hasPhoneRequest(
-          previousMessages
-        )
-      ) {
-        const phoneNumbers =
-          extractPhoneNumbers(
-            messageText
-          );
-
-        if (
-          phoneNumbers.length
-        ) {
-          conversation.visitorPhone =
-            phoneNumbers[0];
-
-          await conversation.save();
-
-          await syncAILead({
-            ownerId:
-              assistant.ownerId,
-            conversation:
-              conversation.toObject(),
-            service:
-              safeText(
-                req.body?.service,
-                160
-              ),
-          });
-
-          const reply =
-            await saveAIReply({
-              assistant,
-              conversation,
-              text:
-                getAppointmentConfirmationMessage(),
             });
 
           const updatedConversation =
@@ -1867,28 +1594,13 @@ if (contactUpdated) {
 }
 
         const shouldRequestContact =
-          hasAppointmentOffer(previousMessages) &&
-          !conversation.visitorName &&
-          !conversation.visitorPhone &&
-        shouldAskContactAfterGap([
-          ...previousMessages,
-          visitorMessage,
-        ])
+          false;
         const reply =
           await saveAIReply({
             assistant,
             conversation,
             text: replyText,
           });
-
-        if (shouldRequestContact) {
-          await saveAIReply({
-            assistant,
-            conversation,
-            text:
-              "Please share your name and mobile number. Our team will connect with you shortly and provide more information.",
-          });
-        }
 
       const updatedConversation =
         await AIConversation.findById(
