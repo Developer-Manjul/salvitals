@@ -1841,6 +1841,24 @@ body.scrollTop = body.scrollHeight;
         state.conversation;
 
       if (data.message) {
+        if (
+          data.action === "open_appointment_form" &&
+          !data.message.metadata
+        ) {
+          data.message.metadata = {
+            type: "appointment_form",
+          };
+        }
+
+        if (
+          data.action === "appointment_success" &&
+          !data.message.metadata
+        ) {
+          data.message.metadata = {
+            type: "appointment_success",
+          };
+        }
+
         state.messages.push(
           data.message
         );

@@ -111,6 +111,13 @@ function isYes(text) {
   const value =
     normalizeMessage(text);
 
+  if (
+    /\b(haan|ha|han|yes|yup|yeah|sure|ok|okay)\b/i.test(value) &&
+    /\b(book|appointment|kar|kr|do|de|please)\b/i.test(value)
+  ) {
+    return true;
+  }
+
   return new Set([
     "yes",
     "y",
@@ -1483,6 +1490,7 @@ exports.publicMessage =
         return res.json({
           success: true,
           message: reply,
+          action: "open_appointment_form",
           conversation:
             updatedConversation,
           visitorMessage,
@@ -1632,6 +1640,7 @@ if (contactUpdated) {
         return res.json({
           success: true,
           message: reply,
+          action: "open_appointment_form",
           conversation:
             updatedConversation,
           visitorMessage,
