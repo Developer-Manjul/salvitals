@@ -4,6 +4,7 @@ const {
   publicStart,
   publicMessage,
   publicMessages,
+  publicSubmitAppointment,
 } = require("../controllers/aiConversationController");
 
 const router = express.Router();
@@ -12,4 +13,5 @@ router.get("/script.js", script);
 router.post("/start", publicStart);
 router.post("/message", publicMessage);
 router.get("/messages", publicMessages);
+router.post("/appointment", publicSubmitAppointment);
 module.exports = router;

@@ -457,6 +457,103 @@ const apiOrigin = "https://salevitals.com";
   border-bottom-right-radius: 5px;
 }
 
+.ai-appointment-card {
+  width: min(320px, calc(100vw - 90px));
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e3e7eb;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  color: #172b4d;
+}
+
+.ai-appointment-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.ai-appointment-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ai-color);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.ai-appointment-description {
+  margin: 0 0 15px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ai-appointment-card label {
+  display: block;
+  margin-top: 12px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-appointment-card input {
+  width: 100%;
+  height: 42px;
+  margin-top: 6px;
+  border: 1px solid #d9dee7;
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+  outline: none;
+}
+
+.ai-appointment-card input:focus {
+  border-color: var(--ai-color);
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+}
+
+.ai-appointment-error {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.ai-appointment-submit {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 15px 20px;
+  margin-top: 4px;
+  background: var(--client-primary-gradient, var(--ai-color)) !important;
+  color: #fff !important;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-appointment-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.ai-appointment-success {
+  text-align: center;
+}
+
+.ai-appointment-success .ai-appointment-icon {
+  margin: 0 auto 10px;
+  width: 42px;
+  height: 42px;
+  background: #16a34a;
+}
+
 .system .bubble {
   background: #fff7ed;
   border-color: #f5dfc4;
@@ -1054,6 +1151,11 @@ function showPopupMessage() {
       textColor
     );
 
+    shadow.host.style.setProperty(
+      "--client-primary-gradient",
+      color
+    );
+
     assistantName.textContent =
       String(
         assistant.assistantName ||
@@ -1092,6 +1194,154 @@ function showPopupMessage() {
       brandLogo.innerHTML =
         iconHtml;
     }
+  }
+
+  function createAppointmentSuccess() {
+    var card =
+      document.createElement("div");
+    card.className =
+      "ai-appointment-card ai-appointment-success";
+    card.innerHTML =
+      '<div class="ai-appointment-icon">✓</div>' +
+      '<div class="ai-appointment-title" style="justify-content:center">Appointment Request Received!</div>' +
+      '<strong>Thank You!</strong>' +
+      '<p class="ai-appointment-description" style="margin-top:8px;margin-bottom:0">' +
+      'Your details have been submitted successfully. Our team will contact you shortly to assist with your appointment.' +
+      '</p>';
+    return card;
+  }
+
+  async function submitAppointment(card) {
+    if (card.dataset.submitting === "true") {
+      return;
+    }
+
+    var name =
+      card.querySelector("[name=name]").value.trim();
+    var phone =
+      card.querySelector("[name=phone]").value.trim();
+    var error =
+      card.querySelector(".ai-appointment-error");
+    var button =
+      card.querySelector(".ai-appointment-submit");
+    var phoneDigits =
+      phone.replace(/\D/g, "");
+
+    if (name.length < 2) {
+      error.textContent =
+        "Please enter your full name.";
+      return;
+    }
+
+    if (
+      phoneDigits.length < 8 ||
+      phoneDigits.length > 15
+    ) {
+      error.textContent =
+        "Please enter a valid mobile number.";
+      return;
+    }
+
+    card.dataset.submitting = "true";
+    button.disabled = true;
+    button.textContent =
+      "Submitting...";
+    error.textContent = "";
+
+    var visitorMessages =
+      state.messages
+        .filter(function (item) {
+          return item.sender === "visitor";
+        })
+        .map(function (item) {
+          return item.message;
+        })
+        .slice(-8)
+        .join(" ");
+
+    try {
+      var response =
+        await fetch(
+          apiBase +
+            "/api/ai-widget/appointment",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              assistantId: assistantId,
+              sessionId: sessionId,
+              name: name,
+              phone: phone,
+              treatment: visitorMessages,
+            }),
+          }
+        );
+
+      var data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.message ||
+            "Unable to submit appointment request."
+        );
+      }
+
+      card.replaceWith(
+        createAppointmentSuccess()
+      );
+    } catch (requestError) {
+      card.dataset.submitting = "false";
+      button.disabled = false;
+      button.textContent =
+        "Confirm Appointment Request";
+      error.textContent =
+        requestError.message ||
+        "Submission failed. Please try again.";
+    }
+  }
+
+  function createAppointmentCard() {
+    var conversation =
+      state.conversation || {};
+    var card =
+      document.createElement("div");
+    card.className =
+      "ai-appointment-card";
+    card.innerHTML =
+      '<div class="ai-appointment-title">' +
+        '<span class="ai-appointment-icon">✓</span>' +
+        '<span>Book Your Appointment</span>' +
+      '</div>' +
+      '<p class="ai-appointment-description">Please share your details so our team can assist you.</p>' +
+      '<label>Full Name</label>' +
+      '<input name="name" autocomplete="name" maxlength="120" placeholder="Enter your full name">' +
+      '<label>Mobile Number</label>' +
+      '<input name="phone" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Enter your mobile number">' +
+      '<p class="ai-appointment-error"></p>' +
+      '<button type="button" class="ai-appointment-submit">Confirm Appointment Request</button>';
+
+    card.querySelector("[name=name]").value =
+      String(conversation.visitorName || "");
+    card.querySelector("[name=phone]").value =
+      String(conversation.visitorPhone || "");
+
+    card.querySelector(
+      ".ai-appointment-submit"
+    ).addEventListener(
+      "click",
+      function () {
+        submitAppointment(card);
+      }
+    );
+
+    return card;
   }
 
   function render() {
@@ -1232,6 +1482,31 @@ function showPopupMessage() {
           wrapper.appendChild(
             bubble
           );
+
+          var metadata =
+            message.metadata || {};
+
+          if (
+            metadata.type === "appointment_form"
+          ) {
+            wrapper.removeChild(
+              bubble
+            );
+            wrapper.appendChild(
+              createAppointmentCard()
+            );
+          }
+
+          if (
+            metadata.type === "appointment_success"
+          ) {
+            wrapper.removeChild(
+              bubble
+            );
+            wrapper.appendChild(
+              createAppointmentSuccess()
+            );
+          }
 
           row.appendChild(
             wrapper

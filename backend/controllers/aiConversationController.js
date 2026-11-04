@@ -1018,6 +1018,7 @@ async function saveAIReply({
   assistant,
   conversation,
   text,
+  metadata = {},
 }) {
   const reply =
     await AIMessage.create({
@@ -1029,6 +1030,7 @@ async function saveAIReply({
         conversation._id,
       sender: "ai",
       message: text,
+      metadata,
     });
 
   conversation.mode =
@@ -1468,6 +1470,9 @@ exports.publicMessage =
             conversation,
             text:
               getAskNameMessage(),
+            metadata: {
+              type: "appointment_form",
+            },
           });
 
         const updatedConversation =
@@ -1614,6 +1619,9 @@ if (contactUpdated) {
             assistant,
             conversation,
             text: contactMessage,
+            metadata: {
+              type: "appointment_form",
+            },
           });
 
         const updatedConversation =
@@ -1897,6 +1905,173 @@ if (contactUpdated) {
         success: false,
         message:
           "Unable to process AI message",
+      });
+    }
+  };
+
+exports.publicSubmitAppointment =
+  async (req, res) => {
+    try {
+      const assistantId =
+        safeText(req.body?.assistantId, 100);
+      const sessionId =
+        safeText(req.body?.sessionId, 200);
+      const name =
+        safeText(req.body?.name, 120);
+      const phone =
+        normalizePhone(req.body?.phone);
+      const email =
+        safeText(req.body?.email, 160);
+
+      const phoneDigits =
+        phone.replace(/\D/g, "");
+
+      if (
+        !mongoose.isValidObjectId(assistantId) ||
+        !sessionId ||
+        !name ||
+        phoneDigits.length < 8 ||
+        phoneDigits.length > 15
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Please enter a valid name and mobile number.",
+        });
+      }
+
+      const assistant =
+        await AIAssistant.findById(assistantId);
+
+      if (
+        !assistant ||
+        !assistant.enabled ||
+        assistant.status !== "active"
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "AI Assistant is unavailable",
+        });
+      }
+
+      const conversation =
+        await AIConversation.findOne({
+          assistantId: assistant._id,
+          sessionId,
+        });
+
+      if (!conversation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Chat conversation not found",
+        });
+      }
+
+      if (conversation.leadId) {
+        return res.json({
+          success: true,
+          leadId: conversation.leadId,
+          duplicate: true,
+        });
+      }
+
+      conversation.visitorName = name;
+      conversation.visitorPhone = phone;
+      conversation.visitorEmail = email;
+
+      const messages =
+        await AIMessage.find({
+          conversationId:
+            conversation._id,
+        })
+          .sort({ createdAt: 1 })
+          .limit(100)
+          .lean();
+
+      const transcript =
+        messages
+          .map((item) =>
+            `${item.sender === "visitor" ? "Visitor" : "Grace"}: ${item.message}`
+          )
+          .join("\n");
+
+      const treatment =
+        safeText(
+          req.body?.treatment ||
+            req.body?.service ||
+            "",
+          160
+        );
+
+      const doctor =
+        safeText(
+          req.body?.doctor ||
+            "",
+          160
+        );
+
+      const appointmentNote =
+        [
+          "Appointment request submitted from AI Chat widget.",
+          treatment ? `Treatment/Problem: ${treatment}` : "",
+          doctor ? `Preferred doctor: ${doctor}` : "",
+          transcript ? `\nConversation transcript:\n${transcript}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+      const lead =
+        await syncAILead({
+          ownerId: assistant.ownerId,
+          conversation: {
+            ...conversation.toObject(),
+            visitorName: name,
+            visitorPhone: phone,
+            visitorEmail: email,
+            preferredDoctor: doctor,
+            appointmentNote,
+          },
+          service: treatment,
+        });
+
+      if (!lead) {
+        throw new Error(
+          "Unable to create appointment lead"
+        );
+      }
+
+      conversation.leadId = lead._id;
+      conversation.lastMessage =
+        "Appointment request submitted";
+      conversation.lastMessageAt = new Date();
+      await conversation.save();
+
+      await saveAIReply({
+        assistant,
+        conversation,
+        text:
+          "Appointment Request Received!",
+        metadata: {
+          type: "appointment_success",
+          leadId: String(lead._id),
+        },
+      });
+
+      return res.json({
+        success: true,
+        leadId: lead._id,
+      });
+    } catch (error) {
+      console.error(
+        "AI APPOINTMENT SUBMIT ERROR:",
+        error
+      );
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to submit appointment request. Please try again.",
       });
     }
   };
