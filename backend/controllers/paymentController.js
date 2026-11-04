@@ -46,6 +46,7 @@ const ADDONS = {
     whatsapp_leads: {
         name: "WhatsApp Lead Notifications",
         unitPrice: 1000,
+        usdUnitPrice: 18,
         quotaPerMonth: 600,
         unitLabel: "WhatsApp lead notifications",
     },
@@ -53,6 +54,7 @@ const ADDONS = {
     contacts: {
         name: "Extra Contacts",
         unitPrice: 500,
+        usdUnitPrice: 10,
         quotaPerMonth: 1000,
         unitLabel: "contacts",
     },
@@ -60,6 +62,7 @@ const ADDONS = {
     ai_chat: {
         name: "AI Chatbot",
         unitPrice: 500,
+        usdUnitPrice: 10,
         quotaPerMonth: 3000,
         unitLabel: "AI conversations",
     },
@@ -67,6 +70,7 @@ const ADDONS = {
     pharmacy_invoice: {
         name: "Pharmacy Invoice",
         unitPrice: 1000,
+        usdUnitPrice: 18,
         quotaPerMonth: 0,
         unitLabel: "invoices",
     },
@@ -216,10 +220,6 @@ function calculateAddon(
         return null;
     }
 
-    if (currency !== "INR") {
-        return null;
-    }
-
     const isPharmacyInvoice =
         normalizedType === "pharmacy_invoice";
 
@@ -237,9 +237,13 @@ function calculateAddon(
         }
     }
 
+    const unitPrice = currency === "INR"
+        ? addon.unitPrice
+        : addon.usdUnitPrice;
+
     const amount = isPharmacyInvoice
-        ? 1000
-        : addon.unitPrice * packs;
+        ? unitPrice
+        : unitPrice * packs;
 
     const quota = isPharmacyInvoice
         ? 0
@@ -250,11 +254,11 @@ function calculateAddon(
         addonName: addon.name,
         quantity: packs,
         months: 1,
-        unitPrice: addon.unitPrice,
+        unitPrice,
         quotaPerMonth: addon.quotaPerMonth,
         quota,
         amount,
-        currency: "INR",
+        currency,
     };
 }
 
@@ -286,7 +290,11 @@ function calculateTax(
     currency
 ) {
     if (currency !== "INR") {
-        return 0;
+        return Math.round(
+            subtotal *
+                0.05 *
+                100
+        ) / 100;
     }
 
     return Math.round(

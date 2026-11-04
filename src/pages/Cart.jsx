@@ -14,6 +14,7 @@ const ADDONS = {
     id: "whatsapp_leads",
     name: "WhatsApp Lead Notifications",
     price: 1000,
+    usdPrice: 18,
     quota: 600,
     unit: "leads",
   },
@@ -22,6 +23,7 @@ const ADDONS = {
     id: "contacts",
     name: "Extra Contacts",
     price: 500,
+    usdPrice: 10,
     quota: 1000,
     unit: "contacts",
   },
@@ -30,6 +32,7 @@ const ADDONS = {
     id: "ai_chat",
     name: "AI Chatbot",
     price: 500,
+    usdPrice: 10,
     quota: 3000,
     unit: "conversations",
   },
@@ -38,6 +41,7 @@ const ADDONS = {
     id: "pharmacy_invoice",
     name: "Pharmacy Invoice",
     price: 1000,
+    usdPrice: 18,
     quota: 0,
     unit: "invoices",
   },
@@ -361,8 +365,10 @@ if (response.ok && data.success) {
   const setupCharge =
     isCustomPlan
       ? null
-      : billing?.subscription
-          ?.setupFeePaid
+      : (
+          billing?.subscription?.setupFeePaid ||
+          billing?.subscription?.status === "active"
+        )
         ? 0
         : currency === "INR"
           ? 699
@@ -373,7 +379,7 @@ if (response.ok && data.success) {
 
   return sum + (
     addon
-      ? addon.price *
+      ? (currency === "INR" ? addon.price : addon.usdPrice) *
         Number(item.quantity || 1) *
         Number(selectedMonths || 1)
       : 0
@@ -399,7 +405,7 @@ const subscriptionTax =
     ? null
     : currency === "INR"
       ? Math.round(subscriptionSubtotal * 0.18)
-      : 0;
+      : Math.round(subscriptionSubtotal * 0.05 * 100) / 100;
 
 const subscriptionTotal =
   isCustomPlan
@@ -426,7 +432,7 @@ const subscriptionTotal =
 
   const addonSubtotal =
     checkoutType === "addon"
-      ? selectedAddon.price *
+      ? (currency === "INR" ? selectedAddon.price : selectedAddon.usdPrice) *
         Number(selectedQuantity)
       : null;
 
@@ -436,7 +442,7 @@ const subscriptionTotal =
         ? Math.round(
             addonSubtotal * 0.18
           )
-        : 0
+        : Math.round(addonSubtotal * 0.05 * 100) / 100
       : null;
 
   const addonTotal =
@@ -1066,7 +1072,12 @@ const handleSubscriptionPayment = async () => {
             </div>
 
             <strong>
-              ₹{selectedAddon.price.toLocaleString("en-IN")}/month
+              {formatPrice(
+                currency === "INR"
+                  ? selectedAddon.price
+                  : selectedAddon.usdPrice
+              )}
+              /month
             </strong>
           </div>
 
@@ -1091,7 +1102,11 @@ const handleSubscriptionPayment = async () => {
 
               <div className="setup-price">
                 <strong>
-                  ₹{selectedAddon.price.toLocaleString("en-IN")}
+                  {formatPrice(
+                    currency === "INR"
+                      ? selectedAddon.price
+                      : selectedAddon.usdPrice
+                  )}
                 </strong>
                 <small>/pack</small>
               </div>
@@ -1212,7 +1227,7 @@ const handleSubscriptionPayment = async () => {
       </div>
 
       <div className="summary-row">
-        <span>Tax ({currency === "INR" ? "18%" : "0%"})</span>
+        <span>Tax ({currency === "INR" ? "18%" : "5%"})</span>
         <strong>{formatPrice(addonTax)}</strong>
       </div>
 
@@ -1790,7 +1805,7 @@ const handleSubscriptionPayment = async () => {
                         </div>
 
                         <div style={{ textAlign: "right", minWidth: "100px" }}>
-                          <strong style={{ display: "block", fontSize: "14px", color: "#102A43" }}>{formatPrice(addon.price)}</strong>
+                          <strong style={{ display: "block", fontSize: "14px", color: "#102A43" }}>{formatPrice(currency === "INR" ? addon.price : addon.usdPrice)}</strong>
                           <small style={{ color: "#64748B", fontSize: "11px" }}>{addon.id === "contacts" || addon.id === "ai_chat" ? "/ pack" : "/ month"}</small>
                         </div>
 
@@ -1803,7 +1818,7 @@ const handleSubscriptionPayment = async () => {
                         )}
                         {selected && (
                           <strong style={{ minWidth: "78px", textAlign: "right", fontSize: "13px", color: "#087E8B" }}>
-                            {formatPrice(addon.price * (addon.id === "pharmacy_invoice" ? 1 : selected.quantity))}
+                          {formatPrice((currency === "INR" ? addon.price : addon.usdPrice) * (addon.id === "pharmacy_invoice" ? 1 : selected.quantity))}
                           </strong>
                         )}
                       </div>
@@ -1938,7 +1953,7 @@ const handleSubscriptionPayment = async () => {
                     return (
                       <div className="summary-row" key={item.id}>
                         <span>{addon.name} × {item.quantity}</span>
-                        <strong>{formatPrice(addon.price * item.quantity)}</strong>
+                        <strong>{formatPrice((currency === "INR" ? addon.price : addon.usdPrice) * item.quantity)}</strong>
                       </div>
                     );
                   })}
@@ -2084,7 +2099,7 @@ const handleSubscriptionPayment = async () => {
                   {currency ===
                   "INR"
                     ? "18%"
-                    : "0%"}
+                    : "5%"}
                   )
                 </span>
 
