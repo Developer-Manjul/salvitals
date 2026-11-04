@@ -46,6 +46,15 @@ const aiConversationSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    preferredDoctor: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    appointmentNote: {
+      type: String,
+      default: "",
+    },
 
     status: {
       type: String,
@@ -69,6 +78,49 @@ const aiConversationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Lead",
       default: null,
+    },
+    initialUserMessageCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    messagesAfterAppointmentOffer: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    appointmentOfferPending: {
+      type: Boolean,
+      default: false,
+    },
+    appointmentOfferCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    contactOfferPending: {
+      type: Boolean,
+      default: false,
+    },
+    appointmentOfferDeclined: {
+      type: Boolean,
+      default: false,
+    },
+    contactCollectionRequested: {
+      type: Boolean,
+      default: false,
+    },
+    contactDetailsCaptured: {
+      type: Boolean,
+      default: false,
+    },
+    appointmentRequestSubmitted: {
+      type: Boolean,
+      default: false,
+    },
+    appointmentFormOpen: {
+      type: Boolean,
+      default: false,
     },
 
     assignedTo: {

@@ -148,6 +148,13 @@ function isNo(text) {
   const value =
     normalizeMessage(text);
 
+  if (
+    /^(no|nahi|nahin|n)\s+(abhi nahi|thanks?|thank you)$/i.test(value) ||
+    /^(no|nahi|nahin|n),?\s+/i.test(value)
+  ) {
+    return true;
+  }
+
   return new Set([
     "no",
     "n",
@@ -162,6 +169,14 @@ function isNo(text) {
     "nahi chahiye",
     "abhi nahi",
   ]).has(value);
+}
+
+function getContactCollectionMessage() {
+  return "By the way, may I have your name and mobile number? Our team can connect with you and provide more information.";
+}
+
+function getAppointmentOfferMessage() {
+  return "Would you like me to help you book an appointment with our doctor?";
 }
 
 
@@ -500,12 +515,18 @@ function shouldAskContactAfterGap(messages) {
 
 function looksLikeName(text) {
   const value =
-    String(text || "").trim();
+    String(text || "")
+      .trim()
+      .replace(/[.,!?]+$/g, "");
 
   if (
     !value ||
     value.length > 100
   ) {
+    return false;
+  }
+
+  if (!/[a-zA-Z\u0900-\u097F]/.test(value)) {
     return false;
   }
 
@@ -1266,6 +1287,64 @@ exports.publicMessage =
         });
       }
 
+      const duplicateWindow =
+        new Date(
+          Date.now() - 30000
+        );
+
+      const recentDuplicate =
+        await AIMessage.findOne({
+          conversationId:
+            conversation._id,
+          sender: "visitor",
+          message: messageText,
+          createdAt: {
+            $gte: duplicateWindow,
+          },
+        }).sort({
+          createdAt: -1,
+        });
+
+      if (
+        recentDuplicate
+      ) {
+        const messages =
+          await AIMessage.find({
+            conversationId:
+              conversation._id,
+          })
+            .sort({
+              createdAt: 1,
+            })
+            .limit(200)
+            .lean();
+
+        const duplicateReply =
+          [...messages]
+            .reverse()
+            .find(
+              (message) =>
+                message.sender ===
+                  "ai" &&
+                new Date(
+                  message.createdAt
+                ).getTime() >
+                  new Date(
+                    recentDuplicate.createdAt
+                  ).getTime()
+            );
+
+        return res.json({
+          success: true,
+          message:
+            duplicateReply || null,
+          conversation,
+          visitorMessage:
+            recentDuplicate,
+          duplicate: true,
+        });
+      }
+
       const visitorMessage =
         await AIMessage.create({
           ownerId:
@@ -1361,21 +1440,376 @@ exports.publicMessage =
               visitorMessage._id
             )
         );
+
+      const shouldCountAfterOffer =
+        !conversation.contactCollectionRequested &&
+        (
+          conversation.appointmentOfferPending ||
+          conversation.appointmentOfferDeclined
+        );
+
+      const counterUpdates = {
+        $inc: {
+          initialUserMessageCount: 1,
+        },
+      };
+
+      if (
+        shouldCountAfterOffer &&
+        !isYes(messageText) &&
+        !isNo(messageText)
+      ) {
+        counterUpdates.$inc.messagesAfterAppointmentOffer =
+          1;
+      }
+
+      const updatedConversationState =
+        await AIConversation.findOneAndUpdate(
+          { _id: conversation._id },
+          counterUpdates,
+          { new: true, runValidators: true }
+        );
+
+      if (!updatedConversationState) {
+        throw new Error(
+          "Unable to persist AI conversation counters"
+        );
+      }
+
+      Object.assign(
+        conversation,
+        updatedConversationState.toObject()
+      );
       
       
       if (
-        isGreeting(
-          messageText
-        )
+        conversation.appointmentOfferPending &&
+        isYes(messageText)
+      ) {
+        conversation.appointmentOfferPending =
+          false;
+        conversation.appointmentFormOpen = true;
+        await conversation.save();
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text:
+              "Please complete the appointment request below.",
+            metadata: {
+              type: "appointment_form",
+            },
+          });
+
+        const updatedConversation =
+          await AIConversation.findById(
+            conversation._id
+          ).lean();
+
+        return res.json({
+          success: true,
+          message: reply,
+          action: "open_appointment_form",
+          conversation:
+            updatedConversation,
+          visitorMessage,
+        });
+      }
+
+      if (
+        conversation.contactOfferPending &&
+        isYes(messageText) &&
+        !conversation.visitorName &&
+        !conversation.visitorPhone
       ) {
         const reply =
           await saveAIReply({
             assistant,
             conversation,
             text:
-              getGreeting(
-                assistant
-              ),
+              "Sure. Please share your name first.",
+          });
+
+        conversation.contactOfferPending =
+          false;
+        await conversation.save();
+
+        return res.json({
+          success: true,
+          message: reply,
+          conversation,
+          visitorMessage,
+        });
+      }
+
+      if (
+        conversation.appointmentOfferPending &&
+        isNo(messageText)
+      ) {
+        conversation.appointmentOfferPending =
+          false;
+        conversation.appointmentOfferDeclined =
+          true;
+        conversation.messagesAfterAppointmentOffer =
+          0;
+        await conversation.save();
+      } else if (
+        isNo(messageText) &&
+        conversation.appointmentOfferDeclined
+      ) {
+        conversation.messagesAfterAppointmentOffer =
+          0;
+        await conversation.save();
+      }
+
+      if (
+        conversation.contactOfferPending &&
+        isNo(messageText)
+      ) {
+        conversation.contactOfferPending =
+          false;
+        await conversation.save();
+      }
+
+      if (
+        conversation.contactCollectionRequested &&
+        !conversation.contactDetailsCaptured
+      ) {
+        const phones =
+          extractPhoneNumbers(
+            messageText
+          );
+
+        let capturedName =
+          "";
+        const explicitName =
+          messageText.match(
+            /(?:my name is|name is|mera naam|mera name|naam)\s*:?\s*([a-z][a-z.' -]+)/i
+          );
+
+        if (
+          explicitName?.[1]
+        ) {
+          capturedName =
+            explicitName[1].split(
+              /\s+(?:and|aur|phone|mobile|number)\b/i
+            )[0];
+        } else if (
+          !phones.length &&
+          looksLikeName(messageText)
+        ) {
+          capturedName =
+            String(messageText)
+              .trim()
+              .replace(/[.,!?]+$/g, "");
+        } else {
+          const nameWithoutPhone =
+            messageText.replace(
+              /(?:\+?\d[\d\s()-]{7,}\d)/g,
+              ""
+            );
+
+          const nameCandidate =
+            nameWithoutPhone
+              .replace(
+                /(?:my name is|mera naam|mera name|naam)\s*:?\s*/i,
+                ""
+              )
+              .replace(
+                /[,;|]/g,
+                " "
+              )
+              .trim();
+
+          if (
+            looksLikeName(
+              nameCandidate
+            )
+          ) {
+            capturedName =
+              nameCandidate
+                .replace(/[.,!?]+$/g, "")
+                .split(
+                  /\s+(?:and|aur)\b/i
+                )[0];
+          }
+        }
+
+        if (
+          phones.length
+        ) {
+          conversation.visitorPhone =
+            phones[0];
+        } else if (
+          /phone|mobile|number/i.test(
+            messageText
+          ) &&
+          /\d/.test(messageText)
+        ) {
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                "Please share a valid mobile number with 8 to 15 digits.",
+            });
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation,
+            visitorMessage,
+          });
+        }
+
+        if (
+          capturedName
+        ) {
+          conversation.visitorName =
+            safeText(
+              capturedName,
+              120
+            );
+        }
+
+        await conversation.save();
+
+        if (
+          conversation.visitorName &&
+          !conversation.visitorPhone
+        ) {
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                "Thank you. Please share your mobile number.",
+            });
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation,
+            visitorMessage,
+          });
+        }
+
+        if (
+          !conversation.visitorName &&
+          conversation.visitorPhone
+        ) {
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                "Thank you. Please share your full name.",
+            });
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation,
+            visitorMessage,
+          });
+        }
+
+        if (
+          conversation.visitorName &&
+          conversation.visitorPhone
+        ) {
+          const transcript =
+            previousMessages
+              .map(
+                (item) =>
+                  `${item.sender === "visitor" ? "Visitor" : "Grace"}: ${item.message}`
+              )
+              .concat([
+                `Visitor: ${messageText}`,
+              ])
+              .slice(-30)
+              .join("\n");
+
+          conversation.appointmentNote =
+            `Contact details collected from AI Chat.\nConversation summary:\n${transcript}`;
+
+          const treatment =
+            transcript.match(
+              /(breast augmentation|rhinoplasty|liposuction|hair transplant|hernia|plastic surgery|cosmetic surgery)/gi
+            );
+
+          const lead =
+            await syncAILead({
+              ownerId:
+                assistant.ownerId,
+              conversation:
+                conversation.toObject(),
+              service:
+                treatment
+                  ? treatment.join(
+                      ", "
+                    )
+                  : "",
+            });
+
+          conversation.leadId =
+            lead?._id ||
+            conversation.leadId;
+          conversation.contactDetailsCaptured =
+            Boolean(lead);
+          await conversation.save();
+
+          const reply =
+            await saveAIReply({
+              assistant,
+              conversation,
+              text:
+                "Thank you. Your details have been saved. Our team will be able to assist you shortly.",
+            });
+
+          return res.json({
+            success: true,
+            message: reply,
+            conversation,
+            visitorMessage,
+          });
+        }
+      }
+
+      if (
+        isGreeting(
+          messageText
+        )
+      ) {
+        let greetingText =
+          getGreeting(
+            assistant
+          );
+
+        if (
+          conversation.initialUserMessageCount === 2 &&
+          !conversation.appointmentOfferPending &&
+          !conversation.appointmentOfferDeclined &&
+          conversation.appointmentOfferCount === 0
+        ) {
+          greetingText +=
+            "\n\n" +
+            getAppointmentOfferMessage();
+          conversation.appointmentOfferPending =
+            true;
+          conversation.appointmentOfferCount =
+            1;
+          conversation.messagesAfterAppointmentOffer =
+            0;
+          await conversation.save();
+        }
+
+        const reply =
+          await saveAIReply({
+            assistant,
+            conversation,
+            text: greetingText,
           });
 
         const updatedConversation =
@@ -1397,6 +1831,8 @@ exports.publicMessage =
           messageText
         )
       ) {
+        conversation.appointmentFormOpen = true;
+        await conversation.save();
         const reply =
           await saveAIReply({
             assistant,
@@ -1560,26 +1996,11 @@ exports.publicMessage =
           knowledge,
         });
 
-      if (
-        !aiResult?.shouldReply ||
-        !aiResult?.text
-      ) {
-        return res.json({
-          success: true,
-          message: null,
-          conversation,
-          visitorMessage,
-          silent: false,
-          aiError:
-            aiResult?.error ||
-            "AI_REPLY_NOT_GENERATED",
-        });
-      }
-
       const replyText =
         String(
-          aiResult.text
-        ).trim();
+          aiResult?.text || ""
+        ).trim() ||
+        "I can help answer that. Could you share a little more detail so I can assist you accurately?";
       
      if (!replyText) {
   return res.json({
@@ -1593,13 +2014,49 @@ exports.publicMessage =
   });
 }
 
-        const shouldRequestContact =
-          false;
+        let finalReplyText =
+          replyText;
+
+        if (
+          conversation.initialUserMessageCount === 2 &&
+          !conversation.appointmentOfferPending &&
+          !conversation.appointmentOfferDeclined &&
+          !conversation.contactCollectionRequested &&
+          Number(conversation.appointmentOfferCount || 0) === 0
+        ) {
+          finalReplyText +=
+            "\n\n" +
+            getAppointmentOfferMessage();
+          conversation.appointmentOfferPending =
+            true;
+          conversation.appointmentOfferCount =
+            1;
+          conversation.messagesAfterAppointmentOffer =
+            0;
+          await conversation.save();
+        } else if (
+          (
+            conversation.appointmentOfferPending ||
+            conversation.appointmentOfferDeclined
+          ) &&
+          !conversation.contactCollectionRequested &&
+          conversation.messagesAfterAppointmentOffer >= 2
+        ) {
+          finalReplyText +=
+            "\n\n" +
+            getContactCollectionMessage();
+          conversation.contactCollectionRequested =
+            true;
+          conversation.contactOfferPending =
+            true;
+          await conversation.save();
+        }
+
         const reply =
           await saveAIReply({
             assistant,
             conversation,
-            text: replyText,
+            text: finalReplyText,
           });
 
       const updatedConversation =
@@ -1690,7 +2147,10 @@ exports.publicSubmitAppointment =
         });
       }
 
-      if (conversation.leadId) {
+      if (
+        conversation.appointmentRequestSubmitted &&
+        conversation.leadId
+      ) {
         return res.json({
           success: true,
           leadId: conversation.leadId,
@@ -1728,7 +2188,7 @@ exports.publicSubmitAppointment =
 
       const knownTreatmentMatch =
         treatment.match(
-          /(breast augmentation|rhinoplasty|liposuction|hair transplant|facial plastic surgery|plastic surgery|cosmetic surgery)/i
+          /(breast augmentation|rhinoplasty|liposuction|hair transplant|facial plastic surgery|plastic surgery|cosmetic surgery|hernia)/i
         );
 
       const normalizedTreatment =
@@ -1774,6 +2234,9 @@ exports.publicSubmitAppointment =
       }
 
       conversation.leadId = lead._id;
+      conversation.appointmentRequestSubmitted =
+        true;
+      conversation.appointmentFormOpen = false;
       conversation.lastMessage =
         "Appointment request submitted";
       conversation.lastMessageAt = new Date();

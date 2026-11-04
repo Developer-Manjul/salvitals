@@ -26,12 +26,17 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     let changed = false;
     const appointmentNote = String(conversation.appointmentNote || "").trim();
 
+    if (name && existing.name !== name) {
+      existing.name = name;
+      changed = true;
+    }
+
     if (!existing.email && email) {
       existing.email = email;
       changed = true;
     }
 
-    if (!existing.service && service) {
+    if (service && existing.service !== service) {
       existing.service = service;
       changed = true;
     }
