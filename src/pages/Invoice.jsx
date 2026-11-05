@@ -93,8 +93,6 @@ const normalizeCurrencyCode = (value) => {
   return /^[A-Z]{3}$/.test(normalized) ? normalized : "";
 };
 
-
-
 const getToken = () => {
 
   return (
@@ -117,13 +115,9 @@ const getToken = () => {
 
 };
 
-
-
 const api = async (url, options = {}) => {
 
   const token = getToken();
-
-
 
   const response = await fetch(`${API_BASE}${url}`, {
 
@@ -141,11 +135,7 @@ const api = async (url, options = {}) => {
 
   });
 
-
-
   const data = await response.json().catch(() => ({}));
-
-
 
   if (!response.ok) {
 
@@ -153,13 +143,9 @@ const api = async (url, options = {}) => {
 
   }
 
-
-
   return data;
 
 };
-
-
 
 const today = () => {
 
@@ -168,8 +154,6 @@ const today = () => {
   return date.toISOString().split("T")[0];
 
 };
-
-
 
 const createInvoiceNumber = (businessName = "SaleVitals", existingInvoices = []) => {
 
@@ -185,13 +169,9 @@ const createInvoiceNumber = (businessName = "SaleVitals", existingInvoices = [])
 
     .padEnd(2, "X");
 
-
-
   const prefix = `INV/${year}/${code}`;
 
   let maxSequence = 0;
-
-
 
   existingInvoices.forEach((item) => {
 
@@ -203,8 +183,6 @@ const createInvoiceNumber = (businessName = "SaleVitals", existingInvoices = [])
 
     );
 
-
-
     if (match) {
 
       maxSequence = Math.max(maxSequence, Number(match[1]) || 0);
@@ -213,13 +191,9 @@ const createInvoiceNumber = (businessName = "SaleVitals", existingInvoices = [])
 
   });
 
-
-
   return `${prefix}${String(maxSequence + 1).padStart(3, "0")}`;
 
 };
-
-
 
 const emptyItem = () => ({
 
@@ -235,8 +209,6 @@ const emptyItem = () => ({
 
 });
 
-
-
 const calculateItem = (item) => {
 
   const cost = Number(item.cost) || 0;
@@ -246,8 +218,6 @@ const calculateItem = (item) => {
   const gstAmount = cost - cost / (1 + gst / 100);
 
   const baseAmount = cost - gstAmount;
-
-
 
   return {
 
@@ -260,8 +230,6 @@ const calculateItem = (item) => {
   };
 
 };
-
-
 
 const getProfileValue = (profile, keys) => {
 
@@ -280,8 +248,6 @@ const getProfileValue = (profile, keys) => {
   return "";
 
 };
-
-
 
 export default function Invoice() {
 
@@ -328,8 +294,6 @@ export default function Invoice() {
 
   const pdfExportRef = useRef(null);
 
-
-
   const [invoice, setInvoice] = useState({
 
     invoiceNumber: createInvoiceNumber("SaleVitals", []),
@@ -364,8 +328,6 @@ export default function Invoice() {
 
   });
 
-
-
   useEffect(() => {
 
     loadProfile();
@@ -377,8 +339,6 @@ export default function Invoice() {
     loadCustomers();
 
   }, []);
-
-
 
   useEffect(() => {
 
@@ -392,17 +352,11 @@ export default function Invoice() {
 
     };
 
-
-
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
 
   }, []);
-
-
-
-
 
   const loadProfile = async () => {
 
@@ -430,8 +384,6 @@ export default function Invoice() {
 
   };
 
-
-
   const loadInvoices = async () => {
     try {
       setLoading(true);
@@ -441,9 +393,6 @@ export default function Invoice() {
       let invoiceList = Array.isArray(data.invoices)
         ? data.invoices
         : [];
-
-      // Get workspace owner's billing profile directly.
-      // Never take billing profile from an old invoice.
       let ownerProfile = billingProfile || profile || null;
 
       try {
@@ -495,8 +444,6 @@ export default function Invoice() {
           : ownerCurrency ||
           COUNTRY_CURRENCY_MAP[finalCountry]?.currency ||
           "USD";
-
-      // Normalize every invoice for the current workspace.
       invoiceList = invoiceList.map((item) => {
         const itemCountry = normalizeCountryCode(
           item.countryCode ||
@@ -562,8 +509,6 @@ export default function Invoice() {
     }
   };
 
-
-
   const loadServices = async () => {
 
     try {
@@ -593,8 +538,6 @@ export default function Invoice() {
     }
 
   };
-
-
 
   const loadCustomers = async () => {
 
@@ -629,8 +572,6 @@ export default function Invoice() {
     }
 
   };
-
-
 
   const periodInvoices = useMemo(() => {
     return invoices.filter((item) => {
@@ -673,41 +614,23 @@ export default function Invoice() {
   }, [periodInvoices, search, serviceFilter, statusFilter]);
 
   const invoiceStats = useMemo(() => {
-    const getInvoiceAmount = (item) =>
-      Math.max(0, Number(item.total ?? item.grandTotal ?? item.amount ?? 0) || 0);
-
-    const getPaidAmount = (item) => {
-      const total = getInvoiceAmount(item);
-      const status = String(item.paymentStatus ?? item.status ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/[_-]+/g, " ");
-
-      // A fully-paid status confirms the full invoice was received.
-      if (["paid", "complete", "completed", "fully paid", "payment received"].includes(status)) {
-        return total;
-      }
-
-      // Use an explicit received/paid amount for unpaid or partially-paid invoices.
-      // Sending an invoice (e.g. status "Sent") is not the same as receiving payment.
-      const recordedPaid = Number(
-        item.paidAmount ??
-        item.amountPaid ??
-        item.amountReceived ??
-        item.paymentReceived ??
-        item.receivedAmount ??
-        0
-      ) || 0;
-
-      return Math.min(total, Math.max(0, recordedPaid));
+    const getInvoiceAmount = (item) => Math.max(0, Number(item.total ?? item.grandTotal ?? item.amount ?? 0) || 0);
+    const now = new Date();
+    const currentMonthInvoices = invoices.filter((item) => {
+      const rawDate = item.invoiceDate || item.date || item.createdAt;
+      if (!rawDate) return false;
+      const date = new Date(rawDate);
+      return !Number.isNaN(date.getTime()) && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    });
+    const selectedPeriodRevenue = periodInvoices.reduce((sum, item) => sum + getInvoiceAmount(item), 0);
+    const monthlyRevenue = currentMonthInvoices.reduce((sum, item) => sum + getInvoiceAmount(item), 0);
+    return {
+      count: periodInvoices.length,
+      monthlyCount: currentMonthInvoices.length,
+      monthlyRevenue,
+      totalRevenue: selectedPeriodRevenue,
     };
-
-    const totalValue = filteredInvoices.reduce((sum, item) => sum + getInvoiceAmount(item), 0);
-    const paidAmount = filteredInvoices.reduce((sum, item) => sum + getPaidAmount(item), 0);
-    const pendingAmount = Math.max(0, totalValue - paidAmount);
-
-    return { count: filteredInvoices.length, totalValue, paidAmount, pendingAmount };
-  }, [filteredInvoices]);
+  }, [invoices, periodInvoices]);
 
   const exportInvoices = () => {
     const columns = [
@@ -749,8 +672,6 @@ export default function Invoice() {
 
     let grandTotal = 0;
 
-
-
     invoice.items.forEach((item) => {
 
       const result = calculateItem(item);
@@ -763,13 +684,9 @@ export default function Invoice() {
 
     });
 
-
-
     return { subtotal, gstAmount, grandTotal };
 
   }, [invoice.items]);
-
-
 
   const getBillingCountryCode = () => {
     const billing = getBillingProfile() || {};
@@ -805,8 +722,6 @@ export default function Invoice() {
 
   const getInvoiceCurrencyCode = () => {
     const countryCode = getInvoiceCountryCode();
-
-    // India invoices always use INR/₹.
     if (countryCode === "IN") {
       return "INR";
     }
@@ -880,19 +795,13 @@ export default function Invoice() {
 
     if (!value) return "-";
 
-
-
     const date = new Date(value);
-
-
 
     if (Number.isNaN(date.getTime())) {
 
       return value;
 
     }
-
-
 
     return date.toLocaleDateString("en-IN", {
 
@@ -906,8 +815,6 @@ export default function Invoice() {
 
   };
 
-
-
   const getBillingProfile = () => {
 
     const isTeamMember = Boolean(profile?.workspaceOwner);
@@ -920,57 +827,39 @@ export default function Invoice() {
 
   };
 
-
-
   const getBusinessName = () =>
 
     getProfileValue(getBillingProfile(), ["displayName", "clinicName", "businessName", "name"]) ||
 
     "SaleVitals";
 
-
-
   const getBusinessOwner = () =>
 
     getProfileValue(getBillingProfile(), ["name", "ownerName", "doctorName"]);
-
-
 
   const getBusinessAddress = () =>
 
     getProfileValue(getBillingProfile(), ["address", "clinicAddress", "businessAddress"]);
 
-
-
   const getBusinessPhone = () =>
 
     getProfileValue(getBillingProfile(), ["phone", "mobile", "contactNumber"]);
-
-
 
   const getBusinessEmail = () =>
 
     getProfileValue(getBillingProfile(), ["email", "businessEmail"]);
 
-
-
   const getBusinessGstin = () =>
 
     getProfileValue(getBillingProfile(), ["gstin", "gstNumber", "gstNo"]);
-
-
 
   const getBusinessPan = () =>
 
     getProfileValue(getBillingProfile(), ["pan", "panNumber", "pan_number"]);
 
-
-
   const getBusinessLogo = () =>
 
     getProfileValue(getBillingProfile(), ["clinicLogo", "logo", "businessLogo", "profileImage"]);
-
-
 
   const openCreateInvoice = () => {
 
@@ -989,8 +878,6 @@ export default function Invoice() {
     setServiceSearchOpen("");
 
     setEditingInvoiceId("");
-
-
 
     setInvoice({
 
@@ -1028,13 +915,9 @@ export default function Invoice() {
 
     });
 
-
-
     setView("create");
 
   };
-
-
 
   const handleCustomerChange = (customerId) => {
 
@@ -1046,11 +929,7 @@ export default function Invoice() {
 
     );
 
-
-
     setSelectedCustomer(customer || null);
-
-
 
     setInvoice((prev) => ({
 
@@ -1082,8 +961,6 @@ export default function Invoice() {
 
   };
 
-
-
   const handleCustomerInput = (value) => {
 
     setCustomerQuery(value);
@@ -1106,8 +983,6 @@ export default function Invoice() {
 
   };
 
-
-
   const selectCustomer = (customer) => {
 
     const customerId = customer?._id || customer?.id || "";
@@ -1122,15 +997,11 @@ export default function Invoice() {
 
       "";
 
-
-
     setSelectedCustomer(customer || null);
 
     setCustomerQuery(customerName);
 
     setCustomerSearchOpen(false);
-
-
 
     setInvoice((prev) => ({
 
@@ -1154,21 +1025,15 @@ export default function Invoice() {
 
   };
 
-
-
   const addNewCustomer = async () => {
 
     const name = customerQuery.trim();
-
-
 
     if (!name) {
 
       return;
 
     }
-
-
 
     const existing = customers.find((customer) => {
 
@@ -1182,13 +1047,9 @@ export default function Invoice() {
 
         "";
 
-
-
       return customerName.trim().toLowerCase() === name.toLowerCase();
 
     });
-
-
 
     if (existing) {
 
@@ -1198,15 +1059,11 @@ export default function Invoice() {
 
     }
 
-
-
     try {
 
       setAddingCustomer(true);
 
       setError("");
-
-
 
       const data = await api("/api/contacts", {
 
@@ -1232,8 +1089,6 @@ export default function Invoice() {
 
       });
 
-
-
       const contact =
 
         data.contact || {
@@ -1256,8 +1111,6 @@ export default function Invoice() {
 
         };
 
-
-
       setCustomers((prev) => [
 
         contact,
@@ -1274,8 +1127,6 @@ export default function Invoice() {
 
       ]);
 
-
-
       selectCustomer(contact);
 
     } catch (error) {
@@ -1289,8 +1140,6 @@ export default function Invoice() {
     }
 
   };
-
-
 
   const updateCustomerField = (field, value) => {
 
@@ -1308,8 +1157,6 @@ export default function Invoice() {
 
   };
 
-
-
   const updateItem = (itemId, field, value) => {
 
     setInvoice((prev) => ({
@@ -1326,8 +1173,6 @@ export default function Invoice() {
 
   };
 
-
-
   const selectService = (itemId, serviceId) => {
 
     const service = services.find(
@@ -1335,8 +1180,6 @@ export default function Invoice() {
       (item) => String(item._id || item.id) === String(serviceId)
 
     );
-
-
 
     if (!service) {
 
@@ -1346,19 +1189,13 @@ export default function Invoice() {
 
     }
 
-
-
     const serviceName =
 
       service.name || service.title || service.serviceName || "";
 
-
-
     const serviceCost =
 
       service.cost ?? service.price ?? service.amount ?? "";
-
-
 
     setInvoice((prev) => ({
 
@@ -1390,8 +1227,6 @@ export default function Invoice() {
 
   };
 
-
-
   const handleServiceInput = (itemId, value) => {
 
     updateItem(itemId, "serviceName", value);
@@ -1402,8 +1237,6 @@ export default function Invoice() {
 
   };
 
-
-
   const selectExistingService = (itemId, service) => {
 
     selectService(itemId, service?._id || service?.id || "");
@@ -1412,15 +1245,11 @@ export default function Invoice() {
 
   };
 
-
-
   const addCustomService = (itemId) => {
 
     setServiceSearchOpen("");
 
   };
-
-
 
   const addItem = () => {
 
@@ -1434,8 +1263,6 @@ export default function Invoice() {
 
   };
 
-
-
   const removeItem = (itemId) => {
 
     setInvoice((prev) => {
@@ -1445,8 +1272,6 @@ export default function Invoice() {
         return prev;
 
       }
-
-
 
       return {
 
@@ -1459,8 +1284,6 @@ export default function Invoice() {
     });
 
   };
-
-
 
   const buildPayload = () => ({
 
@@ -1475,7 +1298,6 @@ export default function Invoice() {
     currencySymbol: getInvoiceCurrencySymbol(),
 
     taxType: getTaxLabel(),
-
 
     customerId: invoice.customerId,
 
@@ -1498,8 +1320,6 @@ export default function Invoice() {
     items: invoice.items.map((item) => {
 
       const result = calculateItem(item);
-
-
 
       return {
 
@@ -1539,8 +1359,6 @@ export default function Invoice() {
 
   });
 
-
-
   const buildWhatsAppMessage = (invoiceData = invoice) => {
 
     const businessName = getBusinessName();
@@ -1555,19 +1373,13 @@ export default function Invoice() {
 
     const messageCurrency = invoiceData.currencyCode || getInvoiceCurrencyCode();
 
-
-
     return `Hello ${customerName}, 👋\n\nThank you for choosing ${businessName}.\n\nYour invoice ${invoiceNumber} is ready. Please find the invoice PDF attached with this message.\n\nInvoice Date: ${invoiceDate}\nInvoice Amount: ${formatCurrency(total, messageCurrency)}\n\nIf you have any questions regarding the invoice, please reply to this WhatsApp message.\n\nRegards,\n${businessName}`;
 
   };
 
-
-
   const sendInvoiceToWhatsApp = async (invoiceRecord) => {
 
     const invoiceId = invoiceRecord?._id || invoiceRecord?.id;
-
-
 
     if (!invoiceId) {
 
@@ -1575,15 +1387,11 @@ export default function Invoice() {
 
     }
 
-
-
     if (!invoiceRecord?.customerPhone && !invoice.customerPhone) {
 
       throw new Error("Customer WhatsApp number is missing.");
 
     }
-
-
 
     const message = buildWhatsAppMessage({
 
@@ -1594,8 +1402,6 @@ export default function Invoice() {
       total: invoiceRecord?.total ?? totals.grandTotal,
 
     });
-
-
 
     return api(`/api/invoices/${invoiceId}/send-whatsapp`, {
 
@@ -1611,13 +1417,9 @@ export default function Invoice() {
 
   };
 
-
-
   const downloadInvoicePDF = async (invoiceRecord, returnToList = false) => {
 
     const invoiceId = invoiceRecord?._id || invoiceRecord?.id;
-
-
 
     if (!invoiceId) {
 
@@ -1625,15 +1427,11 @@ export default function Invoice() {
 
     }
 
-
-
     try {
 
       setSaving(true);
 
       setError("");
-
-
 
       const token = getToken();
 
@@ -1651,8 +1449,6 @@ export default function Invoice() {
 
       });
 
-
-
       if (!response.ok) {
 
         const contentType = response.headers.get("content-type") || "";
@@ -1669,8 +1465,6 @@ export default function Invoice() {
 
       }
 
-
-
       const blob = await response.blob();
 
       const url = window.URL.createObjectURL(blob);
@@ -1678,8 +1472,6 @@ export default function Invoice() {
       const link = document.createElement("a");
 
       const filename = `${String(invoiceRecord.invoiceNumber || "invoice").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
-
-
 
       link.href = url;
 
@@ -1693,11 +1485,7 @@ export default function Invoice() {
 
       window.URL.revokeObjectURL(url);
 
-
-
       setSuccess("Invoice PDF downloaded.");
-
-
 
       if (returnToList) {
 
@@ -1721,15 +1509,11 @@ export default function Invoice() {
 
   };
 
-
-
   const saveInvoice = async (downloadAfterSave = false) => {
 
     setError("");
 
     setSuccess("");
-
-
 
     if (!invoice.customerName.trim()) {
 
@@ -1739,8 +1523,6 @@ export default function Invoice() {
 
     }
 
-
-
     if (!invoice.items.length) {
 
       setError("Please add at least one service.");
@@ -1749,15 +1531,11 @@ export default function Invoice() {
 
     }
 
-
-
     const invalidItem = invoice.items.some(
 
       (item) => !item.serviceName.trim() || Number(item.cost) <= 0
 
     );
-
-
 
     if (invalidItem) {
 
@@ -1767,13 +1545,9 @@ export default function Invoice() {
 
     }
 
-
-
     try {
 
       setSaving(true);
-
-
 
       const data = await api(
 
@@ -1789,8 +1563,6 @@ export default function Invoice() {
 
       );
 
-
-
       if (data.invoice) {
 
         setEditingInvoiceId(String(data.invoice._id || data.invoice.id || ""));
@@ -1805,8 +1577,6 @@ export default function Invoice() {
 
       }
 
-
-
       if (downloadAfterSave) {
 
         await downloadInvoicePDF(data.invoice, true);
@@ -1815,11 +1585,7 @@ export default function Invoice() {
 
       }
 
-
-
       setSuccess("Invoice saved successfully.");
-
-
 
       setView("list");
 
@@ -1841,15 +1607,11 @@ export default function Invoice() {
 
   };
 
-
-
   const sendExistingInvoiceToWhatsApp = async (item) => {
 
     setError("");
 
     setSuccess("");
-
-
 
     try {
 
@@ -1875,8 +1637,6 @@ export default function Invoice() {
 
   };
 
-
-
   const deleteInvoice = async (invoiceId) => {
 
     if (!window.confirm("Are you sure you want to delete this invoice?")) {
@@ -1885,8 +1645,6 @@ export default function Invoice() {
 
     }
 
-
-
     try {
 
       await api(`/api/invoices/${invoiceId}`, {
@@ -1894,8 +1652,6 @@ export default function Invoice() {
         method: "DELETE",
 
       });
-
-
 
       setInvoices((prev) =>
 
@@ -1917,8 +1673,6 @@ export default function Invoice() {
 
   };
 
-
-
   const editInvoice = (item) => {
 
     setError("");
@@ -1926,8 +1680,6 @@ export default function Invoice() {
     setSuccess("");
 
     setShowPreview(false);
-
-
 
     setInvoice({
 
@@ -1947,7 +1699,6 @@ export default function Invoice() {
       taxType:
         item.taxType ||
         (normalizeCountryCode(item.countryCode || getBillingCountryCode()) === "IN" ? "GST" : "Tax"),
-
 
       customerId: item.customerId || "",
 
@@ -1987,8 +1738,6 @@ export default function Invoice() {
 
     });
 
-
-
     setCustomerQuery(item.customerName || "");
 
     setEditingInvoiceId(String(item._id || item.id || ""));
@@ -2001,8 +1750,6 @@ export default function Invoice() {
 
   };
 
-
-
   const openPreview = () => {
 
     setError("");
@@ -2010,8 +1757,6 @@ export default function Invoice() {
     setShowPreview(true);
 
   };
-
-
 
   const printInvoice = async () => {
     const invoiceElement = pdfExportRef.current;
@@ -2164,15 +1909,12 @@ export default function Invoice() {
           try {
             await printDocument.fonts.ready;
           } catch {
-            // ignore font loading error
           }
         }
       };
 
       await waitForImages();
       await waitForFonts();
-
-      // Give browser time to render the invoice
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });
@@ -2180,13 +1922,10 @@ export default function Invoice() {
       iframe.contentWindow.focus();
 
       iframe.contentWindow.print();
-
-      // Remove iframe after print dialog is opened
       setTimeout(() => {
         try {
           document.body.removeChild(iframe);
         } catch {
-          // iframe already removed
         }
       }, 3000);
     } catch (error) {
@@ -2194,8 +1933,6 @@ export default function Invoice() {
       setError("Unable to print invoice.");
     }
   };
-
-
 
   const renderInvoiceDocument = () => {
 
@@ -2224,8 +1961,6 @@ export default function Invoice() {
         ? `${taxLabel} (${taxRates[0]}%)`
         : taxLabel;
 
-
-
     return (
 
       <div className="invoice-document" ref={pdfExportRef}>
@@ -2248,8 +1983,6 @@ export default function Invoice() {
 
             </div>
 
-
-
             <div className="invoice-company-info">
 
               <h2>{businessName}</h2>
@@ -2270,17 +2003,9 @@ export default function Invoice() {
 
           </div>
 
-
-
-
-
         </div>
 
-
-
         <div className="invoice-document-line" />
-
-
 
         <div className="invoice-document-parties">
 
@@ -2300,8 +2025,6 @@ export default function Invoice() {
 
           </div>
 
-
-
           <div>
 
             <span>INVOICE DETAILS</span>
@@ -2315,8 +2038,6 @@ export default function Invoice() {
           </div>
 
         </div>
-
-
 
         <div className="invoice-document-table-wrap">
 
@@ -2346,8 +2067,6 @@ export default function Invoice() {
 
                 const result = calculateItem(item);
 
-
-
                 return (
 
                   <tr key={item.id}>
@@ -2374,8 +2093,6 @@ export default function Invoice() {
 
         </div>
 
-
-
         <div className="invoice-document-bottom">
 
           <div className="invoice-document-notes">
@@ -2393,8 +2110,6 @@ export default function Invoice() {
             )}
 
           </div>
-
-
 
           <div className="invoice-document-total-box">
 
@@ -2430,8 +2145,6 @@ export default function Invoice() {
 
         </div>
 
-
-
         <div className="invoice-document-footer">
 
           <strong>Thank you for your business.</strong>
@@ -2446,8 +2159,6 @@ export default function Invoice() {
 
   };
 
-
-
   const renderList = () => (
 
     <div className="invoice-page">
@@ -2461,8 +2172,6 @@ export default function Invoice() {
           <p>Create and manage your customer invoices.</p>
 
         </div>
-
-
 
         <button
 
@@ -2480,43 +2189,27 @@ export default function Invoice() {
 
       </div>
 
-
-
       <style>{`
-        .invoice-dashboard-stats {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-          margin: 18px 0 14px;
-        }
-        .invoice-stat-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          min-width: 0;
-          padding: 16px 18px;
-          border: 1px solid #e1e9f3;
-          border-radius: 12px;
-          background: #fff;
-          box-shadow: 0 3px 10px rgba(20, 54, 95, .035);
-        }
-        .invoice-stat-icon {
-          display: flex;
-          flex: 0 0 40px;
-          width: 40px;
-          height: 40px;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          font-size: 21px;
-          font-weight: 700;
-        }
-        .invoice-stat-icon.blue { color: #2673f5; background: #eaf2ff; }
-        .invoice-stat-icon.green { color: #08a66a; background: #e5f8ef; }
-        .invoice-stat-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-        .invoice-stat-copy > span { color: #61718b; font-size: 11px; }
-        .invoice-stat-copy > strong { color: #10284d; font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
-        .invoice-stat-copy > small { color: #8390a5; font-size: 10px; }
+        .invoice-dashboard-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0 14px}
+        .invoice-stat-card{position:relative;display:flex;align-items:center;gap:12px;min-width:0;min-height:108px;padding:15px 16px;overflow:hidden;border:1px solid #e1e9f3;border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(20,54,95,.045)}
+        .invoice-stat-card:after{content:"";position:absolute;width:110px;height:55px;right:-18px;bottom:-24px;border-radius:50%;opacity:.65;filter:blur(1px)}
+        .invoice-stat-card.monthly-invoices{background:linear-gradient(115deg,#fff 0%,#fbf8ff 100%);border-color:#e8dcff}
+        .invoice-stat-card.monthly-invoices:after{background:#eadcff}
+        .invoice-stat-card.monthly-revenue{background:linear-gradient(115deg,#fff 0%,#f1fffc 100%);border-color:#d5f3eb}
+        .invoice-stat-card.monthly-revenue:after{background:#c8f5ec}
+        .invoice-stat-card.total-revenue{background:linear-gradient(115deg,#fff 0%,#f5fff5 100%);border-color:#d9f2dc}
+        .invoice-stat-card.total-revenue:after{background:#d1f6d5}
+        .invoice-stat-icon{position:relative;z-index:1;display:flex;flex:0 0 42px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:13px;font-size:22px;font-weight:700}
+        .invoice-stat-icon.blue{color:#2673f5;background:#e5efff}
+        .invoice-stat-icon.purple{color:#7c3aed;background:#f0e7ff}
+        .invoice-stat-icon.teal{color:#059b83;background:#dcfaf3}
+        .invoice-stat-icon.green{color:#16a34a;background:#e2fbe5}
+        .invoice-stat-copy{position:relative;z-index:1;display:flex;flex:1;flex-direction:column;min-width:0;gap:3px}
+        .invoice-stat-heading{display:flex;align-items:center;justify-content:space-between;gap:5px;color:#26364d;font-size:11px;font-weight:600}
+        .invoice-stat-period{padding:4px 7px;border-radius:20px;background:#eee5ff;color:#7138d5;font-size:9px;font-weight:700;white-space:nowrap}
+        .monthly-revenue .invoice-stat-period{background:#d9f8f0;color:#07866f}
+        .invoice-stat-copy>strong{color:#10284d;font-size:25px;line-height:1.2;overflow-wrap:anywhere}
+        .invoice-stat-copy>small{color:#65758d;font-size:10px}
         .invoice-list-toolbar {
           display: grid !important;
           grid-template-columns: minmax(205px, 1.05fr) minmax(125px, .65fr) minmax(115px, .55fr) minmax(165px, .9fr) auto;
@@ -2563,12 +2256,14 @@ export default function Invoice() {
         .invoice-export-btn:hover { background: #effcf5; }
         .invoice-clear-filters { height: 34px; padding: 0 9px; border: 1px solid #d7e1ee; border-radius: 7px; color: #52657e; background: #fff; cursor: pointer; white-space: nowrap; }
         .invoice-count { color: #8390a5; font-size: 10px; white-space: nowrap; }
+        @media (max-width: 1200px) {
+          .invoice-dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         @media (max-width: 980px) {
           .invoice-list-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .invoice-export-group { grid-column: 1 / -1; justify-content: flex-end; }
         }
         @media (max-width: 900px) {
-          .invoice-dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .invoice-list-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
           .invoice-search { grid-column: 1 / -1; }
           .invoice-export-group { grid-column: auto; justify-content: flex-start; flex-wrap: wrap; }
@@ -2589,20 +2284,36 @@ export default function Invoice() {
       {success && <div className="invoice-alert success">{success}</div>}
 
       <div className="invoice-dashboard-stats">
-        <div className="invoice-stat-card">
+        <div className="invoice-stat-card total-invoices">
           <div className="invoice-stat-icon blue">▤</div>
           <div className="invoice-stat-copy">
-            <span>Total Invoices</span>
-            <strong>{invoiceStats.count}</strong>
-            <small>Invoices in selected period</small>
+            <div className="invoice-stat-heading"><span>Total Invoices</span></div>
+            <strong>{invoiceStats.count.toLocaleString("en-IN")}</strong>
+            {/* <small>Invoices in selected date range</small> */}
           </div>
         </div>
-        <div className="invoice-stat-card">
-          <div className="invoice-stat-icon green">₹</div>
+        <div className="invoice-stat-card monthly-invoices">
+          <div className="invoice-stat-icon purple">▦</div>
           <div className="invoice-stat-copy">
-            <span>Total Invoice Value</span>
-            <strong>{formatCurrency(invoiceStats.totalValue, "INR")}</strong>
-            <small>Across selected invoices</small>
+            <div className="invoice-stat-heading"><span>Monthly Invoices</span><span className="invoice-stat-period">{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span></div>
+            <strong>{invoiceStats.monthlyCount.toLocaleString("en-IN")}</strong>
+            {/* <small>Invoices created this month</small> */}
+          </div>
+        </div>
+        <div className="invoice-stat-card monthly-revenue">
+          <div className="invoice-stat-icon teal">₹</div>
+          <div className="invoice-stat-copy">
+            <div className="invoice-stat-heading"><span>Monthly Revenue</span><span className="invoice-stat-period">{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span></div>
+            <strong>{formatCurrency(invoiceStats.monthlyRevenue, getBillingCurrencyCode() || "INR")}</strong>
+            {/* <small>Invoice amount created this month</small> */}
+          </div>
+        </div>
+        <div className="invoice-stat-card total-revenue">
+          <div className="invoice-stat-icon green">↗</div>
+          <div className="invoice-stat-copy">
+            <div className="invoice-stat-heading"><span>Total Revenue</span></div>
+            <strong>{formatCurrency(invoiceStats.totalRevenue, getBillingCurrencyCode() || "INR")}</strong>
+            {/* <small>Total invoice amount for selected dates</small> */}
           </div>
         </div>
       </div>
@@ -2647,8 +2358,6 @@ export default function Invoice() {
           </div>
         </div>
 
-
-
         <div className="invoice-table-wrap">
 
           <table className="invoice-table">
@@ -2678,8 +2387,6 @@ export default function Invoice() {
               </tr>
 
             </thead>
-
-
 
             <tbody>
 
@@ -2827,7 +2534,6 @@ export default function Invoice() {
                                 item.taxType ||
                                 (normalizeCountryCode(item.countryCode || getBillingCountryCode()) === "IN" ? "GST" : "Tax"),
 
-
                               customerId: item.customerId || "",
 
                               patientId: item.patientId || "",
@@ -2970,8 +2676,6 @@ export default function Invoice() {
 
   );
 
-
-
   const renderCreate = () => (
 
     <div className="invoice-page">
@@ -3000,8 +2704,6 @@ export default function Invoice() {
 
         </div>
 
-
-
         <div className="invoice-header-powered">
 
           <span className="invoice-powered-dot" />
@@ -3012,13 +2714,9 @@ export default function Invoice() {
 
       </div>
 
-
-
       {error && <div className="invoice-alert error">{error}</div>}
 
       {success && <div className="invoice-alert success">{success}</div>}
-
-
 
       <div className="invoice-create-layout">
 
@@ -3033,8 +2731,6 @@ export default function Invoice() {
               <span className="invoice-draft-badge">Draft</span>
 
             </div>
-
-
 
             <div className="invoice-form-grid">
 
@@ -3053,8 +2749,6 @@ export default function Invoice() {
                 />
 
               </div>
-
-
 
               <div className="invoice-field">
 
@@ -3088,8 +2782,6 @@ export default function Invoice() {
 
           </section>
 
-
-
           <section className="invoice-card">
 
             <div className="invoice-card-header">
@@ -3097,8 +2789,6 @@ export default function Invoice() {
               <h2>Billed By</h2>
 
             </div>
-
-
 
             <div className="invoice-billed-profile">
 
@@ -3115,8 +2805,6 @@ export default function Invoice() {
                 )}
 
               </div>
-
-
 
               <div>
 
@@ -3140,8 +2828,6 @@ export default function Invoice() {
 
           </section>
 
-
-
           <section className="invoice-card">
 
             <div className="invoice-card-header">
@@ -3155,8 +2841,6 @@ export default function Invoice() {
               </div>
 
             </div>
-
-
 
             <div className="invoice-form-grid">
 
@@ -3194,8 +2878,6 @@ export default function Invoice() {
 
                   />
 
-
-
                   {customerSearchOpen && (
 
                     <div className="invoice-search-menu">
@@ -3203,8 +2885,6 @@ export default function Invoice() {
                       {(() => {
 
                         const query = customerQuery.trim().toLowerCase();
-
-
 
                         const matches = customers
 
@@ -3224,8 +2904,6 @@ export default function Invoice() {
 
                             const email = customer?.email || "";
 
-
-
                             return (
 
                               !query ||
@@ -3242,8 +2920,6 @@ export default function Invoice() {
 
                           .slice(0, 8);
 
-
-
                         return (
 
                           <>
@@ -3259,8 +2935,6 @@ export default function Invoice() {
                                 customer?.patientName ||
 
                                 "Unnamed customer";
-
-
 
                               return (
 
@@ -3295,8 +2969,6 @@ export default function Invoice() {
                               );
 
                             })}
-
-
 
                             {query && !matches.some((customer) => {
 
@@ -3350,8 +3022,6 @@ export default function Invoice() {
 
                               )}
 
-
-
                             {!matches.length && !query && (
 
                               <div className="invoice-search-empty">
@@ -3375,8 +3045,6 @@ export default function Invoice() {
                 </div>
 
               </div>
-
-
 
               <div className="invoice-field">
 
@@ -3408,8 +3076,6 @@ export default function Invoice() {
 
               </div>
 
-
-
               <div className="invoice-field">
 
                 <label>Phone Number</label>
@@ -3428,8 +3094,6 @@ export default function Invoice() {
 
               </div>
 
-
-
               <div className="invoice-field">
 
                 <label>Email</label>
@@ -3447,8 +3111,6 @@ export default function Invoice() {
                 />
 
               </div>
-
-
 
               <div className="invoice-field invoice-field-full">
 
@@ -3471,8 +3133,6 @@ export default function Invoice() {
             </div>
 
           </section>
-
-
 
           <section className="invoice-card">
 
@@ -3502,8 +3162,6 @@ export default function Invoice() {
 
             </div>
 
-
-
             <div className="invoice-items invoice-items-no-qty">
 
               <div className="invoice-item-head">
@@ -3519,8 +3177,6 @@ export default function Invoice() {
                 <span />
 
               </div>
-
-
 
               {invoice.items.map((item) => (
 
@@ -3564,8 +3220,6 @@ export default function Invoice() {
 
                     />
 
-
-
                     {serviceSearchOpen === item.id && (
 
                       <div className="invoice-search-menu invoice-service-menu">
@@ -3577,8 +3231,6 @@ export default function Invoice() {
                             .trim()
 
                             .toLowerCase();
-
-
 
                           const matches = services
 
@@ -3594,8 +3246,6 @@ export default function Invoice() {
 
                                 "";
 
-
-
                               return (
 
                                 !query ||
@@ -3607,8 +3257,6 @@ export default function Invoice() {
                             })
 
                             .slice(0, 8);
-
-
 
                           return (
 
@@ -3625,8 +3273,6 @@ export default function Invoice() {
                                   service?.serviceName ||
 
                                   "Service";
-
-
 
                                 return (
 
@@ -3676,8 +3322,6 @@ export default function Invoice() {
 
                               })}
 
-
-
                               {query && !matches.some((service) => {
 
                                 const name =
@@ -3724,8 +3368,6 @@ export default function Invoice() {
 
                                 )}
 
-
-
                               {!matches.length && !query && (
 
                                 <div className="invoice-search-empty">
@@ -3748,8 +3390,6 @@ export default function Invoice() {
 
                   </div>
 
-
-
                   <input
 
                     className="invoice-cost-input"
@@ -3767,8 +3407,6 @@ export default function Invoice() {
                     placeholder="0.00"
 
                   />
-
-
 
                   <div className="invoice-tax-control">
                     {item.customTax ? (
@@ -3879,8 +3517,6 @@ export default function Invoice() {
 
                   </strong>
 
-
-
                   <button
 
                     type="button"
@@ -3905,8 +3541,6 @@ export default function Invoice() {
 
             </div>
 
-
-
             <div className="invoice-bottom-area">
 
               <div className="invoice-notes">
@@ -3926,8 +3560,6 @@ export default function Invoice() {
                 />
 
               </div>
-
-
 
               <div className="invoice-calculation">
 
@@ -3967,8 +3599,6 @@ export default function Invoice() {
 
         </div>
 
-
-
         <aside className="invoice-create-sidebar">
 
           <div className="invoice-card invoice-actions-card">
@@ -3989,8 +3619,6 @@ export default function Invoice() {
 
             </button>
 
-
-
             <button
 
               type="button"
@@ -4004,8 +3632,6 @@ export default function Invoice() {
               ◉ Preview invoice
 
             </button>
-
-
 
             <button
 
@@ -4022,8 +3648,6 @@ export default function Invoice() {
               ↓ Download PDF
 
             </button>
-
-
 
             <button
 
@@ -4064,8 +3688,6 @@ export default function Invoice() {
               </button>
             )}
           </div>
-
-
 
           <div className="invoice-card invoice-summary-card">
 
@@ -4124,8 +3746,6 @@ export default function Invoice() {
         </aside>
 
       </div>
-
-
 
       {showPreview && (
 
@@ -4217,8 +3837,6 @@ export default function Invoice() {
               </div>
 
             </div>
-
-
 
             <div className="invoice-preview-scroll">
               {renderInvoiceDocument()}

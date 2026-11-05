@@ -56,6 +56,24 @@ const formatDate = (value) => {
       });
 };
 
+const toLocalDateKey = (value) => {
+  if (!value) return "";
+  const raw = String(value);
+  // Keep date-only values stable instead of shifting them through UTC.
+  if (/^\\d{4}-\\d{2}-\\d{2}/.test(raw)) return raw.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const currentMonthKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+};
+
 const profileValue = (profile, keys) => {
   for (const key of keys) {
     const value = profile?.[key];
@@ -653,9 +671,39 @@ const chooseMedicine = (index, medicine) => {
     });
   }, [invoices, search, dateFrom, dateTo, deliveryFilter]);
 
+  // Dashboard cards respond only to the date range. Search and delivery
+  // filters continue to affect the table/export without changing the KPIs.
+  const dateRangeInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const dateKey = toLocalDateKey(invoice.invoiceDate || invoice.createdAt);
+      if (!dateKey) return false;
+      if (dateFrom && dateKey < dateFrom) return false;
+      if (dateTo && dateKey > dateTo) return false;
+      return true;
+    });
+  }, [invoices, dateFrom, dateTo]);
+
+  const monthlyInvoices = useMemo(() => {
+    const monthKey = currentMonthKey();
+    return invoices.filter((invoice) =>
+      toLocalDateKey(invoice.invoiceDate || invoice.createdAt).slice(0, 7) === monthKey
+    );
+  }, [invoices]);
+
+  const monthlyRevenue = useMemo(
+    () => monthlyInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.total || invoice.grandTotal || 0),
+      0
+    ),
+    [monthlyInvoices]
+  );
+
   const pharmacyInvoiceTotal = useMemo(
-    () => filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.total || invoice.grandTotal || 0), 0),
-    [filteredInvoices]
+    () => dateRangeInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.total || invoice.grandTotal || 0),
+      0
+    ),
+    [dateRangeInvoices]
   );
 
   const exportPharmacyInvoices = () => {
@@ -714,7 +762,7 @@ const chooseMedicine = (index, medicine) => {
           <style>{`
             .pharmacy-invoice-dashboard-stats {
               display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
+              grid-template-columns: repeat(4, minmax(0, 1fr));
               gap: 12px;
               margin: 18px 0 14px;
             }
@@ -787,12 +835,15 @@ const chooseMedicine = (index, medicine) => {
               .pharmacy-invoice-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
             }
             @media (max-width: 640px) {
-              .pharmacy-invoice-dashboard-stats { grid-template-columns: 1fr; }
+              .pharmacy-invoice-dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
               .pharmacy-invoice-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
               .pharmacy-invoice-filter-search { grid-column: 1 / -1; }
               .pharmacy-invoice-filter-count { justify-self: start; }
               .pharmacy-invoice-stat { padding: 13px; }
               .pharmacy-invoice-stat-value { font-size: 20px; }
+            }
+            @media (max-width: 420px) {
+              .pharmacy-invoice-dashboard-stats { grid-template-columns: 1fr; }
             }
           `}</style>
           <div className="pharmacy-invoice-dashboard-stats">
@@ -800,16 +851,36 @@ const chooseMedicine = (index, medicine) => {
               <div className="pharmacy-invoice-stat-icon">▤</div>
               <div>
                 <div className="pharmacy-invoice-stat-label">Total Invoices</div>
-                <div className="pharmacy-invoice-stat-value">{filteredInvoices.length}</div>
-                <div className="pharmacy-invoice-stat-note">Invoices in selected period</div>
+                <div className="pharmacy-invoice-stat-value">{dateRangeInvoices.length}</div>
+                <div className="pharmacy-invoice-stat-note">
+                  {dateFrom || dateTo ? "Invoices in selected period" : "Across all invoices"}
+                </div>
+              </div>
+            </div>
+            <div className="pharmacy-invoice-stat">
+              <div className="pharmacy-invoice-stat-icon" style={{ background: "#f2eaff", color: "#7c3aed" }}>▦</div>
+              <div>
+                <div className="pharmacy-invoice-stat-label">Monthly Invoices</div>
+                <div className="pharmacy-invoice-stat-value">{monthlyInvoices.length}</div>
+                <div className="pharmacy-invoice-stat-note">Invoices created this month</div>
               </div>
             </div>
             <div className="pharmacy-invoice-stat">
               <div className="pharmacy-invoice-stat-icon total-value">₹</div>
               <div>
-                <div className="pharmacy-invoice-stat-label">Total Invoice Value</div>
+                <div className="pharmacy-invoice-stat-label">Monthly Revenue</div>
+                <div className="pharmacy-invoice-stat-value">{money(monthlyRevenue)}</div>
+                <div className="pharmacy-invoice-stat-note">Invoice amount created this month</div>
+              </div>
+            </div>
+            <div className="pharmacy-invoice-stat">
+              <div className="pharmacy-invoice-stat-icon" style={{ background: "#e4f8ee", color: "#059669" }}>↗</div>
+              <div>
+                <div className="pharmacy-invoice-stat-label">Total Revenue</div>
                 <div className="pharmacy-invoice-stat-value">{money(pharmacyInvoiceTotal)}</div>
-                <div className="pharmacy-invoice-stat-note">Across selected invoices</div>
+                <div className="pharmacy-invoice-stat-note">
+                  {dateFrom || dateTo ? "Total amount for selected dates" : "Total amount across all invoices"}
+                </div>
               </div>
             </div>
           </div>
