@@ -1724,6 +1724,34 @@ const loadRazorpayScript = () => {
   });
 };
 
+const loadAutoPayStatus = async () => {
+  try {
+    setAutoPayLoading(true);
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/billing/autopay/status`,
+      {
+        headers: { Authorization: `Bearer ${getToken()}` },
+        cache: "no-store",
+      }
+    );
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Unable to load AutoPay status.");
+    }
+    setAutoPay({
+      enabled: Boolean(data.autoPay?.enabled),
+      status: data.autoPay?.status || "disabled",
+      subscriptionId: data.autoPay?.subscriptionId || "",
+      nextBillingAt: data.autoPay?.nextBillingAt || null,
+      expiresAt: data.autoPay?.expiresAt || null,
+    });
+  } catch (statusError) {
+    console.error("Unable to load AutoPay status:", statusError.message);
+  } finally {
+    setAutoPayLoading(false);
+  }
+};
+
   
 
 
@@ -1819,6 +1847,7 @@ const period = Number(rawPeriod);
           planId: subscription.planId,
           period,
           orderId,
+          currency: subscription.currency || "INR",
           selectedAddons: [],
         }),
       }
@@ -1830,6 +1859,12 @@ const period = Number(rawPeriod);
       throw new Error(
         data.message || "Unable to create AutoPay subscription."
       );
+    }
+
+    if (data.alreadyAuthorized) {
+      await loadAutoPayStatus();
+      setAutoPayLoading(false);
+      return;
     }
 
     if (!data.subscriptionId || !data.keyId) {

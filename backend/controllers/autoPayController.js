@@ -51,32 +51,18 @@ if (
 
 exports.getAutoPayStatus = async (req, res) => {
     try {
-        const authorization = req.headers.authorization || "";
-        const token = authorization.startsWith("Bearer ")
-            ? authorization.slice(7)
-            : "";
+        const context = await getWorkspaceContext(req);
 
-        if (!token) {
+        if (!context?.workspaceOwnerId) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required",
             });
         }
 
-        const jwt = require("jsonwebtoken");
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        const userId =
-            decoded.id || decoded._id || decoded.userId;
-
-        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid authentication",
-            });
-        }
-
-        const user = await User.findById(userId).select("subscription");
+        const user = await User.findById(
+            context.workspaceOwnerId
+        ).select("subscription");
 
         if (!user) {
             return res.status(404).json({
@@ -293,7 +279,16 @@ exports.createAutoPaySubscription = async (req, res) => {
             });
         }
 
-        const user = await User.findById(userId);
+        const context = await getWorkspaceContext(req);
+
+        if (!context?.workspaceOwnerId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unable to verify workspace ownership.",
+            });
+        }
+
+        const user = await User.findById(context.workspaceOwnerId);
 
         if (!user || !user.emailVerified) {
             return res.status(403).json({
@@ -302,14 +297,18 @@ exports.createAutoPaySubscription = async (req, res) => {
             });
         }
 
-        const { planId, period = 1, orderId } = req.body || {};
+        const { planId, period = 1, orderId, currency } = req.body || {};
         const normalizedPlan = String(planId || "").trim().toLowerCase();
         const months = Number(period);
 
+        const recurringCurrency = String(
+            currency || "INR"
+        ).toUpperCase();
+
         const prices = {
-            starter: { name: "Starter", inr: 1453 },
-            growth: { name: "Growth", inr: 2453 },
-            scale: { name: "Scale", inr: 4453 },
+            starter: { name: "Starter", inr: 1453, usd: 49 },
+            growth: { name: "Growth", inr: 2453, usd: 79 },
+            scale: { name: "Scale", inr: 4453, usd: 99 },
         };
 
         const discounts = {
@@ -319,6 +318,13 @@ exports.createAutoPaySubscription = async (req, res) => {
             9: 9,
             12: 12,
         };
+
+        if (!["INR", "USD"].includes(recurringCurrency)) {
+            return res.status(400).json({
+                success: false,
+                message: "Unsupported recurring currency.",
+            });
+        }
 
         if (
             !orderId ||
@@ -331,8 +337,6 @@ exports.createAutoPaySubscription = async (req, res) => {
                 message: "Invalid order, plan, or billing period.",
             });
         }
-
-        const context = await getWorkspaceContext(req);
 
         if (!context?.workspaceOwnerId) {
             return res.status(403).json({
@@ -386,6 +390,15 @@ exports.createAutoPaySubscription = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "AutoPay requires a successfully paid order.",
+            });
+        }
+
+        const orderCurrency = String(order.currency || "INR").toUpperCase();
+
+        if (orderCurrency !== recurringCurrency) {
+            return res.status(400).json({
+                success: false,
+                message: "AutoPay currency does not match the paid order.",
             });
         }
 
@@ -444,7 +457,7 @@ exports.createAutoPaySubscription = async (req, res) => {
 
         // Calculate recurring price.
         const discountedPlanAmount = Math.round(
-            prices[normalizedPlan].inr *
+            prices[normalizedPlan][recurringCurrency.toLowerCase()] *
                 months *
                 (1 - discounts[months] / 100) *
                 100
@@ -454,8 +467,8 @@ exports.createAutoPaySubscription = async (req, res) => {
         // Contacts and AI chatbot are pack-based add-ons, not monthly
         // subscriptions in the current checkout UI.
         const monthlyAddonPrices = {
-            pharmacy_invoice: 1000,
-            whatsapp_leads: 1000,
+            pharmacy_invoice: recurringCurrency === "USD" ? 18 : 1000,
+            whatsapp_leads: recurringCurrency === "USD" ? 18 : 1000,
         };
 
         const includedAddons = [];
@@ -626,7 +639,7 @@ exports.createAutoPaySubscription = async (req, res) => {
 
                 if (
                     oldAmountPaise === expectedAmountPaise &&
-                    oldCurrency === "INR" &&
+                    oldCurrency === recurringCurrency &&
                     oldPeriod === "monthly" &&
                     oldInterval === months
                 ) {
@@ -638,7 +651,7 @@ exports.createAutoPaySubscription = async (req, res) => {
                         periodMonths: months,
                         resumeAuthorization: true,
                         recurringAmount,
-                        currency: "INR",
+                        currency: recurringCurrency,
                         message:
                             "The existing AutoPay subscription matches the verified amount.",
                     });
@@ -662,6 +675,28 @@ exports.createAutoPaySubscription = async (req, res) => {
                     status
                 )
             ) {
+                if (["active", "authenticated"].includes(status)) {
+                    subscription.autoRenew = true;
+                    subscription.autoRenewStatus =
+                        status === "active" ? "active" : "authenticated";
+                    subscription.razorpaySubscriptionId =
+                        existingSubscriptionId;
+                    subscription.razorpayPlanId =
+                        existingRazorpaySubscription.plan_id ||
+                        subscription.razorpayPlanId;
+                    await owner.save();
+
+                    return res.status(200).json({
+                        success: true,
+                        alreadyAuthorized: true,
+                        subscriptionId: existingSubscriptionId,
+                        keyId: process.env.RAZORPAY_KEY_ID,
+                        planName: prices[normalizedPlan].name,
+                        periodMonths: months,
+                        message: "AutoPay is already authorized.",
+                    });
+                }
+
                 return res.status(409).json({
                     success: false,
                     message: `The existing AutoPay subscription is ${status}.`,
@@ -687,7 +722,7 @@ exports.createAutoPaySubscription = async (req, res) => {
         const planKey = [
             normalizedPlan,
             months,
-            "INR",
+            recurringCurrency,
             expectedAmountPaise,
         ].join("_");
 
@@ -695,7 +730,7 @@ exports.createAutoPaySubscription = async (req, res) => {
             planKey,
             planName:
                 `SaleVitals ${prices[normalizedPlan].name} - ${months} month(s)`,
-            currency: "INR",
+            currency: recurringCurrency,
             amount: recurringAmount,
             periodMonths: months,
         });
@@ -704,7 +739,7 @@ exports.createAutoPaySubscription = async (req, res) => {
             !savedPlan?.planId ||
             Math.round(Number(savedPlan.amount) * 100) !==
                 expectedAmountPaise ||
-            String(savedPlan.currency || "").toUpperCase() !== "INR" ||
+            String(savedPlan.currency || "").toUpperCase() !== recurringCurrency ||
             Number(savedPlan.periodMonths) !== months
         ) {
             throw new Error(
@@ -716,7 +751,7 @@ exports.createAutoPaySubscription = async (req, res) => {
 
         if (
             Number(razorpayPlan.item?.amount) !== expectedAmountPaise ||
-            String(razorpayPlan.item?.currency || "").toUpperCase() !== "INR" ||
+            String(razorpayPlan.item?.currency || "").toUpperCase() !== recurringCurrency ||
             String(razorpayPlan.period || "").toLowerCase() !== "monthly" ||
             Number(razorpayPlan.interval) !== months
         ) {
@@ -792,7 +827,7 @@ exports.createAutoPaySubscription = async (req, res) => {
             subtotal: recurringSubtotal,
             tax: recurringTax,
             recurringAmount,
-            currency: "INR",
+            currency: recurringCurrency,
             startAt,
             message:
                 "AutoPay subscription created for the verified plan expiry.",
@@ -1236,8 +1271,8 @@ exports.handleAutoPayWebhook = async (req, res) => {
                         user.subscription.autoRenewStatus = "active";
                         user.subscription.autoRenew = true;
                     } else if (event === "subscription.authenticated") {
-                        user.subscription.autoRenewStatus = "authenticated";
-                        user.subscription.autoRenew = false;
+                        user.subscription.autoRenewStatus = "active";
+                        user.subscription.autoRenew = true;
                     } else if (event === "subscription.halted") {
                         user.subscription.autoRenewStatus = "halted";
                         user.subscription.autoRenew = false;
@@ -1393,6 +1428,36 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
         user.subscription.autoRenewAuthorizedAt = new Date();
         user.subscription.lastRenewalPaymentId = razorpay_payment_id;
 
+        try {
+            const razorpaySubscription =
+                await razorpay.subscriptions.fetch(
+                    razorpay_subscription_id
+                );
+            const razorpayStatus = String(
+                razorpaySubscription?.status || ""
+            ).toLowerCase();
+
+            if (!["authenticated", "active"].includes(razorpayStatus)) {
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        "Razorpay has not confirmed the mandate authorization.",
+                });
+            }
+
+            user.subscription.autoRenewStatus = "active";
+            user.subscription.autoRenew = true;
+        } catch (error) {
+            console.error(
+                "AUTOPAY AUTHORIZATION STATUS CHECK FAILED:",
+                error?.message || error
+            );
+            return res.status(503).json({
+                success: false,
+                message: "Unable to confirm AutoPay with Razorpay.",
+            });
+        }
+
         await user.save();
 
         return res.status(200).json({
@@ -1412,4 +1477,3 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
         });
     }
 };
-

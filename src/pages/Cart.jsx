@@ -210,7 +210,8 @@ const Cart = () => {
   const [error, setError] =
     useState("");
   
-const enableAutoPay = true;
+  const [enableAutoPay, setEnableAutoPay] =
+    useState(true);
   const [billingLoading, setBillingLoading] =
     useState(true);
   
@@ -671,15 +672,31 @@ const handleSubscriptionPayment = async () => {
           if (!verifyResponse.ok || !verifyData.success) {
             throw new Error(verifyData.message || "Payment verification failed. Please contact support before retrying.");
           }
+          if (!enableAutoPay) {
+            localStorage.removeItem("selectedPlan");
+            goTo("/dashboard");
+            return;
+          }
+
           const autoPayResponse = await fetch(`${apiBase}/api/billing/autopay/subscribe`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ planId, period: selectedMonths, orderId: order.dbOrderId }),
+            body: JSON.stringify({
+              planId,
+              period: selectedMonths,
+              orderId: order.dbOrderId,
+              currency,
+            }),
           });
           const autoPayData = await autoPayResponse.json();
           if (!autoPayResponse.ok || !autoPayData.success) {
             setError("Your payment was successful, but AutoPay setup could not be completed. Please contact support. Do not pay again.");
             setLoading(false);
+            return;
+          }
+          if (autoPayData.alreadyAuthorized) {
+            localStorage.removeItem("selectedPlan");
+            goTo("/dashboard");
             return;
           }
           const razorpayAutoPay = new window.Razorpay({
