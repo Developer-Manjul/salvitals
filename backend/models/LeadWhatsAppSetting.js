@@ -15,6 +15,12 @@ const leadWhatsAppSettingSchema = new mongoose.Schema(
             default: false,
         },
 
+        scheduleMode: {
+            type: String,
+            enum: ["all_day", "custom"],
+            default: "custom",
+        },
+
         recipientNumber: {
             type: String,
             trim: true,
@@ -34,6 +40,12 @@ const leadWhatsAppSettingSchema = new mongoose.Schema(
         timezone: {
             type: String,
             default: "Asia/Kolkata",
+        },
+
+        country: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
         leadSources: {

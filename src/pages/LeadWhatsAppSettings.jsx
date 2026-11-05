@@ -6,9 +6,11 @@ import "../styles/lead-whatsapp-settings.scss";
 const DEFAULT_SETTINGS = {
   enabled: false,
   recipientNumber: "",
+  scheduleMode: "custom",
   startTime: "19:00",
   endTime: "10:00",
   timezone: "Asia/Kolkata",
+  country: "",
   leadSources: ["Website", "Meta", "AI Chat", "Google Ads"],
   sendOutsideWindow: false,
 };
@@ -59,6 +61,210 @@ const TIMEZONES = [
   "Australia/Sydney",
   "UTC",
 ];
+
+const COUNTRIES = [
+  ["Afghanistan", "Asia/Kabul"],
+  ["Albania", "Europe/Tirane"],
+  ["Algeria", "Africa/Algiers"],
+  ["Andorra", "Europe/Andorra"],
+  ["Angola", "Africa/Lagos"],
+  ["Antigua and Barbuda", "America/Antigua"],
+  ["Argentina", "America/Argentina/Buenos_Aires"],
+  ["Armenia", "Asia/Yerevan"],
+  ["Australia", "Australia/Sydney"],
+  ["Austria", "Europe/Vienna"],
+  ["Azerbaijan", "Asia/Baku"],
+  ["Bahamas", "America/Nassau"],
+  ["Bahrain", "Asia/Bahrain"],
+  ["Bangladesh", "Asia/Dhaka"],
+  ["Barbados", "America/Barbados"],
+  ["Belarus", "Europe/Minsk"],
+  ["Belgium", "Europe/Brussels"],
+  ["Belize", "America/Belize"],
+  ["Benin", "Africa/Lagos"],
+  ["Bhutan", "Asia/Thimphu"],
+  ["Bolivia", "America/La_Paz"],
+  ["Bosnia and Herzegovina", "Europe/Sarajevo"],
+  ["Botswana", "Africa/Johannesburg"],
+  ["Brazil", "America/Sao_Paulo"],
+  ["Brunei", "Asia/Brunei"],
+  ["Bulgaria", "Europe/Sofia"],
+  ["Burkina Faso", "Africa/Abidjan"],
+  ["Burundi", "Africa/Johannesburg"],
+  ["Cambodia", "Asia/Phnom_Penh"],
+  ["Cameroon", "Africa/Lagos"],
+  ["Canada", "America/Toronto"],
+  ["Cape Verde", "Atlantic/Cape_Verde"],
+  ["Central African Republic", "Africa/Lagos"],
+  ["Chad", "Africa/Ndjamena"],
+  ["Chile", "America/Santiago"],
+  ["China", "Asia/Shanghai"],
+  ["Colombia", "America/Bogota"],
+  ["Comoros", "Indian/Comoro"],
+  ["Costa Rica", "America/Costa_Rica"],
+  ["Croatia", "Europe/Zagreb"],
+  ["Cuba", "America/Havana"],
+  ["Cyprus", "Asia/Nicosia"],
+  ["Czechia", "Europe/Prague"],
+  ["Democratic Republic of the Congo", "Africa/Johannesburg"],
+  ["Denmark", "Europe/Copenhagen"],
+  ["Djibouti", "Africa/Nairobi"],
+  ["Dominica", "America/Dominica"],
+  ["Dominican Republic", "America/Santo_Domingo"],
+  ["East Timor", "Asia/Dili"],
+  ["Ecuador", "America/Guayaquil"],
+  ["Egypt", "Africa/Cairo"],
+  ["El Salvador", "America/El_Salvador"],
+  ["Equatorial Guinea", "Africa/Lagos"],
+  ["Eritrea", "Africa/Nairobi"],
+  ["Estonia", "Europe/Tallinn"],
+  ["Eswatini", "Africa/Johannesburg"],
+  ["Ethiopia", "Africa/Nairobi"],
+  ["Fiji", "Pacific/Fiji"],
+  ["Finland", "Europe/Helsinki"],
+  ["France", "Europe/Paris"],
+  ["Gabon", "Africa/Lagos"],
+  ["Gambia", "Africa/Abidjan"],
+  ["Georgia", "Asia/Tbilisi"],
+  ["Germany", "Europe/Berlin"],
+  ["Ghana", "Africa/Abidjan"],
+  ["Greece", "Europe/Athens"],
+  ["Grenada", "America/Grenada"],
+  ["Guatemala", "America/Guatemala"],
+  ["Guinea", "Africa/Abidjan"],
+  ["Guinea-Bissau", "Africa/Bissau"],
+  ["Guyana", "America/Guyana"],
+  ["Haiti", "America/Port-au-Prince"],
+  ["Honduras", "America/Tegucigalpa"],
+  ["Hungary", "Europe/Budapest"],
+  ["Iceland", "Atlantic/Reykjavik"],
+  ["India", "Asia/Kolkata"],
+  ["Indonesia", "Asia/Jakarta"],
+  ["Iran", "Asia/Tehran"],
+  ["Iraq", "Asia/Baghdad"],
+  ["Ireland", "Europe/Dublin"],
+  ["Israel", "Asia/Jerusalem"],
+  ["Italy", "Europe/Rome"],
+  ["Ivory Coast", "Africa/Abidjan"],
+  ["Jamaica", "America/Jamaica"],
+  ["Japan", "Asia/Tokyo"],
+  ["Jordan", "Asia/Amman"],
+  ["Kazakhstan", "Asia/Almaty"],
+  ["Kenya", "Africa/Nairobi"],
+  ["Kiribati", "Pacific/Tarawa"],
+  ["Kuwait", "Asia/Kuwait"],
+  ["Kyrgyzstan", "Asia/Bishkek"],
+  ["Laos", "Asia/Vientiane"],
+  ["Latvia", "Europe/Riga"],
+  ["Lebanon", "Asia/Beirut"],
+  ["Lesotho", "Africa/Johannesburg"],
+  ["Liberia", "Africa/Monrovia"],
+  ["Libya", "Africa/Tripoli"],
+  ["Liechtenstein", "Europe/Vienna"],
+  ["Lithuania", "Europe/Vilnius"],
+  ["Luxembourg", "Europe/Luxembourg"],
+  ["Madagascar", "Indian/Antananarivo"],
+  ["Malawi", "Africa/Maputo"],
+  ["Malaysia", "Asia/Kuala_Lumpur"],
+  ["Maldives", "Indian/Maldives"],
+  ["Mali", "Africa/Abidjan"],
+  ["Malta", "Europe/Malta"],
+  ["Marshall Islands", "Pacific/Majuro"],
+  ["Mauritania", "Africa/Nouakchott"],
+  ["Mauritius", "Indian/Mauritius"],
+  ["Mexico", "America/Mexico_City"],
+  ["Micronesia", "Pacific/Chuuk"],
+  ["Moldova", "Europe/Chisinau"],
+  ["Monaco", "Europe/Monaco"],
+  ["Mongolia", "Asia/Ulaanbaatar"],
+  ["Montenegro", "Europe/Belgrade"],
+  ["Morocco", "Africa/Casablanca"],
+  ["Mozambique", "Africa/Maputo"],
+  ["Myanmar", "Asia/Yangon"],
+  ["Namibia", "Africa/Windhoek"],
+  ["Nauru", "Pacific/Nauru"],
+  ["Nepal", "Asia/Kathmandu"],
+  ["Netherlands", "Europe/Amsterdam"],
+  ["New Zealand", "Pacific/Auckland"],
+  ["Nicaragua", "America/Managua"],
+  ["Niger", "Africa/Lagos"],
+  ["Nigeria", "Africa/Lagos"],
+  ["North Korea", "Asia/Pyongyang"],
+  ["North Macedonia", "Europe/Skopje"],
+  ["Norway", "Europe/Oslo"],
+  ["Oman", "Asia/Muscat"],
+  ["Pakistan", "Asia/Karachi"],
+  ["Palau", "Pacific/Palau"],
+  ["Palestine", "Asia/Gaza"],
+  ["Panama", "America/Panama"],
+  ["Papua New Guinea", "Pacific/Port_Moresby"],
+  ["Paraguay", "America/Asuncion"],
+  ["Peru", "America/Lima"],
+  ["Philippines", "Asia/Manila"],
+  ["Poland", "Europe/Warsaw"],
+  ["Portugal", "Europe/Lisbon"],
+  ["Qatar", "Asia/Qatar"],
+  ["Republic of the Congo", "Africa/Lagos"],
+  ["Romania", "Europe/Bucharest"],
+  ["Russia", "Europe/Moscow"],
+  ["Rwanda", "Africa/Kigali"],
+  ["Saint Kitts and Nevis", "America/St_Kitts"],
+  ["Saint Lucia", "America/St_Lucia"],
+  ["Saint Vincent and the Grenadines", "America/St_Vincent"],
+  ["Samoa", "Pacific/Apia"],
+  ["San Marino", "Europe/Rome"],
+  ["Sao Tome and Principe", "Africa/Sao_Tome"],
+  ["Saudi Arabia", "Asia/Riyadh"],
+  ["Senegal", "Africa/Dakar"],
+  ["Serbia", "Europe/Belgrade"],
+  ["Seychelles", "Indian/Mahe"],
+  ["Sierra Leone", "Africa/Freetown"],
+  ["Singapore", "Asia/Singapore"],
+  ["Slovakia", "Europe/Bratislava"],
+  ["Slovenia", "Europe/Ljubljana"],
+  ["Solomon Islands", "Pacific/Guadalcanal"],
+  ["Somalia", "Africa/Mogadishu"],
+  ["South Africa", "Africa/Johannesburg"],
+  ["South Korea", "Asia/Seoul"],
+  ["South Sudan", "Africa/Juba"],
+  ["Spain", "Europe/Madrid"],
+  ["Sri Lanka", "Asia/Colombo"],
+  ["Sudan", "Africa/Khartoum"],
+  ["Suriname", "America/Paramaribo"],
+  ["Sweden", "Europe/Stockholm"],
+  ["Switzerland", "Europe/Zurich"],
+  ["Syria", "Asia/Damascus"],
+  ["Taiwan", "Asia/Taipei"],
+  ["Tajikistan", "Asia/Dushanbe"],
+  ["Tanzania", "Africa/Dar_es_Salaam"],
+  ["Thailand", "Asia/Bangkok"],
+  ["Togo", "Africa/Abidjan"],
+  ["Tonga", "Pacific/Tongatapu"],
+  ["Trinidad and Tobago", "America/Port_of_Spain"],
+  ["Tunisia", "Africa/Tunis"],
+  ["Turkey", "Europe/Istanbul"],
+  ["Turkmenistan", "Asia/Ashgabat"],
+  ["Tuvalu", "Pacific/Funafuti"],
+  ["Uganda", "Africa/Kampala"],
+  ["Ukraine", "Europe/Kyiv"],
+  ["United Arab Emirates", "Asia/Dubai"],
+  ["United Kingdom", "Europe/London"],
+  ["United States", "America/New_York"],
+  ["Uruguay", "America/Montevideo"],
+  ["Uzbekistan", "Asia/Tashkent"],
+  ["Vanuatu", "Pacific/Efate"],
+  ["Vatican City", "Europe/Vatican"],
+  ["Venezuela", "America/Caracas"],
+  ["Vietnam", "Asia/Ho_Chi_Minh"],
+  ["Yemen", "Asia/Aden"],
+  ["Zambia", "Africa/Maputo"],
+  ["Zimbabwe", "Africa/Harare"],
+];
+
+const supportedTimezones =
+  typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : TIMEZONES;
 
 function getToken() {
   return (
@@ -127,6 +333,14 @@ export default function LeadWhatsAppSettings() {
             leadSources: Array.isArray(data.settings?.leadSources)
               ? data.settings.leadSources
               : DEFAULT_SETTINGS.leadSources,
+            scheduleMode:
+              data.settings?.scheduleMode === "custom"
+                ? "custom"
+                : data.settings?.scheduleMode === "all_day" ||
+              data.settings?.scheduleMode === "24_hours" ||
+              data.settings?.sendOutsideWindow === true
+                ? "all_day"
+                : "custom",
             sendOutsideWindow:
               data.settings?.sendOutsideWindow === true,
           });
@@ -187,7 +401,7 @@ export default function LeadWhatsAppSettings() {
     }
 
     if (
-      !settings.sendOutsideWindow &&
+      settings.scheduleMode === "custom" &&
       settings.startTime === settings.endTime
     ) {
       setError("Start Time and End Time cannot be the same.");
@@ -223,6 +437,14 @@ export default function LeadWhatsAppSettings() {
         leadSources: Array.isArray(data.settings?.leadSources)
           ? data.settings.leadSources
           : DEFAULT_SETTINGS.leadSources,
+        scheduleMode:
+          data.settings?.scheduleMode === "custom"
+            ? "custom"
+            : data.settings?.scheduleMode === "all_day" ||
+          data.settings?.scheduleMode === "24_hours" ||
+          data.settings?.sendOutsideWindow === true
+            ? "all_day"
+            : "custom",
         sendOutsideWindow:
           data.settings?.sendOutsideWindow === true,
       });
@@ -337,57 +559,96 @@ export default function LeadWhatsAppSettings() {
               <small>Include country code, e.g. 91 for India.</small>
             </div>
 
-            <div className="sv-lw-field">
+            {settings.scheduleMode === "custom" && (
+              <>
+                <div className="sv-lw-field">
+              <label htmlFor="sv-lw-country">
+                Country
+                <input
+                  id="sv-lw-country"
+                  type="text"
+                  list="sv-lw-countries"
+                  value={settings.country || ""}
+                  onChange={(event) => {
+                    const country = event.target.value;
+                    const suggested = COUNTRIES.find(
+                      ([name]) => name.toLowerCase() === country.toLowerCase()
+                    );
+                    setSettings((previous) => ({
+                      ...previous,
+                      country,
+                      timezone: suggested ? suggested[1] : previous.timezone,
+                    }));
+                    setError("");
+                    setSuccess("");
+                  }}
+                  placeholder="Search country"
+                  autoComplete="country-name"
+                />
+                <datalist id="sv-lw-countries">
+                  {COUNTRIES.map(([name]) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </label>
+                </div>
+
+                <div className="sv-lw-field">
               <label htmlFor="sv-lw-timezone">
                 Timezone
-                <select
+                <input
                   id="sv-lw-timezone"
+                  type="text"
+                  list="sv-lw-timezones"
                   value={settings.timezone}
                   onChange={(event) =>
                     updateSetting("timezone", event.target.value)
                   }
-                >
-                  {!TIMEZONES.includes(settings.timezone) && (
-                    <option value={settings.timezone}>
-                      {settings.timezone}
-                    </option>
-                  )}
-
-                  {TIMEZONES.map((timezone) => (
+                  placeholder="Search IANA timezone"
+                />
+                <datalist id="sv-lw-timezones">
+                  {[...new Set([...TIMEZONES, ...supportedTimezones])].map((timezone) => (
                     <option key={timezone} value={timezone}>
                       {timezone}
                     </option>
                   ))}
-                </select>
+                </datalist>
               </label>
             </div>
+              </>
+            )}
           </div>
 
-          <label
-            className={`sv-lw-all-day ${
-              settings.sendOutsideWindow ? "is-active" : ""
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={settings.sendOutsideWindow}
-              onChange={(event) =>
-                updateSetting("sendOutsideWindow", event.target.checked)
-              }
-            />
-
-            <span className="sv-lw-all-day-copy">
-              <strong>Send notifications 24 hours (All day)</strong>
-              <small>
-                When enabled, you will receive WhatsApp alerts at any
-                time, day or night.
-              </small>
-            </span>
-          </label>
+          <div className="sv-lw-schedule-options" role="radiogroup" aria-label="Notification schedule">
+            <label className={`sv-lw-all-day ${settings.scheduleMode === "all_day" ? "is-active" : ""}`}>
+              <input
+                type="radio"
+                name="notification-schedule"
+                checked={settings.scheduleMode === "all_day"}
+                onChange={() => updateSetting("scheduleMode", "all_day")}
+              />
+              <span className="sv-lw-all-day-copy">
+                <strong>24 Hours (All Day)</strong>
+                <small>Receive WhatsApp alerts at any time in every country.</small>
+              </span>
+            </label>
+            <label className={`sv-lw-all-day ${settings.scheduleMode === "custom" ? "is-active" : ""}`}>
+              <input
+                type="radio"
+                name="notification-schedule"
+                checked={settings.scheduleMode === "custom"}
+                onChange={() => updateSetting("scheduleMode", "custom")}
+              />
+              <span className="sv-lw-all-day-copy">
+                <strong>Custom Time</strong>
+                <small>Receive alerts only during a local time window.</small>
+              </span>
+            </label>
+          </div>
 
           <div
             className={`sv-lw-fields sv-lw-time-fields ${
-              settings.sendOutsideWindow ? "is-disabled" : ""
+              settings.scheduleMode === "all_day" ? "is-disabled" : ""
             }`}
           >
             <div className="sv-lw-field">
@@ -400,8 +661,8 @@ export default function LeadWhatsAppSettings() {
                   onChange={(event) =>
                     updateSetting("startTime", event.target.value)
                   }
-                  disabled={settings.sendOutsideWindow}
-                  required={!settings.sendOutsideWindow}
+                  disabled={settings.scheduleMode === "all_day"}
+                  required={settings.scheduleMode === "custom"}
                 />
               </label>
             </div>
@@ -416,15 +677,15 @@ export default function LeadWhatsAppSettings() {
                   onChange={(event) =>
                     updateSetting("endTime", event.target.value)
                   }
-                  disabled={settings.sendOutsideWindow}
-                  required={!settings.sendOutsideWindow}
+                  disabled={settings.scheduleMode === "all_day"}
+                  required={settings.scheduleMode === "custom"}
                 />
               </label>
             </div>
           </div>
 
           <p className="sv-lw-schedule-hint">
-            {settings.sendOutsideWindow
+            {settings.scheduleMode === "all_day"
               ? "Notifications can be sent throughout the day and night."
               : "Notifications are sent only during your selected time window."}
           </p>

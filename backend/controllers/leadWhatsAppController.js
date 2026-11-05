@@ -1,5 +1,9 @@
 const LeadWhatsAppSetting = require("../models/LeadWhatsAppSetting");
 const {
+    isValidTimezone,
+    isValidTime,
+} = require("../utils/leadWhatsAppSchedule");
+const {
     getWorkspaceContext,
     requirePermission,
 } = require("../utils/workspace");
@@ -36,17 +40,22 @@ exports.getSettings = async (req, res) => {
         const defaultSettings = {
             enabled: false,
             recipientNumber: "",
+            scheduleMode: "custom",
             startTime: "19:00",
             endTime: "10:00",
             timezone: "Asia/Kolkata",
+            country: "",
             leadSources: ALLOWED_SOURCES,
-          sendOutsideWindow: false,
+            sendOutsideWindow: false,
         };
 
         const settings = setting
             ? {
                 ...defaultSettings,
                 ...setting,
+                scheduleMode:
+                    setting.scheduleMode ||
+                    (setting.sendOutsideWindow ? "all_day" : "custom"),
                 leadSources: Array.isArray(setting.leadSources)
                     ? setting.leadSources
                     : ALLOWED_SOURCES,
@@ -91,6 +100,8 @@ exports.saveSettings = async (req, res) => {
         startTime,
         endTime,
         timezone,
+        country,
+        scheduleMode,
         leadSources,
         sendOutsideWindow,
     } = req.body;
@@ -111,18 +122,31 @@ exports.saveSettings = async (req, res) => {
             });
         }
 
-        const validTime = (value) =>
-            typeof value === "string" &&
-            /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+        const normalizedScheduleMode =
+            scheduleMode === "all_day" || scheduleMode === "24_hours"
+                ? "all_day"
+                : scheduleMode === "custom"
+                    ? "custom"
+                    : sendOutsideWindow === true
+                        ? "all_day"
+                        : null;
 
-        if (!validTime(startTime) || !validTime(endTime)) {
+        if (normalizedScheduleMode === null) {
+            return res.status(400).json({
+                success: false,
+                message: "Select a notification schedule.",
+            });
+        }
+
+        if (normalizedScheduleMode === "custom" &&
+            (!isValidTime(startTime) || !isValidTime(endTime))) {
             return res.status(400).json({
                 success: false,
                 message: "Start and end times must use HH:mm format.",
             });
         }
 
-        if (startTime === endTime) {
+        if (normalizedScheduleMode === "custom" && startTime === endTime) {
             return res.status(400).json({
                 success: false,
                 message: "Start and end times cannot be the same.",
@@ -144,11 +168,7 @@ exports.saveSettings = async (req, res) => {
 
         const selectedTimezone = timezone || "Asia/Kolkata";
 
-        try {
-            new Intl.DateTimeFormat("en-US", {
-                timeZone: selectedTimezone,
-            });
-        } catch {
+        if (normalizedScheduleMode === "custom" && !isValidTimezone(selectedTimezone)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid timezone.",
@@ -161,11 +181,13 @@ exports.saveSettings = async (req, res) => {
                 $set: {
                     enabled,
                     recipientNumber: phone,
+                    scheduleMode: normalizedScheduleMode,
                     startTime,
                     endTime,
                     timezone: selectedTimezone,
+                    country: String(country || "").trim().slice(0, 100),
                     leadSources: [...new Set(leadSources)],
-                    sendOutsideWindow: sendOutsideWindow === true,
+                    sendOutsideWindow: normalizedScheduleMode === "all_day",
                 },
             },
             {

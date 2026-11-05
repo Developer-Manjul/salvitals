@@ -2,6 +2,9 @@ const axios = require("axios");
 const User = require("../models/User");
 const LeadWhatsAppSetting = require("../models/LeadWhatsAppSetting");
 const LeadWhatsAppDelivery = require("../models/LeadWhatsAppDelivery");
+const {
+    isWithinAllowedWindow,
+} = require("../utils/leadWhatsAppSchedule");
 
 function normalizePhone(value) {
     let phone = String(value || "").replace(/\D/g, "");
@@ -55,43 +58,6 @@ function normalizeLeadSource(value) {
     }
 
     return source ? String(value).trim() : "Other";
-}
-
-function isWithinAllowedWindow(settings, now = new Date()) {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: settings.timezone || "Asia/Kolkata",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-    }).formatToParts(now);
-
-    const hour = Number(
-        parts.find((part) => part.type === "hour").value
-    );
-
-    const minute = Number(
-        parts.find((part) => part.type === "minute").value
-    );
-
-    const current = hour * 60 + minute;
-
-    const [startHour, startMinute] = settings.startTime
-        .split(":")
-        .map(Number);
-
-    const [endHour, endMinute] = settings.endTime
-        .split(":")
-        .map(Number);
-
-    const start = startHour * 60 + startMinute;
-    const end = endHour * 60 + endMinute;
-
-    if (start < end) {
-        return current >= start && current < end;
-    }
-
-    // Supports windows that cross midnight, e.g. 19:00–10:00.
-    return current >= start || current < end;
 }
 
 async function reserveWhatsAppQuota(userId) {
@@ -210,7 +176,6 @@ async function sendLeadWhatsAppNotification(lead) {
     }
 
     if (
-    settings.sendOutsideWindow !== true &&
     !isWithinAllowedWindow(settings)
     ) {
         return {
