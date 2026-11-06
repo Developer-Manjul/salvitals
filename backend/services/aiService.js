@@ -701,6 +701,76 @@ ${currentTurnInstruction}
   }
 }
 
+async function generateAILeadSummary({
+  transcript = "",
+  visitor = {},
+  service = "",
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return { text: "", error: "OPENAI_API_KEY_MISSING" };
+  }
+
+  const prompt = [
+    "Create a concise CRM lead summary from this AI Chat conversation.",
+    "Use only supported facts. Never infer a diagnosis.",
+    "Return only the requested structure:",
+    "**AI Chat - Lead Summary**",
+    "- Requirement: ...",
+    "- Main Concern: ...",
+    "- Service: ...",
+    "- Patient Preferences: ...",
+    "- Appointment: ...",
+    "- Next Action: ...",
+    "Include only relevant fields. Do not add a transcript, greetings, or generic AI responses.",
+    "The summary must be 60-100 words at most and preferably 5-8 bullets.",
+    "",
+    `Known details: ${JSON.stringify({
+      name: String(visitor.visitorName || "").trim(),
+      phone: String(visitor.visitorPhone || "").trim(),
+      email: String(visitor.visitorEmail || "").trim(),
+      service: String(service || "").trim(),
+    })}`,
+    "",
+    "Conversation:",
+    String(transcript || "").slice(0, 12000),
+  ].join("\n");
+
+  try {
+    const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+    const response = await axios.post(
+      OPENAI_URL,
+      {
+        model,
+        input: prompt,
+        max_output_tokens: 500,
+      },
+      {
+        timeout: 60000,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return { text: extractOutputText(response.data) };
+  } catch (error) {
+    console.error(
+      "AI LEAD SUMMARY ERROR:",
+      error?.response?.data || error?.message || "Unknown OpenAI error"
+    );
+    return {
+      text: "",
+      error:
+        error?.response?.status === 401
+          ? "OPENAI_AUTH_ERROR"
+          : "OPENAI_REQUEST_FAILED",
+    };
+  }
+}
+
 module.exports = {
   generateAIReply,
+  generateAILeadSummary,
 };

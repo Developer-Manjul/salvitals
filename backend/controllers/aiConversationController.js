@@ -1743,7 +1743,7 @@ exports.publicMessage =
               .join("\n");
 
           conversation.appointmentNote =
-            `Contact details collected from AI Chat.\nConversation summary:\n${transcript}`;
+            "Contact details collected from AI Chat.";
 
           const treatment =
             transcript.match(
@@ -2221,7 +2221,6 @@ exports.publicSubmitAppointment =
           "Appointment request submitted from AI Chat widget.",
           normalizedTreatment ? `Treatment/Problem: ${normalizedTreatment}` : "",
           doctor ? `Preferred doctor: ${doctor}` : "",
-          transcript ? `\nConversation transcript:\n${transcript}` : "",
         ]
           .filter(Boolean)
           .join("\n");

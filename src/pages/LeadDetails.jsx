@@ -210,7 +210,15 @@ function getActivities(lead) {
     });
   }
 
+  const seenAiSummaries = new Set();
   (lead.notes || []).forEach((note, index) => {
+    if (isLegacyAiTranscriptNote(note)) return;
+    const aiSummary = isAiChatSummary(note);
+    if (aiSummary) {
+      const key = normalizeNoteText(note.text);
+      if (seenAiSummaries.has(key)) return;
+      seenAiSummaries.add(key);
+    }
     const history = getNoteHistory(note);
 
     const lastEdit =
@@ -221,7 +229,7 @@ function getActivities(lead) {
     activities.push({
       type: "notes",
       icon: "▱",
-      title: "Note added",
+      title: aiSummary ? "AI Chat Summary" : "Note added",
       detail: note.text,
       date:
         lastEdit?.editedAt ||
@@ -287,6 +295,30 @@ function getActivities(lead) {
   );
 }
 
+function isAiChatSummary(note) {
+  return /AI Chat - Lead Summary/i.test(String(note?.text || "")) ||
+    /AI Chat Summary/i.test(String(note?.userName || ""));
+}
+
+function isLegacyAiTranscriptNote(note) {
+  return isAiChatSummary(note) === false &&
+    /ai chat/i.test(String(note?.userName || "")) &&
+    (
+      /Conversation transcript:/i.test(String(note?.text || "")) ||
+      /Conversation summary:/i.test(String(note?.text || "")) ||
+      /Contact details collected from AI Chat/i.test(String(note?.text || "")) ||
+      /Appointment request submitted from AI Chat/i.test(String(note?.text || ""))
+    );
+}
+
+function normalizeNoteText(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getNextFollowUp(lead) {
   if (!lead?.followUps?.length) {
     return null;
@@ -327,11 +359,19 @@ function getSavedNotes(lead) {
     return [];
   }
 
+  const seenAiSummaries = new Set();
   return lead.notes.filter(
     (note) =>
       note?.text &&
       String(note.text).trim()
-  );
+  ).filter((note) => {
+    if (isLegacyAiTranscriptNote(note)) return false;
+    if (!isAiChatSummary(note)) return true;
+    const key = normalizeNoteText(note.text);
+    if (seenAiSummaries.has(key)) return false;
+    seenAiSummaries.add(key);
+    return true;
+  });
 }
 
 function EditIcon({ size = 15 }) {
