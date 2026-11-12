@@ -182,6 +182,7 @@ async function getMetaCampaignName(
         process.env.META_GRAPH_VERSION ||
         process.env.META_GRAPH_API_VERSION ||
         "v25.0";
+    const errors = [];
 
     if (
         resolvedCampaignId &&
@@ -208,11 +209,10 @@ async function getMetaCampaignName(
                     response.data?.name || ""
                 ).trim();
         } catch (error) {
-            console.error(
-                "META CAMPAIGN NAME FETCH ERROR:",
-                error.response?.data ||
-                    error.message
-            );
+            errors.push({
+                operation: "campaign_name",
+                error: metaGraphErrorDetails(error),
+            });
         }
     }
 
@@ -271,11 +271,10 @@ async function getMetaCampaignName(
                     adCampaignName;
             }
         } catch (error) {
-            console.error(
-                "META AD CAMPAIGN FETCH ERROR:",
-                error.response?.data ||
-                    error.message
-            );
+            errors.push({
+                operation: "ad_campaign_details",
+                error: metaGraphErrorDetails(error),
+            });
         }
     }
 
@@ -300,6 +299,30 @@ async function getMetaCampaignName(
 
         adName:
             adName || "",
+
+        errors,
+    };
+}
+
+function metaGraphErrorDetails(error) {
+    const graphError =
+        error?.metaError ||
+        error?.response?.data?.error ||
+        null;
+
+    return {
+        message:
+            graphError?.message ||
+            error?.message ||
+            "Unknown Meta Graph API error",
+        ...(graphError ? { graphError } : {}),
+        ...(error?.status || error?.response?.status
+            ? {
+                  status:
+                      error.status ||
+                      error.response.status,
+              }
+            : {}),
     };
 }
 
@@ -1066,7 +1089,7 @@ exports.verifyWebhook = (
 };
 
 function fieldMap(fieldData = []) {
-    return fieldData.reduce(
+    return (Array.isArray(fieldData) ? fieldData : []).reduce(
         (result, field) => {
             const key =
                 String(
@@ -1078,9 +1101,9 @@ function fieldMap(fieldData = []) {
                         "_"
                     );
 
-            result[key] =
-                field?.values?.[0] ||
-                "";
+            result[key] = String(
+                field?.values?.[0] || ""
+            ).trim();
 
             return result;
         },
@@ -1648,87 +1671,271 @@ exports.receiveWebhook = async (req, res) => {
         // FACEBOOK LEADGEN WEBHOOK
         // ==========================================
         for (const entry of req.body?.entry || []) {
-            const pageId = String(entry.id || "");
-            if (!pageId) continue;
+            const pageId = String(entry.id || "").trim();
 
-            const integrations = await MetaIntegration.find({ pageId, isActive: true });
-            if (integrations.length === 0) continue;
-            if (integrations.length > 1) continue;
+            for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
+                if (change.field !== "leadgen") {
+                    continue;
+                }
 
-            const integration = integrations[0];
-
-            for (const change of entry.changes || []) {
                 const value = change.value || {};
-                const leadId = value.leadgen_id || value.lead_id;
+                const leadId = String(
+                    value.leadgen_id || value.lead_id || ""
+                ).trim();
 
-                if (!leadId) continue;
-
-                const token = decrypt(integration.accessTokenEncrypted);
-                const metaLead = await meta.getLeadDetails(leadId, token);
-                const allowedFrom = getAllowedMetaLeadStart();
-                const metaCreatedAt = new Date(metaLead?.created_time || "");
-
-                if (!Number.isNaN(metaCreatedAt.getTime()) && metaCreatedAt < allowedFrom) {
-                    continue;
-                }
-
-                const fields = fieldMap(metaLead.field_data);
-                const adId = String(metaLead?.ad_id || value?.ad_id || "").trim();
-                const campaignId = String(metaLead?.campaign_id || value?.campaign_id || "").trim();
-
-                const campaignResult = await getMetaCampaignName(campaignId, adId, token);
-                const resolvedCampaignId = campaignResult.campaignId;
-                const serviceName = campaignResult.serviceName;
-
-                const existing = await Lead.findOne({ userId: integration.userId, metaLeadId: String(leadId) });
-
-                if (existing) {
-                    let changed = false;
-                    if (serviceName && !String(existing.service || "").trim()) {
-                        existing.service = serviceName;
-                        changed = true;
-                    }
-                    if (resolvedCampaignId && !String(existing.metaCampaignId || "").trim()) {
-                        existing.metaCampaignId = resolvedCampaignId;
-                        changed = true;
-                    }
-                    if (adId && !String(existing.metaAdId || "").trim()) {
-                        existing.metaAdId = adId;
-                        changed = true;
-                    }
-                    if (changed) await existing.save();
-                    await processNewLead(existing);
-                    continue;
-                }
-
-                const source = detectMetaLeadSource(value, req, metaLead);
-                const name = fields.full_name || [fields.first_name, fields.last_name].filter(Boolean).join(" ") || "Unknown";
-                const phone = fields.phone_number || fields.phone || "";
-                const email = fields.email || "";
-                const service = serviceName || fields.service || fields.treatment || "";
-                const landingPage = fields.form_name || integration.pageName || "";
-
-                const lead = await Lead.create({
-                    userId: integration.userId,
-                    metaLeadId: String(leadId),
-                    metaPageId: pageId,
-                    metaFormId: metaLead.form_id || value.form_id || "",
-                    metaAdId: adId,
-                    metaCampaignId: resolvedCampaignId,
-                    name,
-                    email,
-                    phone,
-                    source,
-                    stage: "New",
-                    service,
-                    landingPage,
-                    pageUrl: fields.page_url || fields.website || "",
-                    utmSource: source.toLowerCase(),
-                    utmMedium: "paid_social",
-                    firstNote: `Lead received from ${source} Lead Ads`,
+                console.log("META LEADGEN EVENT RECEIVED:", {
+                    pageId,
+                    leadId: leadId || null,
+                    hasLeadId: Boolean(leadId),
                 });
 
-                await processNewLead(lead);
+                try {
+                    if (!pageId || !leadId) {
+                        console.error("META LEADGEN EVENT INVALID:", {
+                            pageId: pageId || null,
+                            hasLeadId: Boolean(leadId),
+                        });
+                        continue;
+                    }
+
+                    const integrations = await MetaIntegration.find({
+                        pageId,
+                        isActive: true,
+                    })
+                        .select("userId pageId pageName accessTokenEncrypted")
+                        .limit(2);
+
+                    if (integrations.length !== 1) {
+                        console.error("META LEADGEN PAGE MAPPING ERROR:", {
+                            pageId,
+                            activeIntegrationCount: integrations.length,
+                            reason:
+                                integrations.length === 0
+                                    ? "No active Page integration found"
+                                    : "Multiple active Page integrations found",
+                        });
+                        continue;
+                    }
+
+                    const integration = integrations[0];
+                    const token = decrypt(integration.accessTokenEncrypted);
+                    let metaLead;
+
+                    try {
+                        metaLead = await meta.getLeadDetails(leadId, token);
+                    } catch (error) {
+                        console.error("META LEAD DETAILS FETCH FAILED:", {
+                            pageId,
+                            leadId,
+                            error: metaGraphErrorDetails(error),
+                        });
+                        continue;
+                    }
+
+                    if (
+                        !metaLead ||
+                        typeof metaLead !== "object" ||
+                        !Array.isArray(metaLead.field_data)
+                    ) {
+                        console.error("META LEAD DETAILS FETCH FAILED:", {
+                            pageId,
+                            leadId,
+                            error: {
+                                message:
+                                    "Meta response did not contain lead field_data",
+                            },
+                        });
+                        continue;
+                    }
+
+                    console.log("META LEAD DETAILS FETCHED:", {
+                        pageId,
+                        leadId,
+                        fieldCount: metaLead.field_data.length,
+                    });
+
+                    const allowedFrom = getAllowedMetaLeadStart();
+                    const metaCreatedAt = new Date(metaLead.created_time || "");
+
+                    if (
+                        !Number.isNaN(metaCreatedAt.getTime()) &&
+                        metaCreatedAt < allowedFrom
+                    ) {
+                        console.log("META LEADGEN EVENT OUTSIDE PROCESSING WINDOW:", {
+                            pageId,
+                            leadId,
+                            createdAt: metaLead.created_time,
+                        });
+                        continue;
+                    }
+
+                    const fields = fieldMap(metaLead.field_data);
+                    const adId = String(
+                        metaLead.ad_id || value.ad_id || ""
+                    ).trim();
+                    const campaignId = String(
+                        metaLead.campaign_id || value.campaign_id || ""
+                    ).trim();
+                    const formId = String(
+                        metaLead.form_id || value.form_id || ""
+                    ).trim();
+                    const source = detectMetaLeadSource(value, req, metaLead);
+                    const name =
+                        fields.full_name ||
+                        [fields.first_name, fields.last_name]
+                            .filter(Boolean)
+                            .join(" ") ||
+                        "Unknown";
+                    const phone =
+                        fields.phone_number || fields.phone || "";
+                    const email = fields.email || "";
+                    const fieldService =
+                        fields.service || fields.treatment || "";
+                    const landingPage =
+                        fields.form_name || integration.pageName || "";
+                    const pageUrl =
+                        fields.page_url || fields.website || "";
+                    const metaLeadId = String(leadId);
+
+                    if (!phone) {
+                        console.error("META LEAD NOT SAVED:", {
+                            pageId,
+                            leadId,
+                            reason:
+                                "Lead details did not include the phone required by the CRM",
+                        });
+                        continue;
+                    }
+
+                    let lead = await Lead.findOne({
+                        userId: integration.userId,
+                        metaLeadId,
+                    });
+                    let created = false;
+
+                    if (lead) {
+                        const missingFields = {
+                            metaPageId: pageId,
+                            metaFormId: formId,
+                            metaAdId: adId,
+                            metaCampaignId: campaignId,
+                            source,
+                            service: fieldService,
+                            landingPage,
+                            pageUrl,
+                            utmSource: source.toLowerCase(),
+                            utmMedium: "paid_social",
+                        };
+
+                        for (const [field, fieldValue] of Object.entries(
+                            missingFields
+                        )) {
+                            if (
+                                fieldValue &&
+                                !String(lead[field] || "").trim()
+                            ) {
+                                lead[field] = fieldValue;
+                            }
+                        }
+                    } else {
+                        lead = new Lead({
+                            userId: integration.userId,
+                            metaLeadId,
+                            metaPageId: pageId,
+                            metaFormId: formId,
+                            metaAdId: adId,
+                            metaCampaignId: campaignId,
+                            name,
+                            email,
+                            phone,
+                            source,
+                            stage: "New",
+                            service: fieldService,
+                            landingPage,
+                            pageUrl,
+                            utmSource: source.toLowerCase(),
+                            utmMedium: "paid_social",
+                            firstNote: `Lead received from ${source} Lead Ads`,
+                        });
+                        created = true;
+                    }
+
+                    await lead.save();
+                    console.log("META LEAD SAVED:", {
+                        pageId,
+                        leadId,
+                        userId: String(integration.userId),
+                        crmLeadId: String(lead._id),
+                        created,
+                    });
+
+                    try {
+                        await processNewLead(lead);
+                    } catch (error) {
+                        console.error("META LEAD PROCESSING FAILED:", {
+                            pageId,
+                            leadId,
+                            crmLeadId: String(lead._id),
+                            error: metaGraphErrorDetails(error),
+                        });
+                    }
+
+                    if (campaignId || adId) {
+                        try {
+                            const campaignResult = await getMetaCampaignName(
+                                campaignId,
+                                adId,
+                                token
+                            );
+
+                            if (campaignResult.errors.length) {
+                                console.error(
+                                    "META CAMPAIGN ENRICHMENT FAILED (OPTIONAL):",
+                                    {
+                                        pageId,
+                                        leadId,
+                                        errors: campaignResult.errors,
+                                    }
+                                );
+                            }
+
+                            let campaignEnrichmentChanged = false;
+                            if (
+                                campaignResult.campaignId &&
+                                !String(lead.metaCampaignId || "").trim()
+                            ) {
+                                lead.metaCampaignId =
+                                    campaignResult.campaignId;
+                                campaignEnrichmentChanged = true;
+                            }
+                            if (
+                                campaignResult.serviceName &&
+                                !String(lead.service || "").trim()
+                            ) {
+                                lead.service = campaignResult.serviceName;
+                                campaignEnrichmentChanged = true;
+                            }
+                            if (campaignEnrichmentChanged) {
+                                await lead.save();
+                            }
+                        } catch (error) {
+                            console.error(
+                                "META CAMPAIGN ENRICHMENT FAILED (OPTIONAL):",
+                                {
+                                    pageId,
+                                    leadId,
+                                    error: metaGraphErrorDetails(error),
+                                }
+                            );
+                        }
+                    }
+                } catch (error) {
+                    console.error("META LEAD EVENT FAILED:", {
+                        pageId,
+                        leadId: leadId || null,
+                        error: metaGraphErrorDetails(error),
+                    });
+                }
             }
         }
     } catch (error) {
