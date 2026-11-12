@@ -169,6 +169,43 @@ const emptyItem = () => ({
 
 });
 
+const findPreviousInvoiceForCustomer = (invoices, customer) => {
+  const customerId = String(customer?._id || customer?.id || "");
+  const byCustomerId = customerId
+    ? invoices.find(
+        (invoice) => String(invoice.customerId || "") === customerId
+      )
+    : null;
+  if (byCustomerId) {
+    return byCustomerId;
+  }
+
+  const patientId = String(customer?.patientId || "");
+  const byPatientId = patientId
+    ? invoices.find((invoice) => String(invoice.patientId || "") === patientId)
+    : null;
+  if (byPatientId) {
+    return byPatientId;
+  }
+
+  const phone = String(customer?.phone || "").replace(/\D/g, "");
+  const email = String(customer?.email || "").trim().toLowerCase();
+  return invoices.find((invoice) => {
+    const invoicePhone = String(invoice.customerPhone || "").replace(/\D/g, "");
+    const invoiceEmail = String(invoice.customerEmail || "").trim().toLowerCase();
+    const phoneComparable = phone && invoicePhone;
+    const emailComparable = email && invoiceEmail;
+    const phoneMatches = phoneComparable && phone === invoicePhone;
+    const emailMatches = emailComparable && email === invoiceEmail;
+
+    return (
+      (phoneMatches || emailMatches) &&
+      (!phoneComparable || phoneMatches) &&
+      (!emailComparable || emailMatches)
+    );
+  }) || null;
+};
+
 const calculateItem = (item) => {
 
   const cost = Number(item.cost) || 0;
@@ -927,6 +964,14 @@ export default function Invoice() {
 
       "";
 
+    const previousInvoice = findPreviousInvoiceForCustomer(invoices, customer);
+    const customerEmail = customer?.email || previousInvoice?.customerEmail || "";
+    const customerPhone = customer?.phone || previousInvoice?.customerPhone || "";
+    const customerAge =
+      customer?.age || customer?.customerAge || previousInvoice?.customerAge || "";
+    const customerAddress =
+      customer?.address || previousInvoice?.customerAddress || "";
+
     setSelectedCustomer(customer || null);
 
     setCustomerQuery(customerName);
@@ -946,17 +991,21 @@ export default function Invoice() {
 
       customerName,
 
-      customerEmail: customer?.email || "",
+      customerEmail,
 
-      customerPhone: customer?.phone || "",
+      customerPhone,
 
-      customerAge: customer?.age || customer?.customerAge || "",
+      customerAge,
 
-      customerAddress: customer?.address || "",
+      customerAddress,
 
     }));
 
-    if (!customerId || customer?.patientId) {
+    const needsCustomerResolution =
+      !customer?.patientId ||
+      (customerPhone && !customer?.phone) ||
+      (customerEmail && !customer?.email);
+    if (!customerId || !needsCustomerResolution) {
       return;
     }
 
@@ -966,9 +1015,9 @@ export default function Invoice() {
         body: JSON.stringify({
           customerId,
           customerName,
-          customerEmail: customer?.email || "",
-          customerPhone: customer?.phone || "",
-          customerAge: customer?.age || customer?.customerAge || "",
+          customerEmail,
+          customerPhone,
+          customerAge,
         }),
       });
 
@@ -1004,11 +1053,11 @@ export default function Invoice() {
             ? previous.patientId || resolvedCustomer.patientId || ""
             : resolvedCustomer.patientId || "",
           customerEmail:
-            previous.customerEmail || resolvedCustomer.email || "",
+            previous.customerEmail || resolvedCustomer.email || customerEmail,
           customerPhone:
-            previous.customerPhone || resolvedCustomer.phone || "",
+            previous.customerPhone || resolvedCustomer.phone || customerPhone,
           customerAge:
-            previous.customerAge || resolvedCustomer.age || "",
+            previous.customerAge || resolvedCustomer.age || customerAge,
         };
       });
     } catch (error) {
