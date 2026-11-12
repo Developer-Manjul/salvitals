@@ -10,6 +10,11 @@ router.get(
 );
 
 router.post(
+    "/resolve-customer",
+    invoiceController.resolveInvoiceCustomer
+);
+
+router.post(
     "/",
     invoiceController.createInvoice
 );

@@ -1,9 +1,17 @@
 const axios = require("axios");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
+const mongoose = require("mongoose");
 const Invoice = require("../models/Invoice");
 const InvoiceCounter = require("../models/InvoiceCounter");
+const Contact = require("../models/Contact");
 const User = require("../models/User");
+const {
+    createContactWithQuota,
+    contactPayloadFromInput,
+    ensureContactPatientId,
+    ensureInvoiceCounter,
+} = require("../services/contactService");
 const {
     getWorkspaceContext,
     hasPermission,
@@ -564,93 +572,253 @@ const getWorkspaceOwner = async (workspaceOwnerId) => {
     return await User.findById(workspaceOwnerId).lean();
 };
 
-const getNextPatientId = async (
-    workspaceOwnerId,
-    prefix = "SV"
-) => {
-    const normalizedPrefix = String(prefix || "SV")
+const normalizeInvoicePhone = (value) =>
+    String(value || "").replace(/\D/g, "");
+
+const normalizeInvoiceEmail = (value) =>
+    String(value || "").trim().toLowerCase();
+
+const httpError = (message, statusCode) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
+const getPatientPrefix = (ownerBillingProfile) =>
+    String(
+        ownerBillingProfile.displayName ||
+        ownerBillingProfile.businessName ||
+        ownerBillingProfile.name ||
+        "SV"
+    )
         .replace(/[^a-zA-Z]/g, "")
         .toUpperCase()
         .slice(0, 2)
         .padEnd(2, "X");
 
-    let counter;
-
-    try {
-        counter = await InvoiceCounter.findOneAndUpdate(
-            {
-                userId: workspaceOwnerId,
-            },
-            {
-                $inc: {
-                    [`prefixSequences.${normalizedPrefix}`]: 1,
-                },
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-    } catch (error) {
-        throw error;
-    }
-
-    const sequence =
-        counter.prefixSequences?.get
-            ? counter.prefixSequences.get(
-                  normalizedPrefix
-              )
-            : counter.prefixSequences?.[
-                  normalizedPrefix
-              ];
-
-    return `${normalizedPrefix}${String(
-        sequence || 1
-    ).padStart(3, "0")}`;
-};
-
-const resolvePatientId = async ({
+const findInvoiceCustomer = async ({
     workspaceOwnerId,
     customerId,
     customerName,
+    customerEmail,
     customerPhone,
-    prefix = "SV",
+    customerAge,
+    patientPrefix,
 }) => {
-    const patientFilter = customerId
-        ? {
-              customerId,
-          }
-        : customerPhone
-        ? {
-              customerId: "",
-              customerName: String(
-                  customerName || ""
-              ).trim(),
-              customerPhone,
-          }
-        : null;
+    const id = String(customerId || "").trim();
+    let contact = null;
 
-    if (patientFilter) {
-        const existingPatient =
-            await Invoice.findOne({
+    if (id && mongoose.isValidObjectId(id)) {
+        contact = await Contact.findOne({
+            _id: id,
+            userId: workspaceOwnerId,
+            deletedAt: null,
+        });
+
+        if (!contact) {
+            throw httpError(
+                "The selected customer was not found in this workspace.",
+                404
+            );
+        }
+    } else {
+        const normalizedPhone = normalizeInvoicePhone(customerPhone);
+        const normalizedEmail = normalizeInvoiceEmail(customerEmail);
+        const identityFilters = [];
+
+        if (normalizedPhone) {
+            identityFilters.push(
+                { normalizedPhone },
+                { phone: String(customerPhone || "").trim() }
+            );
+        }
+
+        if (normalizedEmail) {
+            identityFilters.push(
+                { normalizedEmail },
+                {
+                    email: new RegExp(
+                        `^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+                        "i"
+                    ),
+                }
+            );
+        }
+
+        if (identityFilters.length) {
+            const matches = await Contact.find({
                 userId: workspaceOwnerId,
-                ...patientFilter,
-                patientId: {
-                    $ne: "",
-                },
-            })
-                .select("patientId")
-                .lean();
+                deletedAt: null,
+                $or: identityFilters,
+            }).limit(2);
 
-        if (existingPatient?.patientId) {
-            return existingPatient.patientId;
+            if (matches.length > 1) {
+                throw httpError(
+                    "These customer details match multiple contacts. Select a customer record before saving.",
+                    409
+                );
+            }
+
+            contact = matches[0] || null;
+        } else if (String(customerName || "").trim()) {
+            const escapedName = String(customerName)
+                .trim()
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const nameMatches = await Contact.find({
+                userId: workspaceOwnerId,
+                deletedAt: null,
+                name: new RegExp(`^${escapedName}$`, "i"),
+            }).limit(2);
+
+            if (nameMatches.length > 1) {
+                throw httpError(
+                    "Multiple customers have this name. Select the correct customer before saving.",
+                    409
+                );
+            }
+
+            contact = nameMatches[0] || null;
         }
     }
 
-    return await getNextPatientId(
-        workspaceOwnerId,
-        prefix
-    );
+    if (!contact) {
+        const result = await createContactWithQuota(
+            contactPayloadFromInput(
+                {
+                    name: customerName,
+                    email: customerEmail,
+                    phone: customerPhone,
+                    age: customerAge,
+                    source: "Manual",
+                },
+                workspaceOwnerId
+            ),
+            workspaceOwnerId,
+            { patientPrefix }
+        );
+
+        if (!result.created && !result.duplicate) {
+            throw httpError(
+                result.reason === "limit"
+                    ? "The contact limit has been reached. Upgrade your plan or remove a contact before creating this invoice."
+                    : "Unable to save the invoice customer.",
+                409
+            );
+        }
+
+        contact = result.contact;
+    } else {
+        let changed = false;
+
+        if (!String(contact.name || "").trim() && customerName) {
+            contact.name = String(customerName).trim();
+            changed = true;
+        }
+        if (!String(contact.email || "").trim() && customerEmail) {
+            contact.email = String(customerEmail).trim();
+            changed = true;
+        }
+        if (!String(contact.phone || "").trim() && customerPhone) {
+            contact.phone = String(customerPhone).trim();
+            changed = true;
+        }
+        if (
+            customerAge &&
+            String(contact.age || "").trim() !== String(customerAge).trim()
+        ) {
+            contact.age = String(customerAge).trim();
+            changed = true;
+        }
+
+        if (changed) {
+            await contact.save();
+        }
+    }
+
+    if (!contact) {
+        throw new Error("Unable to resolve the invoice customer.");
+    }
+
+    if (!String(contact.patientId || "").trim()) {
+        await ensureContactPatientId(
+            contact,
+            workspaceOwnerId,
+            patientPrefix
+        );
+    }
+
+    return contact;
+};
+
+const getNextInvoiceNumber = async (
+    workspaceOwnerId,
+    ownerBillingProfile
+) => {
+    const year = new Date().getFullYear();
+    await ensureInvoiceCounter(workspaceOwnerId);
+    const businessCode = String(
+        ownerBillingProfile.displayName ||
+        ownerBillingProfile.businessName ||
+        ownerBillingProfile.name ||
+        "SaleVitals"
+    )
+        .replace(/[^a-zA-Z]/g, "")
+        .slice(0, 2)
+        .toUpperCase()
+        .padEnd(2, "X");
+
+    while (true) {
+        const counter = await InvoiceCounter.findOneAndUpdate(
+            { userId: workspaceOwnerId },
+            { $inc: { invoiceSequence: 1 } },
+            {
+                new: true,
+                upsert: false,
+            }
+        );
+        if (!counter) {
+            throw new Error("Unable to allocate an invoice number.");
+        }
+        const sequence = Number(counter.invoiceSequence) || 1;
+        const invoiceNumber =
+            `INV/${year}/${businessCode}${String(sequence).padStart(3, "0")}`;
+        const alreadyUsed = await Invoice.exists({
+            userId: workspaceOwnerId,
+            invoiceNumber,
+        });
+
+        if (!alreadyUsed) {
+            return invoiceNumber;
+        }
+    }
+};
+
+const createInvoiceWithUniqueNumber = async (
+    invoiceData,
+    workspaceOwnerId,
+    ownerBillingProfile
+) => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        invoiceData.invoiceNumber = await getNextInvoiceNumber(
+            workspaceOwnerId,
+            ownerBillingProfile
+        );
+
+        try {
+            return await Invoice.create(invoiceData);
+        } catch (error) {
+            const invoiceNumberConflict =
+                error?.code === 11000 &&
+                (error?.keyPattern?.invoiceNumber ||
+                    String(error.message || "").includes("invoiceNumber"));
+
+            if (!invoiceNumberConflict || attempt === 4) {
+                throw error;
+            }
+        }
+    }
+
+    throw new Error("Unable to allocate a unique invoice number.");
 };
 
 const normalizePaymentMode = (value) => {
@@ -669,6 +837,72 @@ const normalizePaymentMode = (value) => {
         ? paymentMode
         : "";
 };
+
+exports.resolveInvoiceCustomer = async (req, res) => {
+    try {
+        const context = await getContext(req);
+
+        if (!context) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+
+        if (
+            !hasPermission(context, "invoices.create") &&
+            !hasPermission(context, "invoices.edit")
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have permission to use invoices.",
+            });
+        }
+
+        const customerName = String(req.body?.customerName || "").trim();
+        if (!customerName) {
+            return res.status(400).json({
+                success: false,
+                message: "Customer name is required.",
+            });
+        }
+
+        const workspaceOwnerId = context.workspaceOwnerId;
+        const owner = await getWorkspaceOwner(workspaceOwnerId);
+        if (!owner) {
+            return res.status(404).json({
+                success: false,
+                message: "Workspace owner account not found.",
+            });
+        }
+
+        const contact = await findInvoiceCustomer({
+            workspaceOwnerId,
+            customerId: req.body?.customerId,
+            customerName,
+            customerEmail: req.body?.customerEmail,
+            customerPhone: req.body?.customerPhone,
+            customerAge: req.body?.customerAge,
+            patientPrefix: getPatientPrefix(
+                buildOwnerBillingProfile(owner)
+            ),
+        });
+
+        return res.json({
+            success: true,
+            contact,
+        });
+    } catch (error) {
+        console.error("RESOLVE INVOICE CUSTOMER ERROR:", error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message:
+                error.message ||
+                "Unable to resolve the invoice customer.",
+        });
+    }
+};
+
 exports.getInvoices = async (req, res) => {
     try {
         const context = await getContext(req);
@@ -807,24 +1041,13 @@ exports.createInvoice = async (req, res) => {
 
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
-        const patientPrefix = String(
-    ownerBillingProfile.displayName ||
-    ownerBillingProfile.businessName ||
-    ownerBillingProfile.name ||
-    "SV"
-)
-    .replace(/[^a-zA-Z]/g, "")
-    .toUpperCase()
-    .slice(0, 2)
-    .padEnd(2, "X");
-
         const {
-            invoiceNumber,
             invoiceDate,
             customerId,
             customerName,
             customerEmail,
             customerPhone,
+            customerAge,
             customerAddress,
             paymentMode,
             notes,
@@ -864,14 +1087,15 @@ exports.createInvoice = async (req, res) => {
             });
         }
 
-        const patientId =
-    await resolvePatientId({
-        workspaceOwnerId,
-        customerId,
-        customerName,
-        customerPhone,
-        prefix: patientPrefix,
-    });
+        const contact = await findInvoiceCustomer({
+            workspaceOwnerId,
+            customerId,
+            customerName: String(customerName).trim(),
+            customerEmail,
+            customerPhone,
+            customerAge,
+            patientPrefix: getPatientPrefix(ownerBillingProfile),
+        });
         const invoiceSettings =
             resolveCurrency(owner);
         const requestedCountryCode =
@@ -926,13 +1150,10 @@ exports.createInvoice = async (req, res) => {
                   "Tax";
 
         const invoice =
-            await Invoice.create({
+            await createInvoiceWithUniqueNumber(
+            {
                 userId:
                     workspaceOwnerId,
-
-                invoiceNumber:
-                    invoiceNumber ||
-                    `INV-${Date.now()}`,
 
                 invoiceDate:
                     invoiceDate
@@ -940,20 +1161,21 @@ exports.createInvoice = async (req, res) => {
                         : new Date(),
 
                 customerId:
-                    customerId || "",
+                    String(contact._id),
 
-                patientId,
+                patientId: contact.patientId,
 
                 customerName:
-                    String(
-                        customerName
-                    ).trim(),
+                    String(contact.name || customerName).trim(),
 
                 customerEmail:
-                    customerEmail || "",
+                    customerEmail || contact.email || "",
 
                 customerPhone:
-                    customerPhone || "",
+                    customerPhone || contact.phone || "",
+
+                customerAge:
+                    customerAge || contact.age || "",
 
                 customerAddress:
                     customerAddress || "",
@@ -1012,7 +1234,10 @@ exports.createInvoice = async (req, res) => {
 
                 status:
                     status || "Draft",
-            });
+            },
+            workspaceOwnerId,
+            ownerBillingProfile
+        );
 
         return res.status(201).json({
             success: true,
@@ -1026,7 +1251,7 @@ exports.createInvoice = async (req, res) => {
             error
         );
 
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message:
                 error.message ||
@@ -1068,18 +1293,6 @@ exports.updateInvoice = async (req, res) => {
         const ownerBillingProfile =
             buildOwnerBillingProfile(owner);
         
-         const patientPrefix = String(
-            ownerBillingProfile.displayName ||
-            ownerBillingProfile.businessName ||
-            ownerBillingProfile.name ||
-            "SV"
-        )
-            .replace(/[^a-zA-Z]/g, "")
-            .toUpperCase()
-            .slice(0, 2)
-            .padEnd(2, "X");
-                
-
         const invoice =
             await Invoice.findOne({
                 _id: req.params.invoiceId,
@@ -1094,12 +1307,12 @@ exports.updateInvoice = async (req, res) => {
         }
 
         const {
-            invoiceNumber,
             invoiceDate,
             customerId,
             customerName,
             customerEmail,
             customerPhone,
+            customerAge,
             customerAddress,
             paymentMode,
             notes,
@@ -1130,39 +1343,25 @@ exports.updateInvoice = async (req, res) => {
             });
         }
 
-        const nextCustomerId =
-            customerId || "";
-
         const nextCustomerName =
             String(customerName).trim();
 
-        const nextCustomerPhone =
-            customerPhone || "";
-
-        const samePatient =
-            String(
-                invoice.customerId || ""
-            ) ===
-                String(nextCustomerId) &&
-            invoice.customerName ===
-                nextCustomerName &&
-            invoice.customerPhone ===
-                nextCustomerPhone;
-
-        const patientId =
-        samePatient &&
-        invoice.patientId
-            ? invoice.patientId
-            : await resolvePatientId({
-                workspaceOwnerId,
-                customerId:
-                    nextCustomerId,
-                customerName:
-                    nextCustomerName,
-                customerPhone:
-                    nextCustomerPhone,
-                prefix: patientPrefix,
-            });
+        const nextCustomerId = Object.prototype.hasOwnProperty.call(
+            req.body || {},
+            "customerId"
+        )
+            ? String(customerId || "")
+            : String(invoice.customerId || "");
+        const contact = await findInvoiceCustomer({
+            workspaceOwnerId,
+            customerId: nextCustomerId,
+            customerName: nextCustomerName,
+            customerEmail,
+            customerPhone,
+            customerAge,
+            patientPrefix: getPatientPrefix(ownerBillingProfile),
+        });
+        const patientId = invoice.patientId || contact.patientId;
 
         const invoiceSettings =
             resolveCurrency(owner);
@@ -1222,7 +1421,6 @@ exports.updateInvoice = async (req, res) => {
 
         Object.assign(invoice, {
             invoiceNumber:
-                invoiceNumber ||
                 invoice.invoiceNumber,
 
             invoiceDate:
@@ -1231,7 +1429,7 @@ exports.updateInvoice = async (req, res) => {
                     : invoice.invoiceDate,
 
             customerId:
-                nextCustomerId,
+                String(contact._id),
 
             patientId,
 
@@ -1239,10 +1437,13 @@ exports.updateInvoice = async (req, res) => {
                 nextCustomerName,
 
             customerEmail:
-                customerEmail || "",
+                customerEmail || contact.email || "",
 
             customerPhone:
-                nextCustomerPhone,
+                customerPhone || contact.phone || "",
+
+            customerAge:
+                customerAge || contact.age || "",
 
             customerAddress:
                 customerAddress || "",
@@ -1316,7 +1517,7 @@ exports.updateInvoice = async (req, res) => {
             error
         );
 
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message:
                 error.message ||
@@ -1966,6 +2167,16 @@ if (hasUnicodeFont) {
                 ) {
                     doc.text(
                         `Phone: ${invoice.customerPhone}`,
+                        pageLeft,
+                        customerY
+                    );
+
+                    customerY += 12;
+                }
+
+                if (invoice.customerAge) {
+                    doc.text(
+                        `Age: ${invoice.customerAge}`,
                         pageLeft,
                         customerY
                     );

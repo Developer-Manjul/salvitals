@@ -205,6 +205,12 @@ const invoiceSchema = new mongoose.Schema(
             trim: true,
         },
 
+        customerAge: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
         customerAddress: {
             type: String,
             default: "",
@@ -328,6 +334,16 @@ invoiceSchema.index({
     userId: 1,
     createdAt: -1,
 });
+invoiceSchema.index(
+    { userId: 1, invoiceNumber: 1 },
+    {
+        unique: true,
+        name: "userId_1_invoiceNumber_1",
+        partialFilterExpression: {
+            invoiceNumber: { $type: "string", $gt: "" },
+        },
+    }
+);
 
 module.exports = mongoose.model(
     "Invoice",

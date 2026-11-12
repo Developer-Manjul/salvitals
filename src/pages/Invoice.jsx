@@ -155,46 +155,6 @@ const today = () => {
 
 };
 
-const createInvoiceNumber = (businessName = "SaleVitals", existingInvoices = []) => {
-
-  const year = new Date().getFullYear();
-
-  const code = String(businessName || "SaleVitals")
-
-    .replace(/[^a-zA-Z]/g, "")
-
-    .slice(0, 2)
-
-    .toUpperCase()
-
-    .padEnd(2, "X");
-
-  const prefix = `INV/${year}/${code}`;
-
-  let maxSequence = 0;
-
-  existingInvoices.forEach((item) => {
-
-    const number = String(item?.invoiceNumber || "");
-
-    const match = number.match(
-
-      new RegExp(`^INV/${year}/${code}(\\\d{3,})$`, "i")
-
-    );
-
-    if (match) {
-
-      maxSequence = Math.max(maxSequence, Number(match[1]) || 0);
-
-    }
-
-  });
-
-  return `${prefix}${String(maxSequence + 1).padStart(3, "0")}`;
-
-};
-
 const emptyItem = () => ({
 
   id: Date.now() + Math.random(),
@@ -296,7 +256,7 @@ export default function Invoice() {
 
   const [invoice, setInvoice] = useState({
 
-    invoiceNumber: createInvoiceNumber("SaleVitals", []),
+    invoiceNumber: "",
 
     invoiceDate: today(),
 
@@ -317,6 +277,8 @@ export default function Invoice() {
     customerEmail: "",
 
     customerPhone: "",
+
+    customerAge: "",
 
     customerAddress: "",
 
@@ -881,7 +843,7 @@ export default function Invoice() {
 
     setInvoice({
 
-      invoiceNumber: createInvoiceNumber(getBusinessName(), invoices),
+      invoiceNumber: "",
 
       invoiceDate: today(),
       countryCode: getBillingCountryCode(),
@@ -905,6 +867,8 @@ export default function Invoice() {
 
       customerPhone: "",
 
+      customerAge: "",
+
       customerAddress: "",
 
       paymentMode: "",
@@ -916,48 +880,6 @@ export default function Invoice() {
     });
 
     setView("create");
-
-  };
-
-  const handleCustomerChange = (customerId) => {
-
-    const customer = customers.find(
-
-      (item) =>
-
-        String(item._id || item.id) === String(customerId)
-
-    );
-
-    setSelectedCustomer(customer || null);
-
-    setInvoice((prev) => ({
-
-      ...prev,
-
-      customerId: customerId || "",
-
-      patientId:
-
-        invoices.find((invoiceItem) => String(invoiceItem.customerId) === String(customerId))?.patientId || "",
-
-      customerName:
-
-        customer?.name ||
-
-        customer?.fullName ||
-
-        customer?.patientName ||
-
-        "",
-
-      customerEmail: customer?.email || "",
-
-      customerPhone: customer?.phone || "",
-
-      customerAddress: customer?.address || "",
-
-    }));
 
   };
 
@@ -979,11 +901,19 @@ export default function Invoice() {
 
       customerName: value,
 
+      customerEmail: "",
+
+      customerPhone: "",
+
+      customerAge: "",
+
+      customerAddress: "",
+
     }));
 
   };
 
-  const selectCustomer = (customer) => {
+  const selectCustomer = async (customer) => {
 
     const customerId = customer?._id || customer?.id || "";
 
@@ -1010,8 +940,9 @@ export default function Invoice() {
       customerId,
 
       patientId:
-
-        invoices.find((invoiceItem) => String(invoiceItem.customerId) === String(customerId))?.patientId || "",
+        editingInvoiceId
+          ? prev.patientId
+          : customer?.patientId || "",
 
       customerName,
 
@@ -1019,9 +950,70 @@ export default function Invoice() {
 
       customerPhone: customer?.phone || "",
 
+      customerAge: customer?.age || customer?.customerAge || "",
+
       customerAddress: customer?.address || "",
 
     }));
+
+    if (!customerId || customer?.patientId) {
+      return;
+    }
+
+    try {
+      const data = await api("/api/invoices/resolve-customer", {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          customerName,
+          customerEmail: customer?.email || "",
+          customerPhone: customer?.phone || "",
+          customerAge: customer?.age || customer?.customerAge || "",
+        }),
+      });
+
+      if (!data.contact) {
+        throw new Error("Unable to load this customer's Patient ID.");
+      }
+
+      const resolvedCustomer = data.contact;
+      const resolvedCustomerId = String(
+        resolvedCustomer._id || resolvedCustomer.id || customerId
+      );
+
+      setCustomers((previous) => [
+        resolvedCustomer,
+        ...previous.filter(
+          (item) =>
+            String(item?._id || item?.id) !== resolvedCustomerId
+        ),
+      ]);
+      setSelectedCustomer(resolvedCustomer);
+      setInvoice((previous) => {
+        if (
+          String(previous.customerId || "") !==
+          String(customerId || "")
+        ) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          customerId: resolvedCustomerId,
+          patientId: editingInvoiceId
+            ? previous.patientId || resolvedCustomer.patientId || ""
+            : resolvedCustomer.patientId || "",
+          customerEmail:
+            previous.customerEmail || resolvedCustomer.email || "",
+          customerPhone:
+            previous.customerPhone || resolvedCustomer.phone || "",
+          customerAge:
+            previous.customerAge || resolvedCustomer.age || "",
+        };
+      });
+    } catch (error) {
+      setError(error.message || "Unable to load the customer's Patient ID.");
+    }
 
   };
 
@@ -1035,7 +1027,7 @@ export default function Invoice() {
 
     }
 
-    const existing = customers.find((customer) => {
+    const existing = customers.filter((customer) => {
 
       const customerName =
 
@@ -1048,15 +1040,16 @@ export default function Invoice() {
         "";
 
       return customerName.trim().toLowerCase() === name.toLowerCase();
-
     });
 
-    if (existing) {
-
-      selectCustomer(existing);
-
+    if (existing.length === 1) {
+      selectCustomer(existing[0]);
       return;
+    }
 
+    if (existing.length > 1) {
+      setError("Multiple customers have this name. Select the correct customer from the list.");
+      return;
     }
 
     try {
@@ -1065,51 +1058,23 @@ export default function Invoice() {
 
       setError("");
 
-      const data = await api("/api/contacts", {
+      const data = await api("/api/invoices/resolve-customer", {
 
         method: "POST",
 
         body: JSON.stringify({
 
-          name,
-
-          email: "",
-
-          phone: "",
-
-          source: "Manual",
-
-          service: "",
-
-          doctor: getBusinessOwner(),
-
-          owner: getBusinessOwner(),
+          customerName: name,
 
         }),
 
       });
 
-      const contact =
+      if (!data.contact) {
+        throw new Error("The customer was not saved.");
+      }
 
-        data.contact || {
-
-          _id: `local-${Date.now()}`,
-
-          name,
-
-          email: "",
-
-          phone: "",
-
-          source: "Manual",
-
-          service: "",
-
-          doctor: getBusinessOwner(),
-
-          owner: getBusinessOwner(),
-
-        };
+      const contact = data.contact;
 
       setCustomers((prev) => [
 
@@ -1308,6 +1273,8 @@ export default function Invoice() {
     customerEmail: invoice.customerEmail,
 
     customerPhone: invoice.customerPhone,
+
+    customerAge: invoice.customerAge,
 
     customerAddress: invoice.customerAddress,
 
@@ -1564,10 +1531,30 @@ export default function Invoice() {
       );
 
       if (data.invoice) {
-
+        const savedCustomer = {
+          _id: data.invoice.customerId,
+          name: data.invoice.customerName,
+          email: data.invoice.customerEmail || "",
+          phone: data.invoice.customerPhone || "",
+          age: data.invoice.customerAge || "",
+          patientId: data.invoice.patientId || "",
+        };
         setEditingInvoiceId(String(data.invoice._id || data.invoice.id || ""));
-
-        setInvoice((prev) => ({ ...prev, patientId: data.invoice.patientId || "" }));
+        setInvoice((prev) => ({
+          ...prev,
+          invoiceNumber: data.invoice.invoiceNumber || prev.invoiceNumber,
+          customerId: data.invoice.customerId || prev.customerId,
+          patientId: data.invoice.patientId || prev.patientId,
+          customerAge: data.invoice.customerAge || prev.customerAge,
+        }));
+        setCustomers((previous) => [
+          savedCustomer,
+          ...previous.filter(
+            (customer) =>
+              String(customer?._id || customer?.id) !==
+              String(savedCustomer._id)
+          ),
+        ]);
 
         setInvoices((prev) => editingInvoiceId
 
@@ -1585,7 +1572,11 @@ export default function Invoice() {
 
       }
 
-      setSuccess("Invoice saved successfully.");
+      setSuccess(
+        data.invoice?.invoiceNumber
+          ? `Invoice ${data.invoice.invoiceNumber} saved successfully.`
+          : "Invoice saved successfully."
+      );
 
       setView("list");
 
@@ -1681,9 +1672,17 @@ export default function Invoice() {
 
     setShowPreview(false);
 
+    const customerRecord = customers.find(
+      (customer) =>
+        String(customer?._id || customer?.id) ===
+        String(item.customerId || "")
+    );
+
+    setSelectedCustomer(customerRecord || null);
+
     setInvoice({
 
-      invoiceNumber: item.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
+      invoiceNumber: item.invoiceNumber || "",
 
       invoiceDate: item.invoiceDate || today(),
       countryCode: item.countryCode || getBillingCountryCode(),
@@ -1700,15 +1699,29 @@ export default function Invoice() {
         item.taxType ||
         (normalizeCountryCode(item.countryCode || getBillingCountryCode()) === "IN" ? "GST" : "Tax"),
 
-      customerId: item.customerId || "",
+      customerId:
+        item.customerId ||
+        customerRecord?._id ||
+        customerRecord?.id ||
+        "",
 
-      patientId: item.patientId || "",
+      patientId: item.patientId || customerRecord?.patientId || "",
 
-      customerName: item.customerName || "",
+      customerName:
+        item.customerName ||
+        customerRecord?.name ||
+        customerRecord?.fullName ||
+        "",
 
-      customerEmail: item.customerEmail || "",
+      customerEmail: item.customerEmail || customerRecord?.email || "",
 
-      customerPhone: item.customerPhone || "",
+      customerPhone: item.customerPhone || customerRecord?.phone || "",
+
+      customerAge:
+        item.customerAge ||
+        customerRecord?.age ||
+        customerRecord?.customerAge ||
+        "",
 
       customerAddress: item.customerAddress || "",
 
@@ -2014,6 +2027,8 @@ export default function Invoice() {
             <span>BILLED TO</span>
 
             <strong>{invoice.customerName || "—"}</strong>
+
+            {invoice.customerAge && <p>Age: {invoice.customerAge}</p>}
 
             {invoice.paymentMode && <p><strong>Payment Mode: {invoice.paymentMode}</strong></p>}
 
@@ -2517,7 +2532,7 @@ export default function Invoice() {
                           onClick={() => {
                             setInvoice({
 
-                              invoiceNumber: item.invoiceNumber || createInvoiceNumber(getBusinessName(), invoices),
+                              invoiceNumber: item.invoiceNumber || "",
 
                               invoiceDate: item.invoiceDate || today(),
                               countryCode: item.countryCode || getBillingCountryCode(),
@@ -2543,6 +2558,15 @@ export default function Invoice() {
                               customerEmail: item.customerEmail || "",
 
                               customerPhone: item.customerPhone || "",
+
+                              customerAge:
+                                item.customerAge ||
+                                customers.find(
+                                  (customer) =>
+                                    String(customer?._id || customer?.id) ===
+                                    String(item.customerId || "")
+                                )?.age ||
+                                "",
 
                               customerAddress: item.customerAddress || "",
 
@@ -2742,7 +2766,7 @@ export default function Invoice() {
 
                   type="text"
 
-                  value={invoice.invoiceNumber}
+                  value={invoice.invoiceNumber || "Assigned when saved"}
 
                   readOnly
 
@@ -3107,6 +3131,26 @@ export default function Invoice() {
                   onChange={(e) => updateCustomerField("customerEmail", e.target.value)}
 
                   placeholder="Enter email"
+
+                />
+
+              </div>
+
+              <div className="invoice-field">
+
+                <label>Patient Age</label>
+
+                <input
+
+                  type="number"
+
+                  min="0"
+
+                  value={invoice.customerAge}
+
+                  onChange={(e) => updateCustomerField("customerAge", e.target.value)}
+
+                  placeholder="Enter age"
 
                 />
 

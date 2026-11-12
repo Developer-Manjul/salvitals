@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const Lead = require("../models/Lead");
+const Invoice = require("../models/Invoice");
+const InvoiceCounter = require("../models/InvoiceCounter");
 const User = require("../models/User");
 const { getActivePlan } = require("../utils/contactLimits");
 
@@ -33,6 +35,232 @@ function normalizeEmail(value) {
 function normalizePhone(value) {
   return String(value || "")
     .replace(/\D/g, "");
+}
+
+function normalizePatientPrefix(value = "SV") {
+  return String(value || "SV")
+    .replace(/[^a-zA-Z]/g, "")
+    .toUpperCase()
+    .slice(0, 2)
+    .padEnd(2, "X");
+}
+
+async function ensureInvoiceCounter(userId) {
+  try {
+    await InvoiceCounter.updateOne(
+      { userId },
+      { $setOnInsert: { userId } },
+      { upsert: true }
+    );
+  } catch (error) {
+    if (error?.code !== 11000 && error?.code !== 11001) {
+      throw error;
+    }
+
+    if (!(await InvoiceCounter.exists({ userId }))) {
+      throw error;
+    }
+  }
+}
+
+async function allocatePatientId(userId, prefix, session = null) {
+  const normalizedPrefix = normalizePatientPrefix(prefix);
+  const options = {
+    new: true,
+    upsert: false,
+  };
+
+  if (session) {
+    options.session = session;
+  }
+
+  while (true) {
+    const counter = await InvoiceCounter.findOneAndUpdate(
+      { userId },
+      {
+        $inc: {
+          [`prefixSequences.${normalizedPrefix}`]: 1,
+        },
+      },
+      options
+    );
+
+    if (!counter) {
+      throw new Error("Unable to allocate a Patient ID counter.");
+    }
+
+    const sequence =
+      counter.prefixSequences?.get
+        ? counter.prefixSequences.get(normalizedPrefix)
+        : counter.prefixSequences?.[normalizedPrefix];
+    const patientId = `${normalizedPrefix}${String(
+      sequence || 1
+    ).padStart(3, "0")}`;
+    let existingQuery = Contact.findOne({
+      userId,
+      patientId,
+    }).select("_id");
+
+    if (session) {
+      existingQuery = existingQuery.session(session);
+    }
+
+    if (!(await existingQuery.lean())) {
+      return patientId;
+    }
+  }
+}
+
+async function findLegacyPatientId(userId, contact, session = null) {
+  const contactId = String(contact?._id || "");
+  if (contactId) {
+    let invoiceQuery = Invoice.findOne({
+      userId,
+      customerId: contactId,
+      patientId: { $nin: ["", null] },
+    })
+      .sort({ createdAt: 1 })
+      .select("patientId");
+
+    if (session) {
+      invoiceQuery = invoiceQuery.session(session);
+    }
+
+    const invoice = await invoiceQuery.lean();
+    if (invoice?.patientId) {
+      return invoice.patientId;
+    }
+  }
+
+  const email = normalizeEmail(contact?.normalizedEmail || contact?.email);
+  const phone = normalizePhone(contact?.normalizedPhone || contact?.phone);
+  const identityFilters = [];
+
+  if (email) {
+    const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    identityFilters.push({
+      customerEmail: new RegExp(`^${escapedEmail}$`, "i"),
+    });
+  }
+
+  if (phone.length >= 4) {
+    const phoneSuffix = phone.slice(-Math.min(7, phone.length));
+    identityFilters.push({
+      customerPhone: {
+        $regex: phoneSuffix.split("").join("\\D*"),
+      },
+    });
+  }
+
+  if (!identityFilters.length) {
+    return "";
+  }
+
+  let invoicesQuery = Invoice.find({
+    userId,
+    patientId: { $nin: ["", null] },
+    $or: identityFilters,
+  })
+    .sort({ createdAt: 1 })
+    .select("patientId customerEmail customerPhone");
+
+  if (session) {
+    invoicesQuery = invoicesQuery.session(session);
+  }
+
+  const invoices = await invoicesQuery.lean();
+  const match = invoices.find(
+    (invoice) =>
+      (email && normalizeEmail(invoice.customerEmail) === email) ||
+      (phone && normalizePhone(invoice.customerPhone) === phone)
+  );
+
+  return match?.patientId || "";
+}
+
+async function ensureContactPatientId(
+  contact,
+  userId,
+  prefix = "SV",
+  session = null
+) {
+  if (String(contact?.patientId || "").trim()) {
+    return contact.patientId;
+  }
+
+  if (!session) {
+    await ensureInvoiceCounter(userId);
+  }
+
+  const legacyPatientId = await findLegacyPatientId(
+    userId,
+    contact,
+    session
+  );
+  let patientId = legacyPatientId;
+
+  if (patientId) {
+    let duplicateQuery = Contact.findOne({
+      userId,
+      patientId,
+      _id: { $ne: contact._id },
+    }).select("_id");
+
+    if (session) {
+      duplicateQuery = duplicateQuery.session(session);
+    }
+
+    if (await duplicateQuery.lean()) {
+      patientId = "";
+    }
+  }
+
+  if (!patientId) {
+    patientId = await allocatePatientId(userId, prefix, session);
+  }
+
+  const updateOptions = { new: true };
+  if (session) {
+    updateOptions.session = session;
+  }
+
+  const updatedContact = await Contact.findOneAndUpdate(
+    {
+      _id: contact._id,
+      userId,
+      $or: [
+        { patientId: { $exists: false } },
+        { patientId: "" },
+        { patientId: null },
+      ],
+    },
+    {
+      $set: { patientId },
+    },
+    updateOptions
+  );
+
+  if (updatedContact?.patientId) {
+    contact.patientId = updatedContact.patientId;
+    return updatedContact.patientId;
+  }
+
+  let currentContactQuery = Contact.findOne({
+    _id: contact._id,
+    userId,
+  }).select("patientId");
+
+  if (session) {
+    currentContactQuery = currentContactQuery.session(session);
+  }
+
+  const currentContact = await currentContactQuery.lean();
+  if (!currentContact?.patientId) {
+    throw new Error("Unable to assign a Patient ID to this customer.");
+  }
+
+  contact.patientId = currentContact.patientId;
+  return currentContact.patientId;
 }
 
 function addNormalizedIdentity(payload) {
@@ -210,9 +438,12 @@ async function getAuthoritativeContactCount(userId) {
 
 async function createContactWithQuota(
   payload,
-  userId
+  userId,
+  { patientPrefix = "SV" } = {}
 ) {
   payload = addNormalizedIdentity(payload);
+  payload.patientId = "";
+  await ensureInvoiceCounter(userId);
   const session =
     await mongoose.startSession();
 
@@ -291,6 +522,12 @@ async function createContactWithQuota(
               payload.leadCreatedAt;
           }
 
+          await ensureContactPatientId(
+            matchingContact,
+            userId,
+            patientPrefix,
+            session
+          );
           await matchingContact.save({
             session,
           });
@@ -364,6 +601,36 @@ async function createContactWithQuota(
           return;
         }
 
+        const legacyPatientId = await findLegacyPatientId(
+          userId,
+          payload,
+          session
+        );
+        let contactPatientId = legacyPatientId;
+
+        if (contactPatientId) {
+          const legacyContactQuery = Contact.findOne({
+            userId,
+            patientId: contactPatientId,
+          }).select("_id");
+
+          if (session) {
+            legacyContactQuery.session(session);
+          }
+
+          if (await legacyContactQuery.lean()) {
+            contactPatientId = "";
+          }
+        }
+
+        payload.patientId =
+          contactPatientId ||
+          await allocatePatientId(
+            userId,
+            patientPrefix,
+            session
+          );
+
         const [contact] =
           await Contact.create(
             [payload],
@@ -392,25 +659,31 @@ async function createContactWithQuota(
       error?.code === 11000 ||
       error?.code === 11001
     ) {
-      const duplicate = payload.leadId
-        ? await Contact.findOne({
+      const identityFilters = [
+        ...(payload.normalizedPhone
+          ? [{ normalizedPhone: payload.normalizedPhone }]
+          : []),
+        ...(payload.normalizedEmail
+          ? [{ normalizedEmail: payload.normalizedEmail }]
+          : []),
+      ];
+      const duplicateFilter = payload.leadId
+        ? {
             userId,
             leadId: payload.leadId,
+          }
+        : identityFilters.length
+          ? {
+              userId,
+              $or: identityFilters,
+            }
+          : null;
+      const duplicate = duplicateFilter
+        ? await Contact.findOne({
+            ...duplicateFilter,
             deletedAt: null,
           })
-        : payload.normalizedPhone
-          ? await Contact.findOne({
-              userId,
-              deletedAt: null,
-              normalizedPhone: payload.normalizedPhone,
-            })
-          : payload.normalizedEmail
-            ? await Contact.findOne({
-                userId,
-                deletedAt: null,
-                normalizedEmail: payload.normalizedEmail,
-              })
-            : null;
+        : null;
 
       if (duplicate) {
         return {
@@ -482,6 +755,8 @@ async function createContactFromLead(
 module.exports = {
   createContactFromLead,
   createContactWithQuota,
+  ensureContactPatientId,
+  ensureInvoiceCounter,
   getContactUsage,
   getAuthoritativeContactCount,
   contactPayloadFromInput,

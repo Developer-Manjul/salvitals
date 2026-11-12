@@ -15,6 +15,12 @@ const invoiceCounterSchema = new mongoose.Schema(
             default: 0,
         },
 
+        invoiceSequence: {
+            type: Number,
+            min: 0,
+            default: 0,
+        },
+
         // New prefix-based patient counters
         // Example:
         // { WF: 1, AB: 5 }

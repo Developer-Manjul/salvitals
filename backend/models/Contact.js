@@ -15,6 +15,7 @@ const contactSchema = new mongoose.Schema(
       index: true,
     },
     name: { type: String, required: true, trim: true },
+    patientId: { type: String, trim: true, default: "" },
     email: { type: String, trim: true, default: "" },
     phone: { type: String, trim: true, default: "" },
     normalizedEmail: { type: String, trim: true, default: "", index: true },
@@ -34,6 +35,15 @@ const contactSchema = new mongoose.Schema(
 );
 
 contactSchema.index({ userId: 1, createdAt: -1 });
+contactSchema.index(
+  { userId: 1, patientId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      patientId: { $type: "string", $gt: "" },
+    },
+  }
+);
 contactSchema.index(
   { userId: 1, leadId: 1 },
   { unique: true, partialFilterExpression: { leadId: { $type: "objectId" } } }
