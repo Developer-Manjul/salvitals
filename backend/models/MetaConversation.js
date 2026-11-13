@@ -98,6 +98,9 @@ const metaConversationSchema = new mongoose.Schema(
         "awaiting_name",
         "awaiting_phone",
         "awaiting_treatment",
+        "awaiting_date",
+        "awaiting_time",
+        "awaiting_confirmation",
         "ready_to_submit",
       ],
       default: "idle",
@@ -116,6 +119,22 @@ const metaConversationSchema = new mongoose.Schema(
     aiBookingTreatment: {
       type: String,
       default: "",
+    },
+
+    aiBookingDate: {
+      type: String,
+      default: "",
+    },
+
+    aiBookingTime: {
+      type: String,
+      default: "",
+    },
+
+    aiBookingLanguage: {
+      type: String,
+      enum: ["english", "hindi", "hinglish"],
+      default: "english",
     },
 
     lastDiscussedTreatment: {

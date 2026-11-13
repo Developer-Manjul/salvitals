@@ -106,7 +106,9 @@ function detectLanguage(text) {
     "iska", "iske", "iski", "uska", "uske", "uski",
     "baare", "bare", "kuch", "tum", "tumhara",
     "pasand", "ghumne", "zindagi", "yaar", "bhai",
-    "haan", "han", "nahi", "nahin", "acha", "achha"
+    "haan", "han", "nahi", "nahin", "acha", "achha",
+    "kal", "parso", "aaj", "baje", "bajey", "subah",
+    "shaam", "dopahar", "raat", "somvar", "mangalvar",
   ]);
 
   const englishWords = new Set([
@@ -378,6 +380,7 @@ RULES:
 5. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
 5a. For medical or treatment questions, state only facts explicitly present in verified business information. Do not infer outcomes, risks, recovery, suitability, or medical advice; if the information does not answer the question, say the clinic will clarify it in consultation.
 5b. A question about treatment pricing or the doctor's consultation fee is an information request, not an appointment request. Answer it from verified information and do not initiate booking.
+5c. Do not claim that an appointment date or time is available unless verified availability is explicitly provided in business information.
 6. Answer the visitor's current business-related question directly.
 7. Use conversation history to understand relevant follow-up messages and short replies.
 8. If a business-related question is unclear, ask one short clarifying question.
