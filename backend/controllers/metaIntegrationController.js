@@ -1343,7 +1343,7 @@ exports.receiveWebhook = async (req, res) => {
                                     item => String(item.wa_id) === senderId
                                 );
 
-                                const participantName = String(contact?.profile?.name || senderId);
+                                const participantName = String(contact?.profile?.name || "").trim();
                                 const messageType = String(waMessage.type || "other");
 
                                 let text = "";
@@ -1436,6 +1436,7 @@ exports.receiveWebhook = async (req, res) => {
                                             integration,
                                             conversation,
                                             inboundText: text,
+                                            inboundMessageId: messageId,
                                             accessToken: decrypt(integration.accessTokenEncrypted),
                                         });
                                     } catch (automationError) {

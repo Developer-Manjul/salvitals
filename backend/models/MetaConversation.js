@@ -93,13 +93,50 @@ const metaConversationSchema = new mongoose.Schema(
 
     aiBookingState: {
       type: String,
-      enum: ["idle", "awaiting_name", "awaiting_phone"],
+      enum: [
+        "idle",
+        "awaiting_name",
+        "awaiting_phone",
+        "awaiting_treatment",
+        "ready_to_submit",
+      ],
       default: "idle",
     },
 
     aiBookingName: {
       type: String,
       default: "",
+    },
+
+    aiBookingPhone: {
+      type: String,
+      default: "",
+    },
+
+    aiBookingTreatment: {
+      type: String,
+      default: "",
+    },
+
+    lastDiscussedTreatment: {
+      type: String,
+      default: "",
+    },
+
+    currentIntent: {
+      type: String,
+      default: "",
+    },
+
+    appointmentProgress: {
+      type: String,
+      default: "idle",
+    },
+
+    whatsappLeadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lead",
+      default: null,
     },
   },
   { timestamps: true }

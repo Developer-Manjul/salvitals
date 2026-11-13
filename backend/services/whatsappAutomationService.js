@@ -1,65 +1,220 @@
 const AIAssistant = require("../models/AIAssistant");
+const AIKnowledge = require("../models/AIKnowledge");
+const Contact = require("../models/Contact");
 const Lead = require("../models/Lead");
 const MetaMessage = require("../models/MetaMessage");
+const Service = require("../models/Service");
+const User = require("../models/User");
 const WhatsAppAutomationSettings = require("../models/WhatsAppAutomationSettings");
 const { searchKnowledge } = require("./aiKnowledgeService");
-const { generateAIReply } = require("./aiService");
+const { detectLanguage, generateAIReply } = require("./aiService");
 const meta = require("./metaService");
 
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "").slice(-15);
 }
 
-function isAppointmentRequest(text) {
-  return /\b(appointment|consultation|book|booking|visit)\b|appointment chahiye|consultation\b/i.test(
-    String(text || "")
+function isGreeting(text) {
+  return /^(hi|hii|hello|hey|namaste|namaskar|good morning|good afternoon|good evening)[.!?\s]*$/i.test(
+    String(text || "").trim()
   );
 }
 
-async function syncLead({ ownerId, conversation, name, phone }) {
-  const cleanName = String(name || conversation.participantName || "").trim();
+function cleanCustomerName(value) {
+  const name = String(value || "").trim();
+  if (!name || /^\+?[\d\s().-]+$/.test(name) || name.length > 100) return "";
+  if (/^(whatsapp user|instagram\/facebook user|customer|unknown)$/i.test(name)) return "";
+  return name;
+}
+
+function normalizeWords(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\u0900-\u097f]/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function editDistanceAtMostOne(left, right) {
+  if (Math.abs(left.length - right.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let differences = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    differences += 1;
+    if (differences > 1) return false;
+    if (left.length > right.length) i += 1;
+    else if (right.length > left.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  if (i < left.length || j < right.length) differences += 1;
+  return differences <= 1;
+}
+
+function matchTreatment(text, candidates = []) {
+  const words = normalizeWords(text).split(" ").filter(Boolean);
+  for (const candidate of candidates) {
+    const name = String(candidate || "").trim();
+    const normalized = normalizeWords(name);
+    if (!normalized || normalized.length < 3) continue;
+    if (` ${normalizeWords(text)} `.includes(` ${normalized} `)) return name;
+
+    const candidateWords = normalized.split(" ").filter((word) => word.length >= 4);
+    if (candidateWords.some((candidateWord) =>
+      words.some((word) =>
+        word === candidateWord ||
+        (Math.min(word.length, candidateWord.length) >= 5 &&
+          editDistanceAtMostOne(word, candidateWord))
+      )
+    )) return name;
+  }
+  return "";
+}
+
+function isAppointmentRequest(text) {
+  if (/अपॉइंटमेंट|परामर्श|डॉक्टर.{0,12}(बात|मिल|बोल)|डॉक्टर से बात/u.test(String(text || ""))) {
+    return true;
+  }
+  const value = normalizeWords(text);
+  return /\b(appointment|appointmnt|appointement|consultation|consult|booking|book|reserve|schedule)\b/.test(value) ||
+    /\b(doctor|dr)\s+(se\s+)?(baat|bat|talk|speak)\b/.test(value) ||
+    /\b(baat|bat)\s+(karni|krni|karna|krna)\s+(hai|h)\b.*\b(doctor|dr)\b/.test(value) ||
+    /\bdoctor\s+(se\s+)?(baat|bat)\s+(karni|krni)\s+(hai|h)\b/.test(value);
+}
+
+function isPricingQuestion(text) {
+  if (/कीमत|मूल्य|खर्च|दाम/u.test(String(text || ""))) return true;
+  return /\b(cost|price|pricing|fee|fees|charge|charges|rate|kitna|kitne|kitni|kharcha|paisa|paise)\b/.test(
+    normalizeWords(text)
+  );
+}
+
+function needsMedicalDetails(text, treatment) {
+  if (/^(hi|hello|hey|ok|okay|thanks|thank you|haan|han|nahi|nahin)$/i.test(normalizeWords(text))) {
+    return false;
+  }
+  return Boolean(treatment) ||
+    /\b(treatment|procedure|surgery|recovery|recover|side effects?|risks?|pain|healing|doctor|safe|suitable|results?|aftercare)\b/i.test(
+      normalizeWords(text)
+    ) ||
+    /उपचार|इलाज|प्रक्रिया|सर्जरी|रिकवरी|डॉक्टर|दर्द|जोखिम/u.test(String(text || ""));
+}
+
+function hasVerifiedPricing(knowledge = []) {
+  return knowledge.some((item) => {
+    const content = String(item?.title || "") + " " + String(item?.content || "");
+    return /(?:₹|rs\.?|inr|\$|€|£)\s*\d/i.test(content) ||
+      /\b(?:price|pricing|cost|fee|fees|charges?)\b.{0,60}\b\d[\d,]*/i.test(content) ||
+      /\b\d[\d,]*(?:\.\d+)?\s*(?:rs\.?|inr|rupees|\/-)\b/i.test(content);
+  });
+}
+
+function pricingFallback(language, treatment) {
+  const subject = treatment ? ` for ${treatment}` : "";
+  if (language === "hindi") {
+    return `Mere paas${subject} ki confirmed pricing nahi hai. Clinic consultation ke baad exact cost confirm karegi.`;
+  }
+  if (language === "hinglish") {
+    return `${treatment || "Is treatment"} ki confirmed pricing mere paas nahi hai. Clinic consultation ke baad exact cost confirm karegi.`;
+  }
+  return `I don’t have confirmed pricing${subject}. The clinic will confirm the exact cost after a consultation.`;
+}
+
+function medicalDetailsFallback(language) {
+  if (language === "hindi") {
+    return "मेरे पास इस उपचार के बारे में क्लिनिक की पुष्टि की हुई जानकारी नहीं है। डॉक्टर कंसल्टेशन के दौरान आपको सही जानकारी देंगे।";
+  }
+  if (language === "hinglish") {
+    return "Is treatment ke baare mein mere paas clinic ki confirmed details nahi hain. Doctor consultation ke dauran sahi information denge.";
+  }
+  return "I don’t have clinic-verified details about that treatment. The doctor can provide accurate information during a consultation.";
+}
+
+async function findCustomerName({ ownerId, conversation }) {
+  const profileName = cleanCustomerName(conversation.participantName);
+  if (profileName) return profileName;
+
+  const phone = normalizePhone(conversation.participantId);
+  if (!phone) return "";
+  const contact = await Contact.findOne({
+    userId: ownerId,
+    normalizedPhone: { $regex: `${phone}$` },
+    deletedAt: null,
+  }).select("name").lean();
+  return cleanCustomerName(contact?.name);
+}
+
+async function syncLead({ ownerId, conversation, name, phone, treatment, consultation = false }) {
+  const cleanName = cleanCustomerName(name);
   const cleanPhone = normalizePhone(phone || conversation.participantId);
-  if (!cleanPhone) return null;
+  if (!cleanName || cleanPhone.length < 10) return null;
 
   const existing = await Lead.findOne({
     userId: ownerId,
-    phone: { $in: [cleanPhone, conversation.participantId] },
+    $or: [
+      { whatsappConversationId: conversation._id },
+      { phone: { $in: [cleanPhone, String(phone || ""), conversation.participantId] } },
+      { phone: { $regex: `${cleanPhone.slice(-10)}$` } },
+    ],
   }).sort({ createdAt: -1 });
 
-  const displayName = cleanName && !/^WhatsApp user$/i.test(cleanName)
-    ? cleanName
-    : cleanName || "WhatsApp Patient";
+  const noteText = [
+    consultation ? "WhatsApp consultation request" : "WhatsApp conversation",
+    `Conversation: ${String(conversation._id)}`,
+    treatment ? `Treatment: ${treatment}` : "",
+  ].filter(Boolean).join("\n");
 
   if (existing) {
-    let changed = false;
-    if (displayName && existing.name !== displayName) {
-      existing.name = displayName;
-      changed = true;
+    existing.name = cleanName;
+    existing.phone = cleanPhone;
+    existing.source = "WhatsApp";
+    existing.whatsappConversationId = conversation._id;
+    if (treatment) existing.service = treatment;
+    const existingNote = String(existing.firstNote || "");
+    if (!existingNote.includes(String(conversation._id))) {
+      existing.firstNote = [existing.firstNote, noteText].filter(Boolean).join("\n");
+    } else if (treatment && !existingNote.includes(`Treatment: ${treatment}`)) {
+      existing.firstNote = `${existingNote}\nTreatment: ${treatment}`;
+    } else if (consultation && existingNote.startsWith("WhatsApp conversation")) {
+      existing.firstNote = existingNote.replace("WhatsApp conversation", "WhatsApp consultation request");
     }
-    if (existing.source !== "WhatsApp") {
-      existing.source = "WhatsApp";
-      changed = true;
+    const priorNote = (existing.notes || []).find((note) =>
+      String(note.text || "").includes(String(conversation._id))
+    );
+    if (priorNote && treatment && !String(priorNote.text || "").includes(`Treatment: ${treatment}`)) {
+      priorNote.text = noteText;
+    } else if (priorNote && consultation && String(priorNote.text || "").startsWith("WhatsApp conversation")) {
+      priorNote.text = String(priorNote.text).replace("WhatsApp conversation", "WhatsApp consultation request");
+    } else if (!priorNote) {
+      existing.notes.push({ text: noteText, userName: "WhatsApp" });
     }
-    if (changed) await existing.save();
+    await existing.save();
     return existing;
   }
 
   return Lead.create({
     userId: ownerId,
-    name: displayName,
+    name: cleanName,
     phone: cleanPhone,
     source: "WhatsApp",
+    service: treatment || "",
     stage: "New",
-    firstNote: "Lead created from WhatsApp Inbox.",
+    whatsappConversationId: conversation._id,
+    firstNote: noteText,
+    notes: [{ text: noteText, userName: "WhatsApp" }],
   });
 }
 
-async function sendAutomationReply({
-  integration,
-  conversation,
-  text,
-  accessToken,
-}) {
+async function sendAutomationReply({ integration, conversation, text, accessToken }) {
   const result = await meta.sendWhatsAppMessage({
     phoneNumberId: integration.phoneNumberId,
     accessToken,
@@ -82,143 +237,284 @@ async function sendAutomationReply({
   });
 }
 
+async function replyAndUpdate({ integration, conversation, text, accessToken }) {
+  const message = await sendAutomationReply({ integration, conversation, text, accessToken });
+  conversation.lastMessageText = text;
+  conversation.lastMessageAt = message.sentAt;
+  conversation.lastMessageDirection = "outbound";
+  await conversation.save();
+}
+
+function setNextBookingState(conversation, customerName) {
+  conversation.aiBookingName = cleanCustomerName(conversation.aiBookingName) || customerName;
+  conversation.aiBookingPhone = normalizePhone(
+    conversation.aiBookingPhone || conversation.participantId
+  );
+  conversation.aiBookingTreatment = String(
+    conversation.aiBookingTreatment || conversation.lastDiscussedTreatment || ""
+  ).trim();
+
+  if (!conversation.aiBookingName) conversation.aiBookingState = "awaiting_name";
+  else if (conversation.aiBookingPhone.length < 10) conversation.aiBookingState = "awaiting_phone";
+  else if (!conversation.aiBookingTreatment) conversation.aiBookingState = "awaiting_treatment";
+  else conversation.aiBookingState = "ready_to_submit";
+}
+
+function getBookingPrompt(conversation, language) {
+  if (language === "hindi") {
+    if (conversation.aiBookingState === "awaiting_name") return "कंसल्टेशन अनुरोध के लिए मैं आपका क्या नाम लिखूँ?";
+    if (conversation.aiBookingState === "awaiting_phone") return "क्लिनिक के संपर्क के लिए अपना मोबाइल नंबर साझा करें।";
+    if (conversation.aiBookingState === "awaiting_treatment") return "आप किस उपचार या समस्या के बारे में डॉक्टर से चर्चा करना चाहेंगे?";
+  }
+  if (language === "hinglish") {
+    if (conversation.aiBookingState === "awaiting_name") return "Consultation request ke liye aapka naam kya likhun?";
+    if (conversation.aiBookingState === "awaiting_phone") return "Clinic se contact ke liye apna mobile number share karein.";
+    if (conversation.aiBookingState === "awaiting_treatment") return "Aap kis treatment ya concern ke baare mein doctor se baat karna chahenge?";
+  }
+  if (conversation.aiBookingState === "awaiting_name") {
+    return "I can help with that. What name should I use for your consultation request?";
+  }
+  if (conversation.aiBookingState === "awaiting_phone") {
+    return "Please share the best mobile number for the clinic to contact you.";
+  }
+  if (conversation.aiBookingState === "awaiting_treatment") {
+    return "Which treatment or concern would you like to discuss with the doctor?";
+  }
+  return "";
+}
+
+function normalizeNameAnswer(value) {
+  return cleanCustomerName(String(value || "")
+    .replace(/^(my name is|i am|i'm|this is|name is|mera naam|naam)\s+/i, "")
+    .trim());
+}
+
+function confirmationMessage({ name, clinicName, treatment, language }) {
+  const clinic = clinicName || "our team";
+  const procedure = treatment ? ` for ${treatment}` : "";
+  if (language === "hindi" || language === "hinglish") {
+    const hindiProcedure = treatment ? ` (${treatment}) ke liye` : "";
+    if (language === "hindi") {
+      return `धन्यवाद, ${name}। आपकी${hindiProcedure} कंसल्टेशन रिक्वेस्ट ${clinic} को भेज दी गई है। क्लिनिक की टीम समय तय करने के लिए आपसे संपर्क करेगी। यह अनुरोध है, कन्फर्म अपॉइंटमेंट नहीं।`;
+    }
+    return `Dhanyavaad, ${name}. Aapki consultation request${hindiProcedure} ${clinic} ko bhej di gayi hai. Clinic ki team samay tay karne ke liye aapse sampark karegi. Yeh request hai, confirmed appointment nahi.`;
+  }
+  return `Thank you, ${name}. Your consultation request${procedure} has been sent to ${clinic}. The clinic team will contact you to arrange a time. This is a request, not a confirmed appointment.`;
+}
+
 async function processIncomingWhatsApp({
   integration,
   conversation,
   inboundText,
+  inboundMessageId,
   accessToken,
 }) {
-  let settings = await WhatsAppAutomationSettings.findOne({
-    userId: integration.userId,
-  });
-
-  if (!settings) {
-    settings = await WhatsAppAutomationSettings.create({
-      userId: integration.userId,
-    });
-  }
+  const ownerId = integration.userId;
+  const settings = await WhatsAppAutomationSettings.findOne({ userId: ownerId }) ||
+    await WhatsAppAutomationSettings.create({ userId: ownerId });
 
   if (conversation.aiPaused) return;
 
-  if (settings.leadSyncEnabled) {
-    await syncLead({
-      ownerId: integration.userId,
-      conversation,
-      name: conversation.participantName,
-      phone: conversation.participantId,
-    });
+  const [ownerProfile, assistant, services, customerName] = await Promise.all([
+    User.findById(ownerId).select("clinicName").lean(),
+    AIAssistant.findOne({ ownerId }),
+    Service.find({ userId: ownerId }).select("name").lean(),
+    findCustomerName({ ownerId, conversation }),
+  ]);
+  const serviceKnowledge = assistant
+    ? await AIKnowledge.find({ ownerId, assistantId: assistant._id, active: true })
+      .select("title").lean()
+    : [];
+  if (customerName && !cleanCustomerName(conversation.participantName)) {
+    conversation.participantName = customerName;
+  }
+
+  const treatmentCandidates = [
+    ...services.map((service) => service.name),
+    ...serviceKnowledge.map((item) => item.title),
+  ].filter(Boolean);
+  const mentionedTreatment = matchTreatment(inboundText, treatmentCandidates);
+  if (mentionedTreatment) conversation.lastDiscussedTreatment = mentionedTreatment;
+  conversation.currentIntent = isAppointmentRequest(inboundText) ||
+    (conversation.aiBookingState && conversation.aiBookingState !== "idle")
+    ? "consultation"
+    : "information";
+  await conversation.save();
+
+  if (settings.leadSyncEnabled && customerName && !isAppointmentRequest(inboundText) &&
+      (!conversation.aiBookingState || conversation.aiBookingState === "idle")) {
+    try {
+      await syncLead({
+        ownerId,
+        conversation,
+        name: customerName,
+        phone: conversation.participantId,
+        treatment: conversation.lastDiscussedTreatment,
+      });
+    } catch (error) {
+      console.error("WHATSAPP LEAD SYNC ERROR:", error?.message || error);
+    }
   }
 
   const inboundCount = await MetaMessage.countDocuments({
-    userId: integration.userId,
+    userId: ownerId,
     conversationId: conversation._id,
     direction: "inbound",
   });
-
-  if (settings.welcomeEnabled && inboundCount === 1 && settings.welcomeMessage) {
-    const welcomeMessage = await sendAutomationReply({
+  if (settings.welcomeEnabled && inboundCount === 1 && settings.welcomeMessage &&
+      isGreeting(inboundText)) {
+    await replyAndUpdate({
       integration,
       conversation,
       text: settings.welcomeMessage,
       accessToken,
     });
-    conversation.lastMessageText = settings.welcomeMessage;
-    conversation.lastMessageAt = welcomeMessage.sentAt;
-    conversation.lastMessageDirection = "outbound";
-    await conversation.save();
     return;
   }
 
-  if (settings.appointmentEnabled) {
-    const state = conversation.aiBookingState || "idle";
-    let reply = "";
+  const bookingActive = conversation.aiBookingState && conversation.aiBookingState !== "idle";
+  const appointmentRequested = isAppointmentRequest(inboundText);
+  const beginsBooking = Boolean(settings.appointmentEnabled && appointmentRequested && !bookingActive);
 
-    if (state === "awaiting_name") {
-      conversation.aiBookingName = String(inboundText || "").trim();
-      conversation.aiBookingState = "awaiting_phone";
-      reply = "Please share your mobile number so we can reserve the consultation.";
-    } else if (state === "awaiting_phone") {
-      const phone = normalizePhone(inboundText);
-      if (phone.length < 10) {
-        reply = "Please share a valid 10-digit mobile number.";
-      } else {
-        const lead = await syncLead({
-          ownerId: integration.userId,
-          conversation,
-          name: conversation.aiBookingName || conversation.participantName,
-          phone,
-        });
-        if (lead) {
-          lead.followUps = [
-            ...(lead.followUps || []),
-            {
-              date: new Date(Date.now() + 24 * 60 * 60 * 1000),
-              note: `WhatsApp consultation request from ${conversation.participantId}`,
-              purpose: "Consultation booking",
-              channel: "WhatsApp",
-            },
-          ];
-          await lead.save();
-        }
-        conversation.aiBookingState = "idle";
-        conversation.aiBookingName = "";
-        reply = "Thank you. Your consultation request has been booked. Our team will contact you shortly.";
+  if (settings.appointmentEnabled && (bookingActive || beginsBooking)) {
+    if (beginsBooking) {
+      conversation.currentIntent = "consultation";
+      conversation.appointmentProgress = "collecting_details";
+      conversation.aiBookingTreatment = conversation.lastDiscussedTreatment || mentionedTreatment;
+      conversation.aiBookingName = customerName || "";
+      conversation.aiBookingPhone = normalizePhone(conversation.participantId);
+    } else if (conversation.aiBookingState === "awaiting_name") {
+      const answer = isAppointmentRequest(inboundText) ? "" : normalizeNameAnswer(inboundText);
+      if (answer) {
+        conversation.aiBookingName = answer;
+        conversation.participantName = answer;
       }
-    } else if (isAppointmentRequest(inboundText)) {
-      conversation.aiBookingState = "awaiting_name";
-      reply = "Sure, I can help with a consultation. Please share your name.";
+    } else if (conversation.aiBookingState === "awaiting_phone") {
+      const phone = normalizePhone(inboundText);
+      if (phone.length >= 10) conversation.aiBookingPhone = phone;
+    } else if (conversation.aiBookingState === "awaiting_treatment") {
+      const answer = String(inboundText || "").trim();
+      if (answer && !isAppointmentRequest(answer) && !isPricingQuestion(answer)) {
+        conversation.aiBookingTreatment = mentionedTreatment || answer.slice(0, 160);
+        conversation.lastDiscussedTreatment = conversation.aiBookingTreatment;
+      }
     }
 
-    if (reply) {
+    setNextBookingState(conversation, customerName);
+    conversation.appointmentProgress = conversation.aiBookingState;
+    if (conversation.aiBookingState !== "ready_to_submit") {
+      const prompt = getBookingPrompt(conversation, detectLanguage(inboundText));
       await conversation.save();
-      const automationMessage = await sendAutomationReply({
-        integration,
-        conversation,
-        text: reply,
-        accessToken,
-      });
-      conversation.lastMessageText = reply;
-      conversation.lastMessageAt = automationMessage.sentAt;
-      conversation.lastMessageDirection = "outbound";
-      await conversation.save();
+      await replyAndUpdate({ integration, conversation, text: prompt, accessToken });
       return;
     }
+
+    let lead;
+    try {
+      lead = await syncLead({
+        ownerId,
+        conversation,
+        name: conversation.aiBookingName,
+        phone: conversation.aiBookingPhone,
+        treatment: conversation.aiBookingTreatment,
+        consultation: true,
+      });
+      if (!lead) throw new Error("WhatsApp consultation details are incomplete.");
+    } catch (error) {
+      console.error("WHATSAPP CONSULTATION LEAD SAVE ERROR:", error?.message || error);
+      conversation.aiBookingState = "ready_to_submit";
+      conversation.appointmentProgress = "save_failed";
+      await conversation.save();
+      await replyAndUpdate({
+        integration,
+        conversation,
+        text: "I’m sorry, I couldn’t submit your consultation request right now. Your details are still here; please message again to retry or contact the clinic directly.",
+        accessToken,
+      });
+      return;
+    }
+    conversation.whatsappLeadId = lead._id;
+    conversation.appointmentProgress = "request_submitted";
+    conversation.aiBookingState = "idle";
+    await conversation.save();
+    const clinicName = String(ownerProfile?.clinicName || integration.verifiedName || "").trim();
+    await replyAndUpdate({
+      integration,
+      conversation,
+      text: confirmationMessage({
+        name: conversation.aiBookingName,
+        clinicName,
+        treatment: conversation.aiBookingTreatment,
+        language: detectLanguage(inboundText),
+      }),
+      accessToken,
+    });
+    return;
   }
 
-  if (!settings.aiReplyEnabled) return;
+  if (!settings.aiReplyEnabled || (assistant && (assistant.enabled === false || assistant.status === "disabled"))) {
+    return;
+  }
 
-  const assistant = await AIAssistant.findOne({ ownerId: integration.userId });
-  const knowledge = assistant
-    ? await searchKnowledge({
-        ownerId: integration.userId,
+  const [history, knowledge] = await Promise.all([
+    MetaMessage.find({
+      userId: ownerId,
+      conversationId: conversation._id,
+      ...(inboundMessageId ? { externalMessageId: { $ne: inboundMessageId } } : {}),
+    }).sort({ sentAt: -1 }).limit(12).lean().then((items) => items.reverse().map((item) => ({
+      sender: item.direction === "inbound" ? "visitor" : "assistant",
+      message: item.text,
+    }))),
+    assistant
+      ? searchKnowledge({
+        ownerId,
         assistantId: assistant._id,
-        query: inboundText,
+        query: [conversation.lastDiscussedTreatment, inboundText].filter(Boolean).join(" "),
         limit: 8,
       })
-    : [];
+      : [],
+  ]);
 
-  const aiResult = await generateAIReply({
-    assistant: assistant || {
-      assistantName: "Clinic Assistant",
-      customInstructions: "Answer briefly using only the clinic information provided.",
-    },
-    history: [],
-    userMessage: inboundText,
-    knowledge: Array.isArray(knowledge) ? knowledge : knowledge?.results || [],
-  });
+  const verifiedKnowledge = [
+    ...(Array.isArray(knowledge) ? knowledge : knowledge?.results || []),
+    ...(services.length ? [{
+      title: "Treatments and services listed in this clinic’s CRM",
+      content: services.map((service) => service.name).join(", "),
+    }] : []),
+  ];
 
-  if (!aiResult?.text?.trim()) return;
+  let reply = "";
+  if (isPricingQuestion(inboundText) && !hasVerifiedPricing(verifiedKnowledge)) {
+    reply = pricingFallback(detectLanguage(inboundText), conversation.lastDiscussedTreatment);
+  } else if (!knowledge.length && needsMedicalDetails(inboundText, conversation.lastDiscussedTreatment)) {
+    reply = medicalDetailsFallback(detectLanguage(inboundText));
+  } else {
+    const clinicName = String(ownerProfile?.clinicName || integration.verifiedName || "").trim();
+    const aiResult = await generateAIReply({
+      assistant: {
+        ...(assistant?.toObject ? assistant.toObject() : assistant || {}),
+        assistantName: assistant?.assistantName || "Clinic Assistant",
+        businessName: clinicName,
+        customInstructions: assistant?.customInstructions ||
+          "Answer briefly using only the verified information provided. Never invent clinic, doctor, treatment, price, or medical facts.",
+      },
+      history,
+      userMessage: inboundText,
+      knowledge: verifiedKnowledge,
+    });
+    reply = aiResult?.shouldReply === false ? "" : String(aiResult?.text || "").trim();
+  }
 
-  const automationMessage = await sendAutomationReply({
-    integration,
-    conversation,
-    text: aiResult.text.trim(),
-    accessToken,
-  });
-  conversation.lastMessageText = aiResult.text.trim();
-  conversation.lastMessageAt = automationMessage.sentAt;
-  conversation.lastMessageDirection = "outbound";
-  await conversation.save();
+  if (!reply) return;
+  await replyAndUpdate({ integration, conversation, text: reply, accessToken });
 }
 
-module.exports = { processIncomingWhatsApp, syncLead };
+module.exports = {
+  processIncomingWhatsApp,
+  syncLead,
+  isAppointmentRequest,
+  matchTreatment,
+  isPricingQuestion,
+  normalizePhone,
+  cleanCustomerName,
+};

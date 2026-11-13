@@ -40,6 +40,13 @@ const leadSchema = new mongoose.Schema(
             default: "",
         },
 
+        whatsappConversationId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "MetaConversation",
+            default: null,
+            index: true,
+        },
+
         owner: {
             type: String,
             trim: true,
@@ -373,6 +380,16 @@ leadSchema.index(
                 $type: "string",
                 $ne: "",
             },
+        },
+    }
+);
+
+leadSchema.index(
+    { userId: 1, whatsappConversationId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            whatsappConversationId: { $type: "objectId" },
         },
     }
 );

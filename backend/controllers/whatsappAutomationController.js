@@ -52,7 +52,7 @@ exports.resumeConversation = async (req, res) => {
 
   const conversation = await MetaConversation.findOneAndUpdate(
     { _id: req.params.id, userId: context.workspaceOwnerId, platform: "whatsapp" },
-    { $set: { aiPaused: false, aiPausedAt: null, aiBookingState: "idle", aiBookingName: "" } },
+    { $set: { aiPaused: false, aiPausedAt: null } },
     { new: true }
   );
   if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found" });

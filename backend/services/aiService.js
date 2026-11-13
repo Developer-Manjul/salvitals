@@ -318,6 +318,14 @@ function buildSystemPrompt({
     .trim()
     .slice(0, 100);
 
+  const businessName = String(
+    assistant?.businessName ||
+      assistant?.clinicName ||
+      ""
+  )
+    .trim()
+    .slice(0, 150);
+
   const customInstructions = String(
     assistant?.customInstructions ||
       ""
@@ -368,7 +376,9 @@ Hindi example:
       : "";
 
   return `
-You are ${assistantName}, the website AI assistant for this business.
+You are ${assistantName}, the AI assistant for this business.
+
+${businessName ? `The business is ${businessName}. Use only its verified business information below.` : "Do not guess or name the business."}
 
 ${languageInstruction}
 
@@ -382,6 +392,7 @@ RULES:
 3. Do not reply to unrelated messages just to keep the conversation going.
 4. Use verified business information for all business-related answers.
 5. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
+5a. For medical or treatment questions, state only facts explicitly present in verified business information. Do not infer outcomes, risks, recovery, suitability, or medical advice; if the information does not answer the question, say the clinic will clarify it in consultation.
 6. Answer the visitor's current business-related question directly.
 7. Use conversation history to understand relevant follow-up messages and short replies.
 8. If a business-related question is unclear, ask one short clarifying question.
@@ -773,4 +784,5 @@ async function generateAILeadSummary({
 module.exports = {
   generateAIReply,
   generateAILeadSummary,
+  detectLanguage,
 };
