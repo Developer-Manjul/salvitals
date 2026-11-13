@@ -13,6 +13,7 @@ const {
 
 const {
   searchKnowledge,
+  buildKnowledgeSearchQuery,
 } = require("../services/aiKnowledgeService");
 
 const {
@@ -649,46 +650,6 @@ function extractVisitorName(text) {
   }
 
   return "";
-}
-
-function buildKnowledgeSearchQuery(
-  currentMessage,
-  previousMessages
-) {
-  const current =
-    safeText(
-      currentMessage,
-      1200
-    );
-
-  const visitorContext =
-    previousMessages
-      .filter(
-        (message) =>
-          message?.sender ===
-          "visitor"
-      )
-      .slice(-4)
-      .map(
-        (message) =>
-          safeText(
-            message?.message,
-            500
-          )
-      )
-      .filter(Boolean);
-
-  const parts = [
-    ...visitorContext,
-    current,
-  ];
-
-  return [
-    ...new Set(parts),
-  ]
-    .join(" ")
-    .trim()
-    .slice(0, 2500);
 }
 
 async function getOwnerProfile(

@@ -123,6 +123,16 @@ const metaConversationSchema = new mongoose.Schema(
       default: "",
     },
 
+    lastDiscussedDoctor: {
+      type: String,
+      default: "",
+    },
+
+    lastPricingTopic: {
+      type: String,
+      default: "",
+    },
+
     currentIntent: {
       type: String,
       default: "",

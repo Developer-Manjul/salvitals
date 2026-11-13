@@ -150,13 +150,6 @@ function isSimpleAcknowledgement(text) {
   );
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-}
-
 function isAppointmentRequest(text) {
   const value = String(text || "")
     .toLowerCase()
@@ -166,25 +159,16 @@ function isAppointmentRequest(text) {
     return false;
   }
 
-  const words = [
-    "appointment",
-    "booking",
-    "book",
-    "reserve",
-    "reservation",
-    "schedule",
-    "consultation",
-    "consult",
-  ];
+  if (/\b(cost|price|pricing|fee|fees|charge|charges|kitna|kitne|kitni|kharcha|rate)\b/i.test(value) ||
+      /कीमत|मूल्य|खर्च|दाम|शुल्क|फीस/u.test(value)) {
+    return false;
+  }
 
-  return words.some((word) =>
-    new RegExp(
-      `(^|\\s)${escapeRegExp(
-        word
-      )}(?=\\s|$)`,
-      "i"
-    ).test(value)
-  );
+  return /\b(appointment|booking|book|reserve|reservation|schedule)\b/i.test(value) ||
+    /\b(i want|want to|would like to|need to|please)\s+(?:consult|see|speak to|talk to)\s+(?:a\s+)?doctor\b/i.test(value) ||
+    /\bconsult\s+(?:a\s+)?doctor\b/i.test(value) ||
+    /\bdoctor\s+(?:se\s+)?(?:baat|bat)\s+(?:karni|krni|karna|krna)\s+(?:hai|h)\b/i.test(value) ||
+    /अपॉइंटमेंट|डॉक्टर.{0,12}(बात|मिल|बोल)/u.test(value);
 }
 
 function hasAppointmentOffer(history = []) {
@@ -393,6 +377,7 @@ RULES:
 4. Use verified business information for all business-related answers.
 5. Never invent business facts, prices, doctors, services, timings, addresses, or availability.
 5a. For medical or treatment questions, state only facts explicitly present in verified business information. Do not infer outcomes, risks, recovery, suitability, or medical advice; if the information does not answer the question, say the clinic will clarify it in consultation.
+5b. A question about treatment pricing or the doctor's consultation fee is an information request, not an appointment request. Answer it from verified information and do not initiate booking.
 6. Answer the visitor's current business-related question directly.
 7. Use conversation history to understand relevant follow-up messages and short replies.
 8. If a business-related question is unclear, ask one short clarifying question.
@@ -785,4 +770,5 @@ module.exports = {
   generateAIReply,
   generateAILeadSummary,
   detectLanguage,
+  isAppointmentRequest,
 };

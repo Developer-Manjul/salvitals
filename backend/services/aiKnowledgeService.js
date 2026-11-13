@@ -156,6 +156,23 @@ function meaningfulTokens(value) {
   );
 }
 
+function buildKnowledgeSearchQuery(currentMessage, previousMessages = [], memoryContext = []) {
+  const clean = (value, limit) => String(value || "").trim().slice(0, limit);
+  const visitorContext = (Array.isArray(previousMessages) ? previousMessages : [])
+    .filter((message) => message?.sender === "visitor" || message?.direction === "inbound")
+    .slice(-4)
+    .map((message) => clean(message?.message || message?.text, 500))
+    .filter(Boolean);
+  const memory = (Array.isArray(memoryContext) ? memoryContext : [])
+    .map((value) => clean(value, 300))
+    .filter(Boolean);
+  return [...new Set([...visitorContext, ...memory, clean(currentMessage, 1200)])]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+    .slice(0, 2500);
+}
+
 const CONCEPTS = {
   price: [
     "price",
@@ -692,7 +709,8 @@ function scoreKnowledge(
   query,
   item,
   documentFrequency,
-  totalDocuments
+  totalDocuments,
+  intentQuery = query
 ) {
   const queryText =
     normalizeText(query);
@@ -722,7 +740,7 @@ function scoreKnowledge(
     );
 
   const intent =
-    getIntent(query);
+    getIntent(intentQuery);
 
   const queryTerms =
     getQueryTerms(query);
@@ -1406,6 +1424,7 @@ async function searchKnowledge({
   ownerId,
   assistantId,
   query,
+  intentQuery = query,
   limit = 5,
 }) {
   const cleanQuery =
@@ -1451,7 +1470,7 @@ async function searchKnowledge({
 
   const intent =
     getIntent(
-      cleanQuery
+      intentQuery
     );
 
   const scoredResults =
@@ -1461,7 +1480,8 @@ async function searchKnowledge({
         cleanQuery,
         item,
         documentFrequency,
-        totalDocuments
+        totalDocuments,
+        intentQuery
       );
 
       const title = normalizeText(item.title || "");
@@ -1469,7 +1489,7 @@ async function searchKnowledge({
       const sourceUrl = normalizeText(item.sourceUrl || "");
 
       const asksAboutHours =
-        /\b(hours?|timings?|open|closed|working)\b/i.test(cleanQuery);
+        /\b(hours?|timings?|open|closed|working)\b/i.test(intentQuery);
 
       const hasTime =
         /\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i.test(content);
@@ -1546,4 +1566,5 @@ async function searchKnowledge({
 
 module.exports = {
   searchKnowledge,
+  buildKnowledgeSearchQuery,
 };

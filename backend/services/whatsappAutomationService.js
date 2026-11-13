@@ -6,7 +6,7 @@ const MetaMessage = require("../models/MetaMessage");
 const Service = require("../models/Service");
 const User = require("../models/User");
 const WhatsAppAutomationSettings = require("../models/WhatsAppAutomationSettings");
-const { searchKnowledge } = require("./aiKnowledgeService");
+const { buildKnowledgeSearchQuery, searchKnowledge } = require("./aiKnowledgeService");
 const { detectLanguage, generateAIReply } = require("./aiService");
 const meta = require("./metaService");
 
@@ -66,6 +66,7 @@ function matchTreatment(text, candidates = []) {
     const name = String(candidate || "").trim();
     const normalized = normalizeWords(name);
     if (!normalized || normalized.length < 3) continue;
+    if (/\b(price|pricing|cost|fee|fees|consultation|doctor|appointment|booking)\b/.test(normalized)) continue;
     if (` ${normalizeWords(text)} `.includes(` ${normalized} `)) return name;
 
     const candidateWords = normalized.split(" ").filter((word) => word.length >= 4);
@@ -81,62 +82,55 @@ function matchTreatment(text, candidates = []) {
 }
 
 function isAppointmentRequest(text) {
+  if (isPricingQuestion(text)) return false;
   if (/अपॉइंटमेंट|परामर्श|डॉक्टर.{0,12}(बात|मिल|बोल)|डॉक्टर से बात/u.test(String(text || ""))) {
     return true;
   }
   const value = normalizeWords(text);
-  return /\b(appointment|appointmnt|appointement|consultation|consult|booking|book|reserve|schedule)\b/.test(value) ||
+  return /\b(appointment|appointmnt|appointement|booking|book|reserve|schedule)\b/.test(value) ||
+    /\b(i want|want to|would like to|need to|please)\s+(?:consult|see|speak to|talk to)\s+(?:a\s+)?doctor\b/.test(value) ||
+    /\bconsult\s+(?:a\s+)?doctor\b/.test(value) ||
+    /\bdoctor\s+consultation\s+(?:book|schedule|chahiye|karni|krni)\b/.test(value) ||
     /\b(doctor|dr)\s+(se\s+)?(baat|bat|talk|speak)\b/.test(value) ||
     /\b(baat|bat)\s+(karni|krni|karna|krna)\s+(hai|h)\b.*\b(doctor|dr)\b/.test(value) ||
     /\bdoctor\s+(se\s+)?(baat|bat)\s+(karni|krni)\s+(hai|h)\b/.test(value);
 }
 
 function isPricingQuestion(text) {
-  if (/कीमत|मूल्य|खर्च|दाम/u.test(String(text || ""))) return true;
+  if (/कीमत|मूल्य|खर्च|दाम|शुल्क|फीस/u.test(String(text || ""))) return true;
   return /\b(cost|price|pricing|fee|fees|charge|charges|rate|kitna|kitne|kitni|kharcha|paisa|paise)\b/.test(
     normalizeWords(text)
   );
 }
 
-function needsMedicalDetails(text, treatment) {
-  if (/^(hi|hello|hey|ok|okay|thanks|thank you|haan|han|nahi|nahin)$/i.test(normalizeWords(text))) {
-    return false;
+function detectIntent(text, treatment = "", previousPricingTopic = "") {
+  const value = normalizeWords(text);
+  if (isPricingQuestion(text)) {
+    if (/\bconsultation|consult|doctor\b/.test(value) ||
+        /परामर्श|कंसल्टेशन|डॉक्टर/u.test(String(text || ""))) return "consultation_fee";
+    if (previousPricingTopic === "consultation_fee" &&
+        !/\b(treatment|procedure|service|surgery)\b/.test(value)) return "consultation_fee";
+    return "treatment_pricing";
   }
-  return Boolean(treatment) ||
-    /\b(treatment|procedure|surgery|recovery|recover|side effects?|risks?|pain|healing|doctor|safe|suitable|results?|aftercare)\b/i.test(
-      normalizeWords(text)
-    ) ||
-    /उपचार|इलाज|प्रक्रिया|सर्जरी|रिकवरी|डॉक्टर|दर्द|जोखिम/u.test(String(text || ""));
+  if (isAppointmentRequest(text)) return "appointment_booking";
+  if (/\b(doctor|dr|surgeon)\b/.test(value) &&
+      /\b(name|who|information|details|qualification|experience|about)\b/.test(value)) {
+    return "doctor_information";
+  }
+  if (treatment || /\b(treatment|procedure|service|surgery|recovery|healing|aftercare)\b/.test(value) ||
+      /उपचार|इलाज|प्रक्रिया|सर्जरी/u.test(String(text || ""))) {
+    return "treatment_enquiry";
+  }
+  return "general_conversation";
 }
 
-function hasVerifiedPricing(knowledge = []) {
-  return knowledge.some((item) => {
-    const content = String(item?.title || "") + " " + String(item?.content || "");
-    return /(?:₹|rs\.?|inr|\$|€|£)\s*\d/i.test(content) ||
-      /\b(?:price|pricing|cost|fee|fees|charges?)\b.{0,60}\b\d[\d,]*/i.test(content) ||
-      /\b\d[\d,]*(?:\.\d+)?\s*(?:rs\.?|inr|rupees|\/-)\b/i.test(content);
-  });
-}
-
-function pricingFallback(language, treatment) {
-  const subject = treatment ? ` for ${treatment}` : "";
-  if (language === "hindi") {
-    return `Mere paas${subject} ki confirmed pricing nahi hai. Clinic consultation ke baad exact cost confirm karegi.`;
+function extractDoctorName(knowledge = []) {
+  for (const item of knowledge) {
+    const text = `${item?.title || ""} ${item?.content || ""}`;
+    const match = text.match(/\bDr\.?\s+([A-Z][A-Za-z'.-]*(?:\s+[A-Z][A-Za-z'.-]*){0,3})/);
+    if (match) return `Dr. ${match[1].trim().replace(/[.,;:!?]+$/, "")}`;
   }
-  if (language === "hinglish") {
-    return `${treatment || "Is treatment"} ki confirmed pricing mere paas nahi hai. Clinic consultation ke baad exact cost confirm karegi.`;
-  }
-  return `I don’t have confirmed pricing${subject}. The clinic will confirm the exact cost after a consultation.`;
-}
-
-function medicalDetailsFallback(language) {
-  if (language === "hindi") {
-    return "मेरे पास इस उपचार के बारे में क्लिनिक की पुष्टि की हुई जानकारी नहीं है। डॉक्टर कंसल्टेशन के दौरान आपको सही जानकारी देंगे।";
-  }
-  if (language === "hinglish") {
-    return "Is treatment ke baare mein mere paas clinic ki confirmed details nahi hain. Doctor consultation ke dauran sahi information denge.";
-  }
-  return "I don’t have clinic-verified details about that treatment. The doctor can provide accurate information during a consultation.";
+  return "";
 }
 
 async function findCustomerName({ ownerId, conversation }) {
@@ -284,9 +278,15 @@ function getBookingPrompt(conversation, language) {
 }
 
 function normalizeNameAnswer(value) {
-  return cleanCustomerName(String(value || "")
+  const name = cleanCustomerName(String(value || "")
     .replace(/^(my name is|i am|i'm|this is|name is|mera naam|naam)\s+/i, "")
     .trim());
+  if (!name || /\d|[?!]/.test(name) || name.split(/\s+/).length > 5 ||
+      isPricingQuestion(name) || isAppointmentRequest(name) ||
+      /\b(doctor|treatment|procedure|appointment|consultation|fees?|price|cost)\b/i.test(name)) {
+    return "";
+  }
+  return name;
 }
 
 function confirmationMessage({ name, clinicName, treatment, language }) {
@@ -322,7 +322,7 @@ async function processIncomingWhatsApp({
     findCustomerName({ ownerId, conversation }),
   ]);
   const serviceKnowledge = assistant
-    ? await AIKnowledge.find({ ownerId, assistantId: assistant._id, active: true })
+    ? await AIKnowledge.find({ ownerId, assistantId: assistant._id, active: true, type: "service" })
       .select("title").lean()
     : [];
   if (customerName && !cleanCustomerName(conversation.participantName)) {
@@ -334,14 +334,26 @@ async function processIncomingWhatsApp({
     ...serviceKnowledge.map((item) => item.title),
   ].filter(Boolean);
   const mentionedTreatment = matchTreatment(inboundText, treatmentCandidates);
-  if (mentionedTreatment) conversation.lastDiscussedTreatment = mentionedTreatment;
-  conversation.currentIntent = isAppointmentRequest(inboundText) ||
-    (conversation.aiBookingState && conversation.aiBookingState !== "idle")
-    ? "consultation"
-    : "information";
+  if (mentionedTreatment && mentionedTreatment !== conversation.lastDiscussedTreatment) {
+    conversation.lastDiscussedTreatment = mentionedTreatment;
+    conversation.lastPricingTopic = "";
+  }
+  const intent = detectIntent(
+    inboundText,
+    mentionedTreatment || conversation.lastDiscussedTreatment,
+    conversation.lastPricingTopic
+  );
+  conversation.currentIntent = intent === "general_conversation" &&
+    conversation.aiBookingState && conversation.aiBookingState !== "idle"
+    ? "appointment_booking"
+    : intent;
+  if (intent === "treatment_pricing" || intent === "consultation_fee") {
+    conversation.lastPricingTopic = intent;
+  }
   await conversation.save();
 
-  if (settings.leadSyncEnabled && customerName && !isAppointmentRequest(inboundText) &&
+  if (settings.leadSyncEnabled && customerName && !isPricingQuestion(inboundText) &&
+      !isAppointmentRequest(inboundText) &&
       (!conversation.aiBookingState || conversation.aiBookingState === "idle")) {
     try {
       await syncLead({
@@ -375,10 +387,15 @@ async function processIncomingWhatsApp({
   const bookingActive = conversation.aiBookingState && conversation.aiBookingState !== "idle";
   const appointmentRequested = isAppointmentRequest(inboundText);
   const beginsBooking = Boolean(settings.appointmentEnabled && appointmentRequested && !bookingActive);
+  const bookingQuestion = isPricingQuestion(inboundText) ||
+    intent === "doctor_information" ||
+    (conversation.aiBookingState === "awaiting_name" &&
+      !normalizeNameAnswer(inboundText) && !appointmentRequested) ||
+    (conversation.aiBookingState === "awaiting_treatment" && isPricingQuestion(inboundText));
 
-  if (settings.appointmentEnabled && (bookingActive || beginsBooking)) {
+  if (settings.appointmentEnabled && ((bookingActive && !bookingQuestion) || beginsBooking)) {
     if (beginsBooking) {
-      conversation.currentIntent = "consultation";
+      conversation.currentIntent = "appointment_booking";
       conversation.appointmentProgress = "collecting_details";
       conversation.aiBookingTreatment = conversation.lastDiscussedTreatment || mentionedTreatment;
       conversation.aiBookingName = customerName || "";
@@ -456,41 +473,44 @@ async function processIncomingWhatsApp({
     return;
   }
 
-  const [history, knowledge] = await Promise.all([
-    MetaMessage.find({
+  const history = await MetaMessage.find({
       userId: ownerId,
       conversationId: conversation._id,
       ...(inboundMessageId ? { externalMessageId: { $ne: inboundMessageId } } : {}),
     }).sort({ sentAt: -1 }).limit(12).lean().then((items) => items.reverse().map((item) => ({
       sender: item.direction === "inbound" ? "visitor" : "assistant",
       message: item.text,
-    }))),
-    assistant
-      ? searchKnowledge({
+    })));
+  const query = buildKnowledgeSearchQuery(inboundText, history, [
+    conversation.lastDiscussedTreatment
+      ? `Last discussed treatment: ${conversation.lastDiscussedTreatment}`
+      : "",
+    conversation.lastDiscussedDoctor
+      ? `Last discussed doctor: ${conversation.lastDiscussedDoctor}`
+      : "",
+    intent === "consultation_fee" ? "Doctor consultation fee" : "",
+  ]);
+  let knowledge = [];
+  if (assistant) {
+    try {
+      knowledge = await searchKnowledge({
         ownerId,
         assistantId: assistant._id,
-        query: [conversation.lastDiscussedTreatment, inboundText].filter(Boolean).join(" "),
-        limit: 8,
-      })
-      : [],
-  ]);
-
-  const verifiedKnowledge = [
-    ...(Array.isArray(knowledge) ? knowledge : knowledge?.results || []),
-    ...(services.length ? [{
-      title: "Treatments and services listed in this clinic’s CRM",
-      content: services.map((service) => service.name).join(", "),
-    }] : []),
-  ];
-
-  let reply = "";
-  if (isPricingQuestion(inboundText) && !hasVerifiedPricing(verifiedKnowledge)) {
-    reply = pricingFallback(detectLanguage(inboundText), conversation.lastDiscussedTreatment);
-  } else if (!knowledge.length && needsMedicalDetails(inboundText, conversation.lastDiscussedTreatment)) {
-    reply = medicalDetailsFallback(detectLanguage(inboundText));
-  } else {
-    const clinicName = String(ownerProfile?.clinicName || integration.verifiedName || "").trim();
-    const aiResult = await generateAIReply({
+        query,
+        intentQuery: inboundText,
+        limit: 5,
+      });
+    } catch (error) {
+      console.error("WHATSAPP AI KNOWLEDGE SEARCH ERROR:", error?.message || error);
+    }
+  }
+  const doctorName = extractDoctorName(knowledge);
+  if (doctorName && intent === "doctor_information") {
+    conversation.lastDiscussedDoctor = doctorName;
+    await conversation.save();
+  }
+  const clinicName = String(ownerProfile?.clinicName || integration.verifiedName || "").trim();
+  const aiResult = await generateAIReply({
       assistant: {
         ...(assistant?.toObject ? assistant.toObject() : assistant || {}),
         assistantName: assistant?.assistantName || "Clinic Assistant",
@@ -500,11 +520,9 @@ async function processIncomingWhatsApp({
       },
       history,
       userMessage: inboundText,
-      knowledge: verifiedKnowledge,
-    });
-    reply = aiResult?.shouldReply === false ? "" : String(aiResult?.text || "").trim();
-  }
-
+      knowledge,
+  });
+  const reply = aiResult?.shouldReply === false ? "" : String(aiResult?.text || "").trim();
   if (!reply) return;
   await replyAndUpdate({ integration, conversation, text: reply, accessToken });
 }
@@ -515,6 +533,8 @@ module.exports = {
   isAppointmentRequest,
   matchTreatment,
   isPricingQuestion,
+  detectIntent,
+  extractDoctorName,
   normalizePhone,
   cleanCustomerName,
 };
