@@ -3,9 +3,10 @@ const { createContactFromLead } = require("./contactService");
 const { createLeadNotification } = require("./notificationService");
 const {
   sendLeadWhatsAppNotification,
+  sendLeadWhatsAppWelcome,
 } = require("./leadWhatsAppService");
 
-async function processNewLead(lead) {
+async function processNewLead(lead, { sendCustomerWelcome = false } = {}) {
 
   console.log(
     "PROCESS NEW LEAD ENTERED:",
@@ -63,6 +64,27 @@ async function processNewLead(lead) {
       "LEAD WHATSAPP PROCESSING ERROR:",
       error.message
     );
+  }
+
+  if (sendCustomerWelcome) {
+    try {
+      const result = await sendLeadWhatsAppWelcome(lead);
+
+      if (result.sent) {
+        console.log("CUSTOMER WHATSAPP WELCOME SENT:", String(lead._id));
+      } else {
+        console.log(
+          "CUSTOMER WHATSAPP WELCOME SKIPPED:",
+          String(lead._id),
+          result.reason
+        );
+      }
+    } catch (error) {
+      console.error(
+        "CUSTOMER WHATSAPP WELCOME PROCESSING ERROR:",
+        error.message
+      );
+    }
   }
 
   return { lead, contactResult };

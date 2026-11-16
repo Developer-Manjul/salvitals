@@ -5,6 +5,8 @@ const { google } = require("googleapis");
 const Lead = require("../models/Lead");
 const GoogleIntegration = require("../models/GoogleIntegration");
 const { encrypt, decrypt } = require("../utils/encryption");
+const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
+const { processNewLead } = require("../services/leadProcessingService");
 const {
   getWorkspaceContext,
   hasPermission,
@@ -862,6 +864,11 @@ exports.webhook = async (req, res) => {
       fieldMap.TREATMENT ||
       fieldMap.INTEREST ||
       "";
+    const hasWhatsAppOptIn = [
+      fieldMap.WHATSAPP_OPT_IN,
+      fieldMap.WHATSAPP_OPTIN,
+      fieldMap.WHATSAPP_CONSENT,
+    ].some(isExplicitWhatsAppOptIn);
 
     if (!name && !phone && !email) {
       return res.status(400).json({
@@ -906,6 +913,12 @@ exports.webhook = async (req, res) => {
 
       phone,
 
+      whatsappOptIn: hasWhatsAppOptIn,
+
+      whatsappOptInAt: hasWhatsAppOptIn ? new Date() : null,
+
+      whatsappOptInSource: hasWhatsAppOptIn ? "Google Ads Lead Form" : "",
+
       source: "Google Ads",
 
       stage: "New",
@@ -938,6 +951,15 @@ exports.webhook = async (req, res) => {
       "USER:",
       integration.userId
     );
+
+    try {
+      await processNewLead(lead, { sendCustomerWelcome: true });
+    } catch (processingError) {
+      console.error(
+        "GOOGLE ADS LEAD PROCESSING ERROR:",
+        processingError.message
+      );
+    }
 
     return res.status(200).json({});
   } catch (error) {

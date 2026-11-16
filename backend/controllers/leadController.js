@@ -182,7 +182,9 @@ exports.createLead = async (req, res) => {
     String(lead._id)
 );
 
-        await processNewLeadSafely(lead);
+        await processNewLeadSafely(lead, {
+            sendCustomerWelcome: false,
+        });
 
         return res.status(201).json({
             success: true,
@@ -1238,10 +1240,11 @@ exports.deleteLeadFollowUp = async (
 };
 
 async function processNewLeadSafely(
-    lead
+    lead,
+    options
 ) {
     try {
-        await processNewLead(lead);
+        await processNewLead(lead, options);
     } catch (error) {
         console.error(
             "PROCESS NEW LEAD ERROR:",

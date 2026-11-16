@@ -49,6 +49,58 @@ const leadWhatsAppDeliverySchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+
+        welcomeStatus: {
+            type: String,
+            enum: ["pending", "processing", "sent", "failed", "skipped"],
+            default: undefined,
+            index: true,
+        },
+
+        welcomeRecipientNumber: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        welcomePhoneNumberId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        welcomeMessageId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        welcomeMessageText: {
+            type: String,
+            default: "",
+        },
+
+        welcomeTemplateName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        welcomeAttempts: {
+            type: Number,
+            default: 0,
+        },
+
+        welcomeSentAt: {
+            type: Date,
+            default: null,
+        },
+
+        welcomeLastError: {
+            type: String,
+            default: "",
+        },
+
     },
     {
         timestamps: true,

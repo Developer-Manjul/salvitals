@@ -28,6 +28,7 @@ const {
   getWorkspaceContext,
   hasPermission,
 } = require("../utils/workspace");
+const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
 
 const getContext = async (req) => {
   return await getWorkspaceContext(req);
@@ -909,6 +910,10 @@ async function getOrCreatePublicConversation({
     });
 
   if (!conversation) {
+    const whatsappOptIn = isExplicitWhatsAppOptIn(
+      visitor?.whatsappOptIn
+    );
+
     conversation =
       await AIConversation.create({
         ownerId:
@@ -935,6 +940,8 @@ async function getOrCreatePublicConversation({
             visitor?.phone,
             50
           ),
+        whatsappOptIn,
+        whatsappOptInAt: whatsappOptIn ? new Date() : null,
         visitorEmail:
           safeText(
             visitor?.email,
@@ -982,6 +989,13 @@ async function getOrCreatePublicConversation({
           visitor.phone,
           50
         );
+    }
+
+    if (isExplicitWhatsAppOptIn(visitor?.whatsappOptIn)) {
+      updates.whatsappOptIn = true;
+      if (!conversation.whatsappOptInAt) {
+        updates.whatsappOptInAt = new Date();
+      }
     }
 
     if (visitor?.email) {

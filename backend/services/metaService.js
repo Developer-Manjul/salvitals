@@ -155,6 +155,54 @@ exports.sendWhatsAppMessage = async ({ phoneNumberId, accessToken, to, text }) =
   return graphRequest(`/${encodeURIComponent(phoneNumberId)}/messages`, { method: "POST", params: { access_token: accessToken }, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { body: text } }) });
 };
 
+exports.sendWhatsAppTemplateMessage = async ({
+  phoneNumberId,
+  accessToken,
+  to,
+  templateName,
+  language,
+  parameters,
+}) => {
+  if (
+    !phoneNumberId ||
+    !accessToken ||
+    !to ||
+    !templateName ||
+    !language ||
+    !Array.isArray(parameters)
+  ) {
+    throw new Error("Missing required WhatsApp template message fields");
+  }
+
+  return graphRequest(
+    `/${encodeURIComponent(phoneNumberId)}/messages`,
+    {
+      method: "POST",
+      params: { access_token: accessToken },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: language },
+          components: [
+            {
+              type: "body",
+              parameters: parameters.map((text) => ({
+                type: "text",
+                text: String(text || "").slice(0, 1000),
+              })),
+            },
+          ],
+        },
+      }),
+    }
+  );
+};
+
 exports.exchangeWhatsAppSignupCode = async (code) => {
   if (!code || !process.env.META_APP_ID || !process.env.META_APP_SECRET) throw new Error("WhatsApp signup code or Meta app credentials are missing");
   return graphRequest("/oauth/access_token", { params: { client_id: process.env.META_APP_ID, client_secret: process.env.META_APP_SECRET, code } });

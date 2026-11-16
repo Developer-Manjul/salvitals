@@ -41,6 +41,16 @@ const aiConversationSchema = new mongoose.Schema(
       default: "",
     },
 
+    whatsappOptIn: {
+      type: Boolean,
+      default: false,
+    },
+
+    whatsappOptInAt: {
+      type: Date,
+      default: null,
+    },
+
     visitorEmail: {
       type: String,
       trim: true,

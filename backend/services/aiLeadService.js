@@ -2,6 +2,7 @@ const Lead = require("../models/Lead");
 const AIMessage = require("../models/AIMessage");
 const { processNewLead } = require("./leadProcessingService");
 const { generateAILeadSummary } = require("./aiService");
+const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
 
 const SUMMARY_LABEL = "AI Chat - Lead Summary";
 
@@ -90,6 +91,9 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     conversation.sourceUrl || conversation.pageUrl ||
     conversation.landingPage || conversation.source || ""
   ).trim();
+  const whatsappOptIn = isExplicitWhatsAppOptIn(
+    conversation.whatsappOptIn
+  );
   const summary = await createAISummary(conversation, service);
   const existing = await Lead.findOne({ userId: ownerId, phone }).sort({ createdAt: -1 });
 
@@ -103,6 +107,12 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
 
     if (name && existing.name !== name) existing.name = name, changed = true;
     if (!existing.email && email) existing.email = email, changed = true;
+    if (whatsappOptIn && !existing.whatsappOptIn) {
+      existing.whatsappOptIn = true;
+      existing.whatsappOptInAt = conversation.whatsappOptInAt || new Date();
+      existing.whatsappOptInSource = "AI Chat";
+      changed = true;
+    }
     if (service && existing.service !== service) existing.service = service, changed = true;
     if (existing.source !== "AI Chat") existing.source = "AI Chat", changed = true;
     if (!existing.preferredDoctor && conversation.preferredDoctor) {
@@ -143,6 +153,11 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     name,
     email,
     phone,
+    whatsappOptIn,
+    whatsappOptInAt: whatsappOptIn
+      ? conversation.whatsappOptInAt || new Date()
+      : null,
+    whatsappOptInSource: whatsappOptIn ? "AI Chat" : "",
     source: "AI Chat",
     service,
     stage: "New",
@@ -153,7 +168,7 @@ async function syncAILead({ ownerId, conversation, service = "" }) {
     notes: summary ? [{ text: summary, userName: "AI Chat Summary" }] : [],
   });
 
-  await processNewLead(lead);
+  await processNewLead(lead, { sendCustomerWelcome: true });
   return lead;
 }
 

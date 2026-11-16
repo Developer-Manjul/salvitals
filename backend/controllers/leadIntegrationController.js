@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const LeadApiKey = require("../models/LeadApiKey");
 const Lead = require("../models/Lead");
 const { processNewLead } = require("../services/leadProcessingService");
+const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
 
 const {
   getWorkspaceContext,
@@ -278,6 +279,8 @@ exports.createWebsiteLead = async (req, res) => {
       utmTerm,
       utmContent,
       firstNote,
+      whatsappOptIn,
+      whatsappConsent,
     } = req.body;
 
     console.log("========== WEBSITE LEAD ==========");
@@ -320,11 +323,19 @@ exports.createWebsiteLead = async (req, res) => {
       leadSource
     );
 
+    const hasWhatsAppOptIn = [
+      whatsappOptIn,
+      whatsappConsent,
+    ].some(isExplicitWhatsAppOptIn);
+
     const lead = await Lead.create({
       userId: integration.userId,
       name: String(name).trim(),
       email: String(email || "").trim(),
       phone: String(phone).trim(),
+      whatsappOptIn: hasWhatsAppOptIn,
+      whatsappOptInAt: hasWhatsAppOptIn ? new Date() : null,
+      whatsappOptInSource: hasWhatsAppOptIn ? "Website Form" : "",
       source: leadSource,
       service: String(service || "").trim(),
       owner: "",
@@ -347,7 +358,7 @@ exports.createWebsiteLead = async (req, res) => {
 );
 
 try {
-    await processNewLead(lead);
+    await processNewLead(lead, { sendCustomerWelcome: true });
 
     console.log(
         "WEBSITE LEAD PROCESSING COMPLETE:",

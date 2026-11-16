@@ -11,6 +11,7 @@ const { encrypt, decrypt } = require("../utils/encryption");
 const meta = require("../services/metaService");
 
 const { processNewLead } = require("../services/leadProcessingService");
+const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
 const Invoice = require("../models/Invoice");
 
 const MetaConversation = require("../models/MetaConversation");
@@ -1792,6 +1793,11 @@ exports.receiveWebhook = async (req, res) => {
                     const email = fields.email || "";
                     const fieldService =
                         fields.service || fields.treatment || "";
+                    const hasWhatsAppOptIn = [
+                        fields.whatsapp_opt_in,
+                        fields.whatsapp_optin,
+                        fields.whatsapp_consent,
+                    ].some(isExplicitWhatsAppOptIn);
                     const landingPage =
                         fields.form_name || integration.pageName || "";
                     const pageUrl =
@@ -1815,6 +1821,12 @@ exports.receiveWebhook = async (req, res) => {
                     let created = false;
 
                     if (lead) {
+                        if (hasWhatsAppOptIn && !lead.whatsappOptIn) {
+                            lead.whatsappOptIn = true;
+                            lead.whatsappOptInAt = new Date();
+                            lead.whatsappOptInSource = "Meta Lead Ads";
+                        }
+
                         const missingFields = {
                             metaPageId: pageId,
                             metaFormId: formId,
@@ -1849,6 +1861,11 @@ exports.receiveWebhook = async (req, res) => {
                             name,
                             email,
                             phone,
+                            whatsappOptIn: hasWhatsAppOptIn,
+                            whatsappOptInAt: hasWhatsAppOptIn ? new Date() : null,
+                            whatsappOptInSource: hasWhatsAppOptIn
+                                ? "Meta Lead Ads"
+                                : "",
                             source,
                             stage: "New",
                             service: fieldService,
@@ -1871,7 +1888,9 @@ exports.receiveWebhook = async (req, res) => {
                     });
 
                     try {
-                        await processNewLead(lead);
+                        await processNewLead(lead, {
+                            sendCustomerWelcome: created,
+                        });
                     } catch (error) {
                         console.error("META LEAD PROCESSING FAILED:", {
                             pageId,
