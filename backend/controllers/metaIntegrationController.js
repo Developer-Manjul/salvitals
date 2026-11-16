@@ -2486,7 +2486,7 @@ exports.debugMetaPermissions =
 
     
 
-exports.sendInboxMessage = async (req, res) => {
+const sendInboxMessage = async (req, res, allowedPlatforms) => {
   try {
     const context = await getWorkspaceContext(req);
 
@@ -2524,6 +2524,7 @@ exports.sendInboxMessage = async (req, res) => {
     const conversation = await MetaConversation.findOne({
       _id: conversationId,
       userId: context.workspaceOwnerId,
+      platform: { $in: allowedPlatforms },
     });
 
     if (!conversation) {
@@ -2683,6 +2684,11 @@ exports.sendInboxMessage = async (req, res) => {
   }
 };
 
+exports.sendInboxMessage = (req, res) =>
+  sendInboxMessage(req, res, ["facebook", "instagram"]);
+
+exports.sendWhatsAppInboxMessage = (req, res) =>
+  sendInboxMessage(req, res, ["whatsapp"]);
 
 exports.resubscribeLeadgen = async (req, res) => {
     const userId = requireUser(req, res);

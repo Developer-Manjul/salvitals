@@ -101,9 +101,29 @@ router.patch(
   inboxController.markConversationAsRead
 );
 
+router.get(
+  "/whatsapp/inbox",
+  inboxController.getWhatsAppConversations
+);
+
+router.get(
+  "/whatsapp/inbox/:id/messages",
+  inboxController.getWhatsAppConversationMessages
+);
+
+router.patch(
+  "/whatsapp/inbox/:id/read",
+  inboxController.markWhatsAppConversationAsRead
+);
+
 router.post(
   "/inbox/:id/messages",
   controller.sendInboxMessage
+);
+
+router.post(
+  "/whatsapp/inbox/:id/messages",
+  controller.sendWhatsAppInboxMessage
 );
 
 router.get(

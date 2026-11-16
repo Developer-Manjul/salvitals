@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApiUrl } from "../config/api";
+import { isLeadWithinDateRange } from "../utils/leadDateRange";
 
 function readStoredList(key, fallback) {
   try {
@@ -365,6 +366,12 @@ export default function Leads({
     useState(false);
 
   const [search, setSearch] =
+    useState("");
+
+  const [fromDate, setFromDate] =
+    useState("");
+
+  const [toDate, setToDate] =
     useState("");
 
   const [sourceFilter, setSourceFilter] =
@@ -847,6 +854,12 @@ useEffect(() => {
         lead.stage ===
         stageFilter;
 
+      const matchesDateRange = isLeadWithinDateRange(
+        lead.createdAt,
+        fromDate,
+        toDate
+      );
+
       const leadCategory = getLeadCategory(lead?.stage);
       const matchesEnquiry =
         enquiryFilter === "all" ||
@@ -868,6 +881,7 @@ useEffect(() => {
 
       return (
         matchesSearch &&
+        matchesDateRange &&
         matchesSource &&
         matchesStage &&
         matchesEnquiry &&
@@ -878,6 +892,8 @@ useEffect(() => {
   }, [
     leads,
     search,
+    fromDate,
+    toDate,
     sourceFilter,
     stageFilter,
     enquiryFilter,
@@ -896,7 +912,7 @@ useEffect(() => {
     }
 
     setCurrentPage(1);
-  }, [search, sourceFilter, stageFilter, enquiryFilter, ownerFilter, serviceFilter]);
+  }, [search, fromDate, toDate, sourceFilter, stageFilter, enquiryFilter, ownerFilter, serviceFilter]);
 
   useEffect(() => {
     try {
@@ -1597,6 +1613,8 @@ useEffect(() => {
 
   const resetFilters = () => {
     setSearch("");
+    setFromDate("");
+    setToDate("");
     setSourceFilter(
       "All sources"
     );
@@ -1868,7 +1886,6 @@ const exportAllLeads = () => {
               key={value}
               onClick={() => {
                 setEnquiryFilter(value);
-                setStageFilter("All stages");
               }}
             >
               {label}
@@ -1891,7 +1908,6 @@ const exportAllLeads = () => {
             key={item.key}
             onClick={() => {
               setEnquiryFilter(item.key);
-              setStageFilter("All stages");
             }}
           >
             <span>{item.label}</span>
@@ -1940,7 +1956,7 @@ const exportAllLeads = () => {
             }
           >
             <option value="All stages">
-              Stage
+              All Stages
             </option>
 
             {configuredStageOptions.map(
@@ -1969,7 +1985,7 @@ const exportAllLeads = () => {
             }
           >
             <option value="All sources">
-              Lead Source
+              All Sources
             </option>
 
             {configuredSourceOptions.map(
@@ -1983,6 +1999,26 @@ const exportAllLeads = () => {
               )
             )}
           </select>
+
+          <label className="lead-date-filter">
+            {/* <span>From Date</span> */}
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+              aria-label="From Date"
+            />
+          </label>
+
+          <label className="lead-date-filter">
+            {/* <span>To Date</span> */}
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+              aria-label="To Date"
+            />
+          </label>
 
           {}
 

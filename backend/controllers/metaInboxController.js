@@ -7,6 +7,9 @@ const {
     hasPermission,
 } = require("../utils/workspace");
 
+const SOCIAL_PLATFORMS = ["facebook", "instagram"];
+const WHATSAPP_PLATFORMS = ["whatsapp"];
+
 const getContext = async (req) => {
     return await getWorkspaceContext(req);
 };
@@ -36,8 +39,7 @@ const isValidObjectId = (id) => {
     return /^[a-f\d]{24}$/i.test(String(id || ""));
 };
 
-// GET /api/integrations/meta/inbox
-exports.getConversations = async (req, res) => {
+const getConversations = async (req, res, allowedPlatforms) => {
     try {
         const context = await getContext(req);
 
@@ -53,15 +55,20 @@ exports.getConversations = async (req, res) => {
 
         const filter = {
             userId: context.workspaceOwnerId,
+            platform: { $in: allowedPlatforms },
         };
 
         const platform = String(req.query.platform || "")
             .trim()
             .toLowerCase();
 
-        if (["facebook", "instagram", "whatsapp"].includes(platform)) {
-            filter.platform = platform;
+        if (platform) {
+            if (!allowedPlatforms.includes(platform)) {
+                filter.platform = { $in: [] };
+            } else {
+                filter.platform = platform;
             }
+        }
 
         const status = String(req.query.status || "")
             .trim()
@@ -104,9 +111,7 @@ exports.getConversations = async (req, res) => {
     }
 };
 
-// GET /api/integrations/meta/inbox/:id/messages
-// Opening a conversation clears its unread count.
-exports.getConversationMessages = async (req, res) => {
+const getConversationMessages = async (req, res, allowedPlatforms) => {
     try {
         const context = await getContext(req);
 
@@ -126,6 +131,7 @@ exports.getConversationMessages = async (req, res) => {
         const conversation = await MetaConversation.findOne({
             _id: conversationId,
             userId: context.workspaceOwnerId,
+            platform: { $in: allowedPlatforms },
         });
 
         if (!conversation) {
@@ -144,6 +150,7 @@ exports.getConversationMessages = async (req, res) => {
         const messageFilter = {
             userId: context.workspaceOwnerId,
             conversationId: conversation._id,
+            platform: conversation.platform,
         };
 
         const [messages, total] = await Promise.all([
@@ -162,6 +169,7 @@ exports.getConversationMessages = async (req, res) => {
                 {
                     _id: conversation._id,
                     userId: context.workspaceOwnerId,
+                    platform: { $in: allowedPlatforms },
                 },
                 {
                     $set: { unreadCount: 0 },
@@ -196,8 +204,7 @@ exports.getConversationMessages = async (req, res) => {
     }
 };
 
-// PATCH /api/integrations/meta/inbox/:id/read
-exports.markConversationAsRead = async (req, res) => {
+const markConversationAsRead = async (req, res, allowedPlatforms) => {
     try {
         const context = await getContext(req);
 
@@ -218,6 +225,7 @@ exports.markConversationAsRead = async (req, res) => {
             {
                 _id: conversationId,
                 userId: context.workspaceOwnerId,
+                platform: { $in: allowedPlatforms },
             },
             {
                 $set: { unreadCount: 0 },
@@ -251,3 +259,18 @@ exports.markConversationAsRead = async (req, res) => {
         });
     }
 };
+
+exports.getConversations = (req, res) =>
+    getConversations(req, res, SOCIAL_PLATFORMS);
+exports.getWhatsAppConversations = (req, res) =>
+    getConversations(req, res, WHATSAPP_PLATFORMS);
+
+exports.getConversationMessages = (req, res) =>
+    getConversationMessages(req, res, SOCIAL_PLATFORMS);
+exports.getWhatsAppConversationMessages = (req, res) =>
+    getConversationMessages(req, res, WHATSAPP_PLATFORMS);
+
+exports.markConversationAsRead = (req, res) =>
+    markConversationAsRead(req, res, SOCIAL_PLATFORMS);
+exports.markWhatsAppConversationAsRead = (req, res) =>
+    markConversationAsRead(req, res, WHATSAPP_PLATFORMS);

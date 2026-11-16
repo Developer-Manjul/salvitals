@@ -157,7 +157,7 @@ export default function WhatsAppInbox() {
 
         try {
             const data = await apiRequest(
-                "/api/integrations/meta/inbox?platform=whatsapp"
+                "/api/integrations/meta/whatsapp/inbox"
             );
 
             const list = (data.conversations || []).map(mapConversation);
@@ -191,7 +191,7 @@ export default function WhatsAppInbox() {
 
         try {
             const data = await apiRequest(
-                `/api/integrations/meta/inbox/${encodeURIComponent(conversationId)}/messages`
+                `/api/integrations/meta/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages`
             );
 
             setMessages((data.messages || []).map(mapMessage));
@@ -299,7 +299,7 @@ export default function WhatsAppInbox() {
 
         try {
             const data = await apiRequest(
-                `/api/integrations/meta/inbox/${encodeURIComponent(selected.id)}/messages`,
+                `/api/integrations/meta/whatsapp/inbox/${encodeURIComponent(selected.id)}/messages`,
                 {
                     method: "POST",
                     body: JSON.stringify({ text }),
