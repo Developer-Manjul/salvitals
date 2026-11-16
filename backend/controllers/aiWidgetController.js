@@ -192,6 +192,43 @@ const apiOrigin = "https://salevitals.com";
   display: block;
 }
 
+#popup-message-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#popup-message-close {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #475569;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  font: 600 15px/1 Arial, Helvetica, sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#popup-message-close:hover {
+  background: #f8fafc;
+}
+
 #popup-message::after {
   content: "";
   position: absolute;
@@ -802,12 +839,20 @@ const apiOrigin = "https://salevitals.com";
   <span id="launcherIcon"></span>
 </button>
 
-<div
-  id="popup-message"
-  role="button"
-  tabindex="0"
-  aria-label="Open chat"
-></div>
+<div id="popup-message">
+  <button
+    id="popup-message-open"
+    type="button"
+    aria-label="Open chat"
+  >
+    <span id="popup-message-text"></span>
+  </button>
+  <button
+    id="popup-message-close"
+    type="button"
+    aria-label="Dismiss welcome message"
+  >×</button>
+</div>
 
 <section id="panel" aria-live="polite">
   <div class="head">
@@ -969,35 +1014,96 @@ const apiOrigin = "https://salevitals.com";
       "launcher"
     );
 
-    var popupMessage =
-  shadow.getElementById("popup-message");
+  var popupMessage =
+    shadow.getElementById("popup-message");
 
-var popupTimer = null;
-var popupRepeatTimer = null;
+  var popupMessageOpen =
+    shadow.getElementById("popup-message-open");
 
-function hidePopupMessage() {
-  if (popupMessage) {
-    popupMessage.classList.remove("show");
+  var popupMessageText =
+    shadow.getElementById("popup-message-text");
+
+  var popupMessageClose =
+    shadow.getElementById("popup-message-close");
+
+  var welcomeTooltipDismissKey =
+    "salevitals_ai_welcome_tooltip_dismissed_" +
+    assistantId;
+
+  var welcomeTooltipDismissed = false;
+  var popupTimer = null;
+  var popupRepeatTimer = null;
+
+  function wasWelcomeTooltipDismissed() {
+    if (welcomeTooltipDismissed) {
+      return true;
+    }
+
+    try {
+      return window.sessionStorage.getItem(
+        welcomeTooltipDismissKey
+      ) === "1";
+    } catch (error) {
+      console.warn(
+        "AI WIDGET DISMISS STATE READ ERROR:",
+        error
+      );
+      return false;
+    }
   }
-}
 
-function showPopupMessage() {
-  var assistant = state.assistant || {};
-
-  if (
-    !popupMessage ||
-    assistant.popupEnabled === false ||
-    !String(assistant.popupMessage || "").trim() ||
-    state.open
-  ) {
-    return;
+  function hidePopupMessage() {
+    if (popupMessage) {
+      popupMessage.classList.remove("show");
+    }
   }
 
-  popupMessage.textContent =
-    String(assistant.popupMessage).trim();
+  function dismissWelcomeTooltip() {
+    welcomeTooltipDismissed = true;
 
-  popupMessage.classList.add("show");
-}
+    try {
+      window.sessionStorage.setItem(
+        welcomeTooltipDismissKey,
+        "1"
+      );
+    } catch (error) {
+      console.warn(
+        "AI WIDGET DISMISS STATE SAVE ERROR:",
+        error
+      );
+    }
+
+    hidePopupMessage();
+
+    if (popupTimer) {
+      clearTimeout(popupTimer);
+      popupTimer = null;
+    }
+
+    if (popupRepeatTimer) {
+      clearInterval(popupRepeatTimer);
+      popupRepeatTimer = null;
+    }
+  }
+
+  function showPopupMessage() {
+    var assistant = state.assistant || {};
+
+    if (
+      !popupMessage ||
+      wasWelcomeTooltipDismissed() ||
+      assistant.popupEnabled === false ||
+      !String(assistant.popupMessage || "").trim() ||
+      state.open
+    ) {
+      return;
+    }
+
+    popupMessageText.textContent =
+      String(assistant.popupMessage).trim();
+
+    popupMessage.classList.add("show");
+  }
 
   var launcherIcon =
     shadow.getElementById(
@@ -1631,6 +1737,7 @@ function showPopupMessage() {
         }
 
         if (
+          !wasWelcomeTooltipDismissed() &&
           data.assistant.popupEnabled !== false &&
           String(data.assistant.popupMessage || "").trim()
         ) {
@@ -2079,15 +2186,14 @@ function openChatFromPopup() {
   launcher.click();
 }
 
-popupMessage.addEventListener("click", function () {
+popupMessageOpen.addEventListener("click", function () {
   openChatFromPopup();
 });
 
-popupMessage.addEventListener("keydown", function (event) {
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    openChatFromPopup();
-  }
+popupMessageClose.addEventListener("click", function (event) {
+  event.preventDefault();
+  event.stopPropagation();
+  dismissWelcomeTooltip();
 });
 
 close.onclick = function () {
