@@ -145,6 +145,11 @@ exports.getWhatsAppPhoneNumbers = async (whatsappBusinessAccountId, accessToken)
   return graphRequest(`/${encodeURIComponent(whatsappBusinessAccountId)}/phone_numbers`, { params: { fields: "id,display_phone_number,verified_name,quality_rating", access_token: accessToken } });
 };
 
+exports.getWhatsAppMessageTemplates = async (whatsappBusinessAccountId, accessToken) => {
+  if (!whatsappBusinessAccountId || !accessToken) throw new Error("WhatsApp Business Account ID and access token are required");
+  return graphRequest(`/${encodeURIComponent(whatsappBusinessAccountId)}/message_templates`, { params: { fields: "name,status,language,components", limit: 100, access_token: accessToken } });
+};
+
 exports.subscribeWhatsAppBusinessAccount = async (whatsappBusinessAccountId, accessToken) => {
   if (!whatsappBusinessAccountId || !accessToken) throw new Error("WhatsApp Business Account ID and access token are required");
   return graphRequest(`/${encodeURIComponent(whatsappBusinessAccountId)}/subscribed_apps`, { method: "POST", params: { access_token: accessToken } });

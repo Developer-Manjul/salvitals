@@ -11,7 +11,11 @@ const { encrypt, decrypt } = require("../utils/encryption");
 const meta = require("../services/metaService");
 
 const { processNewLead } = require("../services/leadProcessingService");
-const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
+const { updateLeadWhatsAppDeliveryStatus } = require("../services/leadWhatsAppService");
+const {
+    hasExplicitWhatsAppOptIn,
+    isExplicitWhatsAppOptIn,
+} = require("../utils/whatsappConsent");
 const Invoice = require("../models/Invoice");
 
 const MetaConversation = require("../models/MetaConversation");
@@ -1494,6 +1498,13 @@ exports.receiveWebhook = async (req, res) => {
 
                         if (!messageId) continue;
 
+                        await updateLeadWhatsAppDeliveryStatus({
+                            phoneNumberId,
+                            messageId,
+                            status,
+                            errors: statusData?.errors,
+                        });
+
                         const invoice = await Invoice.findOne({ whatsappMessageId: messageId });
                         if (!invoice) continue;
 
@@ -1797,7 +1808,8 @@ exports.receiveWebhook = async (req, res) => {
                         fields.whatsapp_opt_in,
                         fields.whatsapp_optin,
                         fields.whatsapp_consent,
-                    ].some(isExplicitWhatsAppOptIn);
+                    ].some(isExplicitWhatsAppOptIn) ||
+                        hasExplicitWhatsAppOptIn(fields);
                     const landingPage =
                         fields.form_name || integration.pageName || "";
                     const pageUrl =

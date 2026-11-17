@@ -281,12 +281,9 @@ exports.createWebsiteLead = async (req, res) => {
       firstNote,
       whatsappOptIn,
       whatsappConsent,
+      whatsapp_opt_in,
+      whatsapp_consent,
     } = req.body;
-
-    console.log("========== WEBSITE LEAD ==========");
-    console.log("PAGE TYPE RECEIVED:", pageType);
-    console.log("FULL REQUEST BODY:", req.body);
-    console.log("==================================");
 
     if (!String(name || "").trim()) {
       return res.status(400).json({
@@ -313,19 +310,11 @@ exports.createWebsiteLead = async (req, res) => {
         ? "Google Ads"
         : "Website";
 
-    console.log(
-      "NORMALIZED PAGE TYPE:",
-      normalizedPageType
-    );
-
-    console.log(
-      "FINAL LEAD SOURCE:",
-      leadSource
-    );
-
     const hasWhatsAppOptIn = [
       whatsappOptIn,
       whatsappConsent,
+      whatsapp_opt_in,
+      whatsapp_consent,
     ].some(isExplicitWhatsAppOptIn);
 
     const lead = await Lead.create({

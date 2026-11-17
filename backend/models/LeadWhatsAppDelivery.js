@@ -101,6 +101,23 @@ const leadWhatsAppDeliverySchema = new mongoose.Schema(
             default: "",
         },
 
+        welcomeMetaResponse: {
+            type: mongoose.Schema.Types.Mixed,
+            default: undefined,
+        },
+
+        welcomeDeliveryStatus: {
+            type: String,
+            enum: ["accepted", "sent", "delivered", "read", "failed"],
+            default: undefined,
+            index: true,
+        },
+
+        welcomeFailureDetails: {
+            type: mongoose.Schema.Types.Mixed,
+            default: undefined,
+        },
+
     },
     {
         timestamps: true,

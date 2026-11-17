@@ -2149,6 +2149,12 @@ exports.publicSubmitAppointment =
       conversation.visitorName = name;
       conversation.visitorPhone = phone;
       conversation.visitorEmail = email;
+      if (isExplicitWhatsAppOptIn(req.body?.whatsappOptIn)) {
+        conversation.whatsappOptIn = true;
+        if (!conversation.whatsappOptInAt) {
+          conversation.whatsappOptInAt = new Date();
+        }
+      }
 
       const messages =
         await AIMessage.find({

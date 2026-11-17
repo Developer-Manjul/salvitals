@@ -5,7 +5,10 @@ const { google } = require("googleapis");
 const Lead = require("../models/Lead");
 const GoogleIntegration = require("../models/GoogleIntegration");
 const { encrypt, decrypt } = require("../utils/encryption");
-const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
+const {
+  hasExplicitWhatsAppOptIn,
+  isExplicitWhatsAppOptIn,
+} = require("../utils/whatsappConsent");
 const { processNewLead } = require("../services/leadProcessingService");
 const {
   getWorkspaceContext,
@@ -826,16 +829,14 @@ exports.webhook = async (req, res) => {
     const fieldMap = {};
 
     for (const column of columns) {
-      const key = String(
-        column?.column_id || ""
-      )
-        .trim()
-        .toUpperCase();
-
       const value =
         column?.string_value || "";
 
-      if (key) {
+      const keys = [column?.column_id, column?.column_name]
+        .map((item) => String(item || "").trim().toUpperCase())
+        .filter(Boolean);
+
+      for (const key of keys) {
         fieldMap[key] = value;
       }
     }
@@ -868,7 +869,8 @@ exports.webhook = async (req, res) => {
       fieldMap.WHATSAPP_OPT_IN,
       fieldMap.WHATSAPP_OPTIN,
       fieldMap.WHATSAPP_CONSENT,
-    ].some(isExplicitWhatsAppOptIn);
+    ].some(isExplicitWhatsAppOptIn) ||
+      hasExplicitWhatsAppOptIn(fieldMap);
 
     if (!name && !phone && !email) {
       return res.status(400).json({

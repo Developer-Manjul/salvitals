@@ -16,6 +16,16 @@ const whatsappAutomationSettingsSchema = new mongoose.Schema(
       maxlength: 2000,
       default: "Hello! Thanks for contacting us. How can we help you today?",
     },
+    leadWelcomeTemplateName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    leadWelcomeTemplateLanguage: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     aiReplyEnabled: { type: Boolean, default: true },
     appointmentEnabled: { type: Boolean, default: true },
     leadSyncEnabled: { type: Boolean, default: true },

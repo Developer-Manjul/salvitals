@@ -118,6 +118,27 @@
     font-size: 12px;
 }
 
+.wa-automation-field {
+    display: block;
+    margin-top: 12px;
+    color: #40536a;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.wa-automation-field .wa-automation-welcome {
+    min-height: 0;
+    margin-top: 6px;
+    resize: none;
+}
+
+.wa-automation-hint {
+    margin: 8px 0 14px;
+    color: #71869e;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
 .wa-resume-ai {
     margin-left: auto;
     border: 1px solid #08b878;

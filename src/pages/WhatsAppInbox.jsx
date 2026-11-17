@@ -142,6 +142,8 @@ export default function WhatsAppInbox() {
     const [automation, setAutomation] = useState({
         welcomeEnabled: true,
         welcomeMessage: "",
+        leadWelcomeTemplateName: "",
+        leadWelcomeTemplateLanguage: "",
         aiReplyEnabled: true,
         appointmentEnabled: true,
         leadSyncEnabled: true,
@@ -442,6 +444,35 @@ export default function WhatsAppInbox() {
                                 disabled={!automation.welcomeEnabled}
                                 maxLength={2000}
                             />
+                            <label className="wa-automation-field">
+                                <span>Approved lead welcome template name</span>
+                                <input
+                                    className="wa-automation-welcome"
+                                    value={automation.leadWelcomeTemplateName || ""}
+                                    onChange={(e) => setAutomation({
+                                        ...automation,
+                                        leadWelcomeTemplateName: e.target.value,
+                                    })}
+                                    placeholder="Exact template name from Meta"
+                                    maxLength={512}
+                                />
+                            </label>
+                            <label className="wa-automation-field">
+                                <span>Template language code</span>
+                                <input
+                                    className="wa-automation-welcome"
+                                    value={automation.leadWelcomeTemplateLanguage || ""}
+                                    onChange={(e) => setAutomation({
+                                        ...automation,
+                                        leadWelcomeTemplateLanguage: e.target.value,
+                                    })}
+                                    placeholder="For example, en_US"
+                                    maxLength={12}
+                                />
+                            </label>
+                            <p className="wa-automation-hint">
+                                Configure an approved template for this connected WhatsApp Business Account with body variables {"{{1}}"} lead name, {"{{2}}"} business name, and {"{{3}}"} enquiry. It is used outside the 24-hour service window.
+                            </p>
                             {[
                                 ["aiReplyEnabled", "AI auto-reply", "Answer patient questions from your clinic knowledge base."],
                                 ["appointmentEnabled", "Appointment booking", "Collect the patient's name and mobile number in WhatsApp."],

@@ -24,6 +24,8 @@ exports.updateSettings = async (req, res) => {
   const allowed = [
     "welcomeEnabled",
     "welcomeMessage",
+    "leadWelcomeTemplateName",
+    "leadWelcomeTemplateLanguage",
     "aiReplyEnabled",
     "appointmentEnabled",
     "leadSyncEnabled",
@@ -37,6 +39,28 @@ exports.updateSettings = async (req, res) => {
   update.welcomeMessage = String(update.welcomeMessage || "Hello! Thanks for contacting us. How can we help you today?")
     .trim()
     .slice(0, 2000);
+
+  if (
+    req.body.leadWelcomeTemplateName !== undefined ||
+    req.body.leadWelcomeTemplateLanguage !== undefined
+  ) {
+    const templateName = String(req.body.leadWelcomeTemplateName || "").trim();
+    const templateLanguage = String(req.body.leadWelcomeTemplateLanguage || "").trim();
+
+    if (
+      templateName &&
+      (!/^[a-z0-9_]{1,512}$/.test(templateName) ||
+        !/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(templateLanguage))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter the exact approved template name and language code from Meta.",
+      });
+    }
+
+    update.leadWelcomeTemplateName = templateName;
+    update.leadWelcomeTemplateLanguage = templateName ? templateLanguage : "";
+  }
 
   const settings = await WhatsAppAutomationSettings.findOneAndUpdate(
     { userId: context.workspaceOwnerId },

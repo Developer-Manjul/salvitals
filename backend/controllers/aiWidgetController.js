@@ -564,6 +564,22 @@ const apiOrigin = "https://salevitals.com";
   box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
 }
 
+.ai-appointment-optin {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 4px !important;
+  font-weight: 400 !important;
+  line-height: 1.4;
+}
+
+.ai-appointment-optin input {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
+}
+
 .ai-appointment-error {
   min-height: 18px;
   margin: 8px 0 0;
@@ -1334,6 +1350,8 @@ const apiOrigin = "https://salevitals.com";
       card.querySelector("[name=name]").value.trim();
     var phone =
       card.querySelector("[name=phone]").value.trim();
+    var whatsappOptIn =
+      card.querySelector("[name=whatsappOptIn]").checked;
     var error =
       card.querySelector(".ai-appointment-error");
     var button =
@@ -1394,6 +1412,7 @@ const apiOrigin = "https://salevitals.com";
               sessionId: sessionId,
               name: name,
               phone: phone,
+              whatsappOptIn: whatsappOptIn,
               treatment:
                 treatmentMatch
                   ? treatmentMatch
@@ -1451,6 +1470,10 @@ const apiOrigin = "https://salevitals.com";
         '<label for="aiAppointmentPhone">Mobile Number</label>' +
         '<input id="aiAppointmentPhone" name="phone" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Enter your mobile number">' +
       '</div>' +
+      '<label class="ai-appointment-optin">' +
+        '<input type="checkbox" name="whatsappOptIn">' +
+        '<span>I agree to receive WhatsApp messages about this appointment request.</span>' +
+      '</label>' +
       '<p class="ai-appointment-error"></p>' +
       '<button type="button" class="ai-appointment-submit">Confirm Appointment Request</button>';
 

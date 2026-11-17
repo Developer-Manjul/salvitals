@@ -2,14 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const originalEncryptionKey = process.env.META_TOKEN_ENCRYPTION_KEY;
-const originalTemplateName = process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME;
-const originalTemplateLanguage = process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_LANGUAGE;
 process.env.META_TOKEN_ENCRYPTION_KEY = "lead-welcome-test-key";
-process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME = "approved_lead_welcome";
-process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_LANGUAGE = "en";
 
 const { encrypt } = require("../utils/encryption");
-const { isExplicitWhatsAppOptIn } = require("../utils/whatsappConsent");
+const {
+  hasExplicitWhatsAppOptIn,
+  isExplicitWhatsAppOptIn,
+} = require("../utils/whatsappConsent");
 const welcomeService = require("../services/leadWhatsAppService");
 const meta = require("../services/metaService");
 const User = require("../models/User");
@@ -46,6 +45,7 @@ const WORKSPACE_B = "bbbbbbbbbbbbbbbbbbbbbbbb";
 const integrations = [
   {
     userId: WORKSPACE_A,
+    whatsappBusinessAccountId: "waba-a",
     phoneNumberId: "phone-a",
     accessTokenEncrypted: encrypt("workspace-a-token"),
     isActive: true,
@@ -53,6 +53,7 @@ const integrations = [
   },
   {
     userId: WORKSPACE_B,
+    whatsappBusinessAccountId: "waba-b",
     phoneNumberId: "phone-b",
     accessTokenEncrypted: encrypt("workspace-b-token"),
     isActive: true,
@@ -71,7 +72,9 @@ function createLead(source = "Website", values = {}) {
     whatsappOptIn: values.whatsappOptIn === undefined
       ? true
       : values.whatsappOptIn,
-    whatsappOptInAt: values.whatsappOptInAt || new Date(),
+    whatsappOptInAt: values.whatsappOptIn === false
+      ? null
+      : values.whatsappOptInAt || new Date(),
     whatsappConversationId: null,
   };
 }
@@ -84,6 +87,16 @@ async function withWelcomeMocks(
     inboundMessage = null,
     failTemplateSend = false,
     failTextSend = false,
+    templateName = "approved_lead_welcome",
+    templateLanguage = "en",
+    approvedTemplates = [
+      {
+        name: "approved_lead_welcome",
+        status: "APPROVED",
+        language: "en",
+        components: [{ type: "BODY", text: "Hi {{1}}, {{2}} received your enquiry about {{3}}." }],
+      },
+    ],
   } = {},
   run
 ) {
@@ -99,8 +112,10 @@ async function withWelcomeMocks(
     conversationFindOneAndUpdate: MetaConversation.findOneAndUpdate,
     messageFindOne: MetaMessage.findOne,
     messageCreate: MetaMessage.create,
+    messageUpdateOne: MetaMessage.updateOne,
     sendText: meta.sendWhatsAppMessage,
     sendTemplate: meta.sendWhatsAppTemplateMessage,
+    getTemplates: meta.getWhatsAppMessageTemplates,
   };
 
   const deliveries = new Map();
@@ -108,6 +123,8 @@ async function withWelcomeMocks(
   const sentTemplates = [];
   const inboxMessages = [];
   const integrationQueries = [];
+  const templateQueries = [];
+  const messageUpdates = [];
   let nextDeliveryId = 0;
 
   User.findById = () => ({
@@ -156,17 +173,41 @@ async function withWelcomeMocks(
     return { ...delivery };
   };
 
-  LeadWhatsAppDelivery.findOne = async (filter) =>
-    [...deliveries.values()].find((item) =>
-      String(item.userId) === String(filter.userId) &&
-      String(item.leadId) === String(filter.leadId)
+  LeadWhatsAppDelivery.findOne = (filter) => {
+    const delivery = [...deliveries.values()].find((item) =>
+      (!filter.userId || String(item.userId) === String(filter.userId)) &&
+      (!filter.leadId || String(item.leadId) === String(filter.leadId)) &&
+      (!filter.welcomeMessageId ||
+        item.welcomeMessageId === filter.welcomeMessageId) &&
+      (!filter.welcomePhoneNumberId ||
+        item.welcomePhoneNumberId === filter.welcomePhoneNumberId)
     ) || null;
+    const query = {
+      select() {
+        return this;
+      },
+      lean: async () => delivery,
+      then(resolve, reject) {
+        return this.lean().then(resolve, reject);
+      },
+    };
+    return query;
+  };
 
   LeadWhatsAppDelivery.updateOne = async (filter, update) => {
     const delivery = [...deliveries.values()].find(
-      (item) => String(item._id) === String(filter._id)
+      (item) =>
+        (!filter._id || String(item._id) === String(filter._id)) &&
+        (!filter.userId || String(item.userId) === String(filter.userId)) &&
+        (!filter.welcomeMessageId ||
+          item.welcomeMessageId === filter.welcomeMessageId) &&
+        (!filter.welcomePhoneNumberId ||
+          item.welcomePhoneNumberId === filter.welcomePhoneNumberId)
     );
-    if (delivery && delivery.welcomeStatus === filter.welcomeStatus) {
+    if (
+      delivery &&
+      (!filter.welcomeStatus || delivery.welcomeStatus === filter.welcomeStatus)
+    ) {
       Object.assign(delivery, update.$set || {});
     }
     return { acknowledged: true };
@@ -219,17 +260,43 @@ async function withWelcomeMocks(
     return message;
   };
 
+  MetaMessage.updateOne = async (filter, update) => {
+    messageUpdates.push({ filter, update });
+    return { acknowledged: true };
+  };
+
+  meta.getWhatsAppMessageTemplates = async (wabaId) => {
+    templateQueries.push(wabaId);
+    return { data: approvedTemplates };
+  };
+
   meta.sendWhatsAppMessage = async (request) => {
     sentText.push(request);
-    if (failTextSend) throw new Error("simulated text send failure");
+    if (failTextSend) {
+      const error = new Error("simulated text send failure");
+      error.metaError = { code: 131000, message: error.message };
+      throw error;
+    }
     return { messages: [{ id: `text-${sentText.length}` }] };
   };
 
   meta.sendWhatsAppTemplateMessage = async (request) => {
     sentTemplates.push(request);
-    if (failTemplateSend) throw new Error("simulated template send failure");
+    if (failTemplateSend) {
+      const error = new Error("simulated template send failure");
+      error.metaError = { code: 131000, message: error.message };
+      throw error;
+    }
     return { messages: [{ id: `template-${sentTemplates.length}` }] };
   };
+
+  WhatsAppAutomationSettings.findOne = () => ({
+    lean: async () => ({
+      welcomeEnabled,
+      leadWelcomeTemplateName: templateName,
+      leadWelcomeTemplateLanguage: templateLanguage,
+    }),
+  });
 
   try {
     await run({
@@ -238,6 +305,8 @@ async function withWelcomeMocks(
       sentTemplates,
       inboxMessages,
       integrationQueries,
+      templateQueries,
+      messageUpdates,
     });
   } finally {
     User.findById = originals.userFindById;
@@ -251,19 +320,21 @@ async function withWelcomeMocks(
     MetaConversation.findOneAndUpdate = originals.conversationFindOneAndUpdate;
     MetaMessage.findOne = originals.messageFindOne;
     MetaMessage.create = originals.messageCreate;
+    MetaMessage.updateOne = originals.messageUpdateOne;
     meta.sendWhatsAppMessage = originals.sendText;
     meta.sendWhatsAppTemplateMessage = originals.sendTemplate;
+    meta.getWhatsAppMessageTemplates = originals.getTemplates;
   }
 }
 
 test("Meta, website form, AI chat, Google, and GMB leads use the workspace template sender", async () => {
-  await withWelcomeMocks({}, async ({ sentTemplates, integrationQueries, deliveries }) => {
+  await withWelcomeMocks({}, async ({ sentTemplates, integrationQueries, templateQueries, deliveries }) => {
     for (const [index, source] of [
       "Meta Ads",
       "Website Form",
       "AI Chat",
       "Google Ads",
-      "GMB",
+      "Google Business Profile",
     ].entries()) {
       const result = await welcomeService.sendLeadWhatsAppWelcome(
         createLead(source, { _id: `auto-lead-${index}` })
@@ -272,6 +343,7 @@ test("Meta, website form, AI chat, Google, and GMB leads use the workspace templ
     }
 
     assert.equal(sentTemplates.length, 5);
+    assert.deepEqual(templateQueries, ["waba-a", "waba-a", "waba-a", "waba-a", "waba-a"]);
     assert.ok(sentTemplates.every((request) =>
       request.phoneNumberId === "phone-a" &&
       request.accessToken === "workspace-a-token" &&
@@ -284,7 +356,9 @@ test("Meta, website form, AI chat, Google, and GMB leads use the workspace templ
     assert.ok(integrationQueries.every((query) => query.userId === WORKSPACE_A));
     assert.ok([...deliveries.values()].every((delivery) =>
       delivery.welcomeStatus === "sent" &&
-      delivery.welcomeMessageId.startsWith("template-")
+      delivery.welcomeMessageId.startsWith("template-") &&
+      delivery.welcomeDeliveryStatus === "accepted" &&
+      delivery.welcomeMetaResponse.messages[0].id === delivery.welcomeMessageId
     ));
   });
 });
@@ -305,7 +379,7 @@ test("an active customer-service window sends personalized text instead of a tem
       conversation: existingConversation,
       inboundMessage: { sentAt: new Date(Date.now() - 60 * 1000) },
     },
-    async ({ sentText, sentTemplates, inboxMessages }) => {
+    async ({ sentText, sentTemplates, inboxMessages, templateQueries }) => {
       const result = await welcomeService.sendLeadWhatsAppWelcome(
         createLead("Website", { _id: "in-window-lead" })
       );
@@ -313,6 +387,7 @@ test("an active customer-service window sends personalized text instead of a tem
       assert.equal(result.sent, true);
       assert.equal(sentText.length, 1);
       assert.equal(sentTemplates.length, 0);
+      assert.equal(templateQueries.length, 0);
       assert.match(sentText[0].text, /Workspace Clinic regarding Rhinoplasty/);
       assert.equal(inboxMessages[0].conversationId, "conversation-open");
     }
@@ -377,9 +452,23 @@ test("manual leads and leads without explicit WhatsApp opt-in are not messaged",
     assert.equal(manualResult.reason, "manual_lead");
     assert.equal(noConsentResult.reason, "whatsapp_opt_in_missing");
     assert.equal(sentText.length + sentTemplates.length, 0);
-    assert.equal(deliveries.size, 0);
+    assert.equal(deliveries.get("no-consent-lead").welcomeStatus, "skipped");
+    assert.match(
+      deliveries.get("no-consent-lead").welcomeLastError,
+      /consent was not explicitly granted/
+    );
     assert.equal(isExplicitWhatsAppOptIn("yes"), true);
     assert.equal(isExplicitWhatsAppOptIn("No"), false);
+    assert.equal(
+      hasExplicitWhatsAppOptIn({
+        "Do you agree to receive messages on WhatsApp?": "Yes",
+      }),
+      true
+    );
+    assert.equal(
+      hasExplicitWhatsAppOptIn({ whatsapp_number: "Yes" }),
+      false
+    );
   });
 });
 
@@ -421,6 +510,11 @@ test("invalid phones and failed WhatsApp sends are logged without throwing", asy
       assert.equal(deliveries.get("invalid-phone-lead").welcomeStatus, "failed");
       assert.equal(deliveries.get("failed-send-lead").welcomeStatus, "failed");
       assert.match(deliveries.get("failed-send-lead").welcomeLastError, /simulated template send failure/);
+      assert.equal(deliveries.get("failed-send-lead").welcomeDeliveryStatus, "failed");
+      assert.equal(
+        deliveries.get("failed-send-lead").welcomeFailureDetails.error.code,
+        131000
+      );
     }
   );
 });
@@ -433,7 +527,7 @@ test("a missing workspace WhatsApp integration is logged as a failed delivery", 
         createLead("Website", { _id: "disconnected-lead" })
       );
 
-      assert.equal(result.reason, "send_failed");
+      assert.equal(result.reason, "integration_inactive");
       assert.equal(sentTemplates.length, 0);
       assert.equal(deliveries.get("disconnected-lead").welcomeStatus, "failed");
       assert.match(
@@ -442,6 +536,95 @@ test("a missing workspace WhatsApp integration is logged as a failed delivery", 
       );
     }
   );
+});
+
+test("an unconfigured or unapproved workspace template is never guessed or sent", async () => {
+  await withWelcomeMocks(
+    { templateName: "", templateLanguage: "" },
+    async ({ sentTemplates, templateQueries, deliveries }) => {
+      const lead = createLead("Website", { _id: "template-not-configured" });
+      const result = await welcomeService.sendLeadWhatsAppWelcome(lead);
+
+      assert.equal(result.reason, "template_not_configured");
+      assert.equal(sentTemplates.length, 0);
+      assert.equal(templateQueries.length, 0);
+      assert.equal(deliveries.get(lead._id).welcomeStatus, "failed");
+      assert.match(
+        deliveries.get(lead._id).welcomeLastError,
+        /No approved WhatsApp lead welcome template is configured/
+      );
+    }
+  );
+
+  await withWelcomeMocks(
+    { approvedTemplates: [] },
+    async ({ sentTemplates, deliveries }) => {
+      const lead = createLead("Website", { _id: "template-not-approved" });
+      const result = await welcomeService.sendLeadWhatsAppWelcome(lead);
+
+      assert.equal(result.reason, "template_not_approved");
+      assert.equal(sentTemplates.length, 0);
+      assert.equal(deliveries.get(lead._id).welcomeStatus, "failed");
+      assert.match(
+        deliveries.get(lead._id).welcomeLastError,
+        /not approved for this workspace and language/
+      );
+    }
+  );
+});
+
+test("an approved template with a mismatched body parameter layout is not sent", async () => {
+  await withWelcomeMocks(
+    {
+      approvedTemplates: [{
+        name: "approved_lead_welcome",
+        status: "APPROVED",
+        language: "en",
+        components: [{ type: "BODY", text: "Thanks for contacting {{1}}." }],
+      }],
+    },
+    async ({ sentTemplates, deliveries }) => {
+      const lead = createLead("Website", { _id: "template-parameters-mismatch" });
+      const result = await welcomeService.sendLeadWhatsAppWelcome(lead);
+
+      assert.equal(result.reason, "template_parameters_mismatch");
+      assert.equal(sentTemplates.length, 0);
+      assert.equal(deliveries.get(lead._id).welcomeStatus, "failed");
+      assert.match(
+        deliveries.get(lead._id).welcomeLastError,
+        /must have three sequential body parameters/
+      );
+    }
+  );
+});
+
+test("Meta delivery webhooks update the lead delivery and Inbox message status", async () => {
+  await withWelcomeMocks({}, async ({ deliveries, messageUpdates }) => {
+    const lead = createLead("Website", { _id: "webhook-status-lead" });
+    await welcomeService.sendLeadWhatsAppWelcome(lead);
+
+    const delivery = deliveries.get(lead._id);
+    let updated = await welcomeService.updateLeadWhatsAppDeliveryStatus({
+      phoneNumberId: "phone-a",
+      messageId: delivery.welcomeMessageId,
+      status: "delivered",
+    });
+
+    assert.equal(updated, true);
+    assert.equal(delivery.welcomeDeliveryStatus, "delivered");
+    assert.equal(messageUpdates.length, 1);
+    updated = await welcomeService.updateLeadWhatsAppDeliveryStatus({
+      phoneNumberId: "phone-a",
+      messageId: delivery.welcomeMessageId,
+      status: "sent",
+    });
+    assert.equal(updated, false);
+    assert.equal(delivery.welcomeDeliveryStatus, "delivered");
+    assert.equal(messageUpdates.length, 1);
+    assert.deepEqual(messageUpdates[0].update.$set, {
+      deliveryStatus: "delivered",
+    });
+  });
 });
 
 test("a missing service uses a general enquiry message without inventing a treatment", () => {
@@ -497,16 +680,4 @@ test.after(() => {
     process.env.META_TOKEN_ENCRYPTION_KEY = originalEncryptionKey;
   }
 
-  if (originalTemplateName === undefined) {
-    delete process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME;
-  } else {
-    process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME = originalTemplateName;
-  }
-
-  if (originalTemplateLanguage === undefined) {
-    delete process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_LANGUAGE;
-  } else {
-    process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_LANGUAGE =
-      originalTemplateLanguage;
-  }
 });

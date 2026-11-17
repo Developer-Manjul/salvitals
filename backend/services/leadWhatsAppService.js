@@ -38,7 +38,13 @@ function normalizeLeadSource(value) {
         .replace(/\s+/g, " ");
 
     if (
-        ["website", "web", "website lead", "website leads"].includes(source)
+        [
+            "website",
+            "web",
+            "website lead",
+            "website leads",
+            "website form",
+        ].includes(source)
     ) {
         return "Website";
     }
@@ -67,6 +73,17 @@ function normalizeLeadSource(value) {
         ["google ads", "google ad", "google", "google advertising"].includes(source)
     ) {
         return "Google Ads";
+    }
+
+    if (
+        [
+            "gmb",
+            "google business",
+            "google business profile",
+            "google my business",
+        ].includes(source)
+    ) {
+        return "GMB";
     }
 
     return source ? String(value).trim() : "Other";
@@ -609,6 +626,83 @@ async function recordLeadWelcomeInInbox({
     }
 }
 
+async function updateLeadWhatsAppDeliveryStatus({
+    phoneNumberId,
+    messageId,
+    status,
+    errors = [],
+}) {
+    const deliveryStatus = String(status || "").trim().toLowerCase();
+    if (
+        !phoneNumberId ||
+        !messageId ||
+        !["sent", "delivered", "read", "failed"].includes(deliveryStatus)
+    ) {
+        return false;
+    }
+
+    const delivery = await LeadWhatsAppDelivery.findOne({
+        welcomePhoneNumberId: phoneNumberId,
+        welcomeMessageId: messageId,
+    })
+        .select("userId welcomeDeliveryStatus")
+        .lean();
+
+    if (!delivery) return false;
+
+    const statusRank = {
+        accepted: 0,
+        sent: 1,
+        delivered: 2,
+        read: 3,
+    };
+    if (
+        delivery.welcomeDeliveryStatus === "failed" ||
+        (statusRank[delivery.welcomeDeliveryStatus] !== undefined &&
+            statusRank[deliveryStatus] !== undefined &&
+            statusRank[deliveryStatus] < statusRank[delivery.welcomeDeliveryStatus])
+    ) {
+        return false;
+    }
+
+    const failureDetails = deliveryStatus === "failed"
+        ? errors
+        : undefined;
+    const failureMessage = deliveryStatus === "failed"
+        ? errors
+            .map((item) => item?.error_data?.details || item?.message || item?.title || item?.code)
+            .filter(Boolean)
+            .join("; ")
+        : "";
+
+    const update = {
+        welcomeDeliveryStatus: deliveryStatus,
+    };
+    if (failureDetails) {
+        update.welcomeFailureDetails = failureDetails;
+        update.welcomeLastError = failureMessage || "Meta reported WhatsApp delivery failure.";
+    }
+
+    await LeadWhatsAppDelivery.updateOne(
+        {
+            userId: delivery.userId,
+            welcomePhoneNumberId: phoneNumberId,
+            welcomeMessageId: messageId,
+        },
+        { $set: update }
+    );
+
+    await MetaMessage.updateOne(
+        {
+            userId: delivery.userId,
+            externalMessageId: messageId,
+        },
+        { $set: { deliveryStatus } }
+    );
+
+    return true;
+}
+
 async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
     if (!lead?._id || !lead?.userId) {
         return { sent: false, reason: "invalid_lead" };
@@ -621,10 +715,6 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
         return { sent: false, reason: "manual_lead" };
     }
 
-    if (!isExplicitWhatsAppOptIn(lead.whatsappOptIn)) {
-        return { sent: false, reason: "whatsapp_opt_in_missing" };
-    }
-
     const automationSettings = await WhatsAppAutomationSettings.findOne({
         userId: lead.userId,
     }).lean();
@@ -634,6 +724,28 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
     }
 
     const recipientNumber = normalizePhone(lead.phone);
+    if (!isExplicitWhatsAppOptIn(lead.whatsappOptIn)) {
+        const delivery = await getWelcomeDelivery(lead, recipientNumber);
+        const reason = "WhatsApp consent was not explicitly granted; customer was not messaged.";
+        await LeadWhatsAppDelivery.findOneAndUpdate(
+            {
+                _id: delivery._id,
+                $or: [
+                    { welcomeStatus: { $exists: false } },
+                    { welcomeStatus: "pending" },
+                ],
+            },
+            {
+                $set: {
+                    welcomeStatus: "skipped",
+                    welcomeLastError: reason,
+                },
+            },
+            { new: true }
+        );
+        return { sent: false, reason: "whatsapp_opt_in_missing", message: reason };
+    }
+
     const delivery = await getWelcomeDelivery(lead, recipientNumber);
 
     if (
@@ -682,7 +794,9 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
     let sentAt = null;
     let text = "";
     let templateName = "";
+    let templateLanguage = "";
     let integration = null;
+    let metaResponse = null;
 
     try {
         const integrations = await WhatsAppIntegration.find({
@@ -693,7 +807,9 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             .lean();
 
         if (!integrations.length) {
-            throw new Error("No active WhatsApp integration is connected for this workspace.");
+            const error = new Error("No active WhatsApp integration is connected for this workspace.");
+            error.reason = "integration_inactive";
+            throw error;
         }
 
         const existingConversation = await findWhatsAppConversation(
@@ -716,8 +832,14 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
         if (!integration.accessTokenEncrypted) {
             throw new Error("WhatsApp access token is unavailable.");
         }
+        if (!integration.phoneNumberId) {
+            throw new Error("Active WhatsApp integration has no phone number ID.");
+        }
 
         const accessToken = decrypt(integration.accessTokenEncrypted);
+        if (!accessToken) {
+            throw new Error("WhatsApp access token could not be decrypted.");
+        }
         const business = await User.findById(lead.userId)
             .select("clinicName displayName")
             .lean();
@@ -761,13 +883,59 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             });
         } else {
             templateName = String(
-                process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME || ""
+                automationSettings?.leadWelcomeTemplateName || ""
+            ).trim();
+            templateLanguage = String(
+                automationSettings?.leadWelcomeTemplateLanguage || ""
             ).trim();
 
-            if (!templateName) {
-                throw new Error(
-                    "WHATSAPP_LEAD_WELCOME_TEMPLATE_NAME must name an approved WhatsApp welcome template."
+            if (!templateName || !templateLanguage) {
+                const error = new Error(
+                    "No approved WhatsApp lead welcome template is configured for this workspace."
                 );
+                error.reason = "template_not_configured";
+                throw error;
+            }
+
+            if (!integration.whatsappBusinessAccountId) {
+                throw new Error("Active WhatsApp integration has no business account ID.");
+            }
+
+            const templateResponse = await meta.getWhatsAppMessageTemplates(
+                integration.whatsappBusinessAccountId,
+                accessToken
+            );
+            const approvedTemplate = (templateResponse?.data || []).find(
+                (item) =>
+                    item.name === templateName &&
+                    item.status === "APPROVED" &&
+                    item.language === templateLanguage
+            );
+            if (!approvedTemplate) {
+                const error = new Error(
+                    "The configured WhatsApp lead welcome template is not approved for this workspace and language."
+                );
+                error.reason = "template_not_approved";
+                throw error;
+            }
+            const bodyText = String(
+                approvedTemplate.components?.find(
+                    (component) => component.type === "BODY"
+                )?.text || ""
+            );
+            const bodyParameters = Array.from(
+                bodyText.matchAll(/{{(\d+)}}/g),
+                (match) => Number(match[1])
+            );
+            if (
+                bodyParameters.length !== 3 ||
+                bodyParameters.some((parameter, index) => parameter !== index + 1)
+            ) {
+                const error = new Error(
+                    "The approved WhatsApp lead welcome template must have three sequential body parameters for lead name, business name, and enquiry."
+                );
+                error.reason = "template_parameters_mismatch";
+                throw error;
             }
 
             response = await meta.sendWhatsAppTemplateMessage({
@@ -775,8 +943,7 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
                 accessToken,
                 to: recipientNumber,
                 templateName,
-                language:
-                    process.env.WHATSAPP_LEAD_WELCOME_TEMPLATE_LANGUAGE || "en",
+                language: templateLanguage,
                 parameters: [
                     leadName,
                     clinicName.slice(0, 200),
@@ -785,8 +952,13 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             });
         }
 
-        apiAccepted = true;
+        metaResponse = response;
         messageId = String(response?.messages?.[0]?.id || "");
+        if (!messageId) {
+            throw new Error("Meta accepted no message ID for the WhatsApp welcome send.");
+        }
+
+        apiAccepted = true;
         sentAt = new Date();
     } catch (error) {
         const message =
@@ -794,11 +966,20 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             error.metaError?.message ||
             error.message ||
             "WhatsApp welcome message failed.";
+        const metaErrorResponse =
+            error.response?.data ||
+            (error.metaError ? { error: error.metaError } : null);
 
         await updateWelcomeDelivery(claimed._id, {
             welcomeStatus: "failed",
-            welcomeLastError: String(message).slice(0, 1000),
+            welcomeDeliveryStatus: "failed",
+            welcomeLastError: String(message).slice(0, 4000),
             welcomeTemplateName: templateName,
+            welcomeMetaResponse: metaResponse || metaErrorResponse,
+            welcomeFailureDetails: metaErrorResponse || {
+                code: error.code || "",
+                message: String(message),
+            },
         });
 
         console.error(
@@ -809,7 +990,7 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
 
         return {
             sent: false,
-            reason: "send_failed",
+            reason: error.reason || "send_failed",
             message,
         };
     }
@@ -822,6 +1003,9 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             welcomeMessageId: messageId,
             welcomeMessageText: text,
             welcomeTemplateName: templateName,
+            welcomeMetaResponse: metaResponse,
+            welcomeDeliveryStatus: "accepted",
+            welcomeFailureDetails: undefined,
             welcomeSentAt: sentAt,
             welcomeLastError: "",
         });
@@ -866,6 +1050,7 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
 module.exports = {
     sendLeadWhatsAppNotification,
     sendLeadWhatsAppWelcome,
+    updateLeadWhatsAppDeliveryStatus,
     buildLeadWelcomeMessage,
     isWithinAllowedWindow,
     normalizePhone,
