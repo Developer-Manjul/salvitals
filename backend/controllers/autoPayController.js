@@ -49,17 +49,20 @@ if (
 }
 
 
+
 exports.getAutoPayStatus = async (req, res) => {
     try {
+        // 1. Resolve workspace owner
         const context = await getWorkspaceContext(req);
 
         if (!context?.workspaceOwnerId) {
             return res.status(401).json({
                 success: false,
-                message: "Authentication required",
+                message: "Authentication required.",
             });
         }
 
+        // 2. Fetch workspace subscription
         const user = await User.findById(
             context.workspaceOwnerId
         ).select("subscription");
@@ -67,38 +70,58 @@ exports.getAutoPayStatus = async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "Workspace owner not found.",
             });
         }
 
         const subscription = user.subscription || {};
 
+        // 3. Normalize AutoPay status
+        const autoRenew = subscription.autoRenew === true;
+
+        const autoRenewStatus = String(
+            subscription.autoRenewStatus || "disabled"
+        ).toLowerCase();
+
+        // 4. Return billing status
         return res.status(200).json({
             success: true,
+
             autoPay: {
-                enabled: Boolean(subscription.autoRenew),
-                status: subscription.autoRenewStatus || "disabled",
-                subscriptionId: subscription.razorpaySubscriptionId || "",
-                nextBillingAt: subscription.nextBillingAt || null,
-                expiresAt: subscription.expiresAt || null,
+                enabled: autoRenew,
+                autoRenew,
+                status: autoRenewStatus,
+
+                subscriptionId:
+                    subscription.razorpaySubscriptionId || "",
+
+                razorpayPlanId:
+                    subscription.razorpayPlanId || "",
+
+                authorizedAt:
+                    subscription.autoRenewAuthorizedAt || null,
+
+                nextBillingAt:
+                    subscription.nextBillingAt || null,
+
+                expiresAt:
+                    subscription.expiresAt || null,
             },
         });
-    } catch (error) {
-        console.error("AUTOPAY SUBSCRIPTION ERROR:", {
-  message: error?.message,
-  statusCode: error?.statusCode,
-  error: error?.error,
-  description: error?.description,
-  response: error?.response?.data,
-  stack: error?.stack,
-});
 
-        return res.status(401).json({
+    } catch (error) {
+        console.error("GET AUTOPAY STATUS ERROR:", {
+            message: error?.message,
+            stack: error?.stack,
+        });
+
+        return res.status(500).json({
             success: false,
-            message: "Unable to verify authentication",
+            message: "Unable to fetch AutoPay status.",
         });
     }
 };
+
 
 
 async function getOrCreateAutoPayPlan({
@@ -1271,7 +1294,7 @@ exports.handleAutoPayWebhook = async (req, res) => {
                         user.subscription.autoRenewStatus = "active";
                         user.subscription.autoRenew = true;
                     } else if (event === "subscription.authenticated") {
-                        user.subscription.autoRenewStatus = "active";
+                        user.subscription.autoRenewStatus = "authenticated";
                         user.subscription.autoRenew = true;
                     } else if (event === "subscription.halted") {
                         user.subscription.autoRenewStatus = "halted";
@@ -1337,8 +1360,10 @@ exports.handleAutoPayWebhook = async (req, res) => {
 };
 
 
+
 exports.verifyAutoPayAuthorization = async (req, res) => {
     try {
+        // 1. Check AutoPay configuration
         if (process.env.AUTOPAY_ENABLED !== "true") {
             return res.status(503).json({
                 success: false,
@@ -1346,6 +1371,7 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
+        // 2. Authenticate user
         const authorization = req.headers.authorization || "";
         const token = authorization.startsWith("Bearer ")
             ? authorization.slice(7)
@@ -1360,8 +1386,17 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
 
         const jwt = require("jsonwebtoken");
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
         const userId = decoded.id || decoded._id || decoded.userId;
 
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid authentication.",
+            });
+        }
+
+        // 3. Get Razorpay authorization details
         const {
             razorpay_payment_id,
             razorpay_subscription_id,
@@ -1369,7 +1404,6 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
         } = req.body || {};
 
         if (
-            !userId ||
             !razorpay_payment_id ||
             !razorpay_subscription_id ||
             !razorpay_signature
@@ -1380,19 +1414,44 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
-        const user = await User.findById(userId);
+        // 4. Resolve workspace owner
+        const context = await getWorkspaceContext(req);
 
-        if (
-            !user ||
-            user.subscription?.razorpaySubscriptionId !==
-                razorpay_subscription_id
-        ) {
-            return res.status(400).json({
+        if (!context?.workspaceOwnerId) {
+            return res.status(401).json({
                 success: false,
-                message: "Subscription does not match this account.",
+                message: "Unable to verify workspace ownership.",
             });
         }
 
+        const user = await User.findById(context.workspaceOwnerId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Workspace owner not found.",
+            });
+        }
+
+        if (!user.subscription) {
+            return res.status(400).json({
+                success: false,
+                message: "No active subscription found for this account.",
+            });
+        }
+
+        // 5. Verify subscription belongs to this workspace
+        if (
+            String(user.subscription.razorpaySubscriptionId || "") !==
+            String(razorpay_subscription_id)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Subscription does not match this workspace.",
+            });
+        }
+
+        // 6. Check Razorpay secret
         if (!process.env.RAZORPAY_KEY_SECRET) {
             console.error("RAZORPAY_KEY_SECRET is missing.");
 
@@ -1402,6 +1461,7 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
+        // 7. Verify Razorpay signature
         const expectedSignature = crypto
             .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
             .update(
@@ -1409,7 +1469,11 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             )
             .digest("hex");
 
-        const received = Buffer.from(razorpay_signature, "hex");
+        const received = Buffer.from(
+            String(razorpay_signature),
+            "hex"
+        );
+
         const expected = Buffer.from(expectedSignature, "hex");
 
         if (
@@ -1422,54 +1486,87 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
             });
         }
 
-        // Signature verified. Keep billing activation tied to
-        // Razorpay subscription lifecycle events/webhook.
-        user.subscription.autoRenewStatus = "authenticated";
-        user.subscription.autoRenewAuthorizedAt = new Date();
-        user.subscription.lastRenewalPaymentId = razorpay_payment_id;
+        // 8. Fetch subscription directly from Razorpay
+        let razorpaySubscription;
 
         try {
-            const razorpaySubscription =
+            razorpaySubscription =
                 await razorpay.subscriptions.fetch(
                     razorpay_subscription_id
                 );
-            const razorpayStatus = String(
-                razorpaySubscription?.status || ""
-            ).toLowerCase();
-
-            if (!["authenticated", "active"].includes(razorpayStatus)) {
-                return res.status(409).json({
-                    success: false,
-                    message:
-                        "Razorpay has not confirmed the mandate authorization.",
-                });
-            }
-
-            user.subscription.autoRenewStatus = "active";
-            user.subscription.autoRenew = true;
         } catch (error) {
             console.error(
-                "AUTOPAY AUTHORIZATION STATUS CHECK FAILED:",
+                "AUTOPAY RAZORPAY FETCH ERROR:",
                 error?.message || error
             );
+
             return res.status(503).json({
                 success: false,
                 message: "Unable to confirm AutoPay with Razorpay.",
             });
         }
 
+        const razorpayStatus = String(
+            razorpaySubscription?.status || ""
+        ).toLowerCase();
+
+        console.log("AUTOPAY AUTHORIZATION VERIFICATION:", {
+            userId: String(user._id),
+            requestedBy: String(userId),
+            subscriptionId: razorpay_subscription_id,
+            paymentId: razorpay_payment_id,
+            razorpayStatus,
+        });
+
+        // 9. Activate only after Razorpay confirms authorization
+        if (!["authenticated", "active"].includes(razorpayStatus)) {
+            return res.status(409).json({
+                success: false,
+                autoRenew: false,
+                autoRenewStatus: "pending",
+                razorpayStatus,
+                message:
+                    "Razorpay has not confirmed the mandate authorization yet.",
+            });
+        }
+
+        // 10. Save verified authorization
+        user.subscription.autoRenew = true;
+        user.subscription.autoRenewStatus = "active";
+        user.subscription.autoRenewAuthorizedAt = new Date();
+        user.subscription.lastRenewalPaymentId =
+            razorpay_payment_id;
+
+        user.subscription.razorpaySubscriptionId =
+            razorpay_subscription_id;
+
+        if (razorpaySubscription.plan_id) {
+            user.subscription.razorpayPlanId =
+                razorpaySubscription.plan_id;
+        }
+
         await user.save();
 
+        console.log("AUTOPAY ACTIVATED SUCCESSFULLY:", {
+            userId: String(user._id),
+            subscriptionId: razorpay_subscription_id,
+            status: user.subscription.autoRenewStatus,
+        });
+
+        // 11. Send success response
         return res.status(200).json({
             success: true,
+            autoRenew: true,
+            autoRenewStatus: "active",
+            subscriptionId: razorpay_subscription_id,
             message: "AutoPay authorization verified successfully.",
-            autoRenewStatus: user.subscription.autoRenewStatus,
         });
+
     } catch (error) {
-        console.error(
-            "AUTOPAY AUTH VERIFICATION ERROR:",
-            error.message
-        );
+        console.error("AUTOPAY AUTH VERIFICATION ERROR:", {
+            message: error?.message,
+            stack: error?.stack,
+        });
 
         return res.status(500).json({
             success: false,
@@ -1477,3 +1574,4 @@ exports.verifyAutoPayAuthorization = async (req, res) => {
         });
     }
 };
+

@@ -391,9 +391,16 @@ if (response.ok && data.success) {
 const [voucherApplied, setVoucherApplied] = useState(false);
 const [voucherMessage, setVoucherMessage] = useState("");
 
+const normalizedVoucherCode = voucherCode.trim().toUpperCase();
+
 const voucherDiscount =
   voucherApplied && currency === "INR"
-    ? Math.min(500, Math.max(0, discountedSubscriptionPrice || 0))
+    ? normalizedVoucherCode === "SV-NEW90"
+      ? Math.min(
+          Math.max(0, discountedSubscriptionPrice || 0),
+          Math.round(Math.max(0, discountedSubscriptionPrice || 0) * 0.9 * 100) / 100
+        )
+      : Math.min(500, Math.max(0, discountedSubscriptionPrice || 0))
     : 0;
 
 const subscriptionSubtotal =
@@ -2028,46 +2035,49 @@ const handleSubscriptionPayment = async () => {
                     />
 
                    
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = voucherCode.trim().toUpperCase();
+                 <button
+                  type="button"
+                  onClick={() => {
+                    const code = voucherCode.trim().toUpperCase();
 
-                      if (currency !== "INR") {
-                        setVoucherApplied(false);
-                        setVoucherMessage("");
-                        setError("Vouchers are available for INR payments only.");
-                        return;
-                      }
+                    if (currency !== "INR") {
+                      setVoucherApplied(false);
+                      setVoucherMessage("");
+                      setError("Vouchers are available for INR payments only.");
+                      return;
+                    }
 
-                      if (!["SV-FIRST01", "SV-RENEW500"].includes(code)) {
-                        setVoucherApplied(false);
-                        setVoucherMessage("");
-                        setError("Invalid voucher code.");
-                        return;
-                      }
+                    if (!["SV-FIRST01", "SV-RENEW500", "SV-NEW90"].includes(code)) {
+                      setVoucherApplied(false);
+                      setVoucherMessage("");
+                      setError("Invalid voucher code.");
+                      return;
+                    }
 
-                      setVoucherCode(code);
-                      setVoucherApplied(true);
-                      setVoucherMessage(
-                        code === "SV-FIRST01"
-                          ? "New user voucher applied: ₹500 off"
-                          : "Renewal voucher applied: ₹500 off"
-                      );
-                      setError("");
-                    }}
-                    disabled={loading || !voucherCode.trim()}
-                    style={{
-                      padding: "10px 14px",
-                      border: 0,
-                      borderRadius: "7px",
-                      background: "#00656A",
-                      color: "#fff",
-                      cursor: loading ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    Apply
-                  </button>
+                    setVoucherCode(code);
+                    setVoucherApplied(true);
+                    setError("");
+
+                    if (code === "SV-NEW90") {
+                      setVoucherMessage("New user offer applied: 90% off subscription plan!");
+                    } else if (code === "SV-FIRST01") {
+                      setVoucherMessage("New user voucher applied: ₹500 off");
+                    } else {
+                      setVoucherMessage("Renewal voucher applied: ₹500 off");
+                    }
+                  }}
+                  disabled={loading || !voucherCode.trim()}
+                  style={{
+                    padding: "10px 14px",
+                    border: 0,
+                    borderRadius: "7px",
+                    background: "#00656A",
+                    color: "#fff",
+                    cursor: loading ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Apply
+                </button>
 
                   </div>
 

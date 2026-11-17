@@ -1167,6 +1167,7 @@ exports.getPaymentStatus = async (req, res) => {
 };
 
 
+
 exports.createOrder = async (req, res) => {
     try {
         const userId = getUserId(req);
@@ -1379,18 +1380,21 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
-            
-                const allowedVoucherCodes = ["SV-FIRST01", "SV-RENEW500"];
+            const allowedVoucherCodes = [
+                "SV-FIRST01",
+                "SV-RENEW500",
+                "SV-NEW90",
+            ];
 
-                if (!allowedVoucherCodes.includes(enteredVoucherCode)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid voucher code.",
-                    });
-                }
-
+            if (!allowedVoucherCodes.includes(enteredVoucherCode)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid voucher code.",
+                });
+            }
 
             const assignedVoucher = user.assignedVoucher || {};
+
             const previouslyUsedVoucher = await Order.exists({
                 userId: user._id,
                 voucherCode: enteredVoucherCode,
@@ -1403,6 +1407,7 @@ exports.createOrder = async (req, res) => {
                     message: "This voucher has already been used on this account.",
                 });
             }
+
             const previouslyPaidSubscription = await Order.exists({
                 userId: user._id,
                 paymentStatus: "paid",
@@ -1419,23 +1424,30 @@ exports.createOrder = async (req, res) => {
                 ],
             });
 
-            if (enteredVoucherCode === "SV-FIRST01") {
-                // First-purchase voucher: new subscribers only
+            // FIRST PURCHASE COUPONS
+            if (
+                enteredVoucherCode === "SV-FIRST01" ||
+                enteredVoucherCode === "SV-NEW90"
+            ) {
                 if (previouslyPaidSubscription) {
                     return res.status(400).json({
                         success: false,
-                        message: "SV-FIRST01 is valid only for your first subscription purchase.",
+                        message: `${enteredVoucherCode} is valid only for your first subscription purchase.`,
                     });
                 }
 
                 if (user.subscription?.status === "active") {
                     return res.status(400).json({
                         success: false,
-                        message: "SV-FIRST01 is only available for new subscribers.",
+                        message: `${enteredVoucherCode} is only available for new subscribers.`,
                     });
                 }
 
-                if (assignedVoucher.isUsed) {
+                // Existing assigned voucher tracking applies to SV-FIRST01.
+                if (
+                    enteredVoucherCode === "SV-FIRST01" &&
+                    assignedVoucher.isUsed
+                ) {
                     return res.status(400).json({
                         success: false,
                         message: "Your first-purchase voucher has already been used.",
@@ -1443,7 +1455,10 @@ exports.createOrder = async (req, res) => {
                 }
             } else if (enteredVoucherCode === "SV-RENEW500") {
                 // Renewal voucher: existing subscribers only
-                if (!previouslyPaidSubscription && user.subscription?.status !== "active") {
+                if (
+                    !previouslyPaidSubscription &&
+                    user.subscription?.status !== "active"
+                ) {
                     return res.status(400).json({
                         success: false,
                         message: "SV-RENEW500 is available only to existing subscribers.",
@@ -1451,20 +1466,39 @@ exports.createOrder = async (req, res) => {
                 }
             }
 
-            voucherDiscount = Math.min(
-                500,
-                Math.max(
-                    0,
-                    Number(assignedVoucher.discountAmount) || 500
-                ),
-                Math.max(
-                    0,
-                    Number(calculation.discountedAmount) || 0
-                )
-            );
+            // DISCOUNT CALCULATION
+            if (enteredVoucherCode === "SV-NEW90") {
+                // 90% discount on subscription plan amount only.
+                // Setup fee, add-ons and tax are excluded.
+                voucherDiscount = Math.min(
+                    Math.max(
+                        0,
+                        Number(calculation.discountedAmount) || 0
+                    ),
+                    Math.round(
+                        Math.max(
+                            0,
+                            Number(calculation.discountedAmount) || 0
+                        ) * 0.90 * 100
+                    ) / 100
+                );
+            } else {
+                // Existing fixed ₹500 voucher logic
+                voucherDiscount = Math.min(
+                    500,
+                    Math.max(
+                        0,
+                        Number(assignedVoucher.discountAmount) || 500
+                    ),
+                    Math.max(
+                        0,
+                        Number(calculation.discountedAmount) || 0
+                    )
+                );
+            }
 
             appliedVoucherCode = enteredVoucherCode;
-                    }
+        }
 
         const setupFee = calculateSetupFee(user, curr);
 
@@ -1529,8 +1563,6 @@ exports.createOrder = async (req, res) => {
                 quantity: addonCalculation.quantity,
                 months,
                 unitPrice: addonCalculation.unitPrice,
-                // Charge the add-on for every month in the subscription period.
-                // Quota is also period-based so a multi-month renewal is consistent.
                 quota: addonCalculation.quota * months,
                 amount: addonCalculation.amount * months,
             });
@@ -1638,6 +1670,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
+
 exports.verifyPayment = async (req, res) => {
     try {
         const {
@@ -1706,7 +1739,7 @@ exports.verifyPayment = async (req, res) => {
                 .toUpperCase();
 
             if (
-                !["SV-FIRST01", "SV-RENEW500"].includes(
+                !["SV-FIRST01", "SV-RENEW500", "SV-NEW90"].includes(
                     normalizedCode
                 )
             ) {
@@ -1719,7 +1752,10 @@ exports.verifyPayment = async (req, res) => {
             }
 
             // Renewal voucher is tracked by paid orders.
-            if (normalizedCode === "SV-RENEW500") {
+            if (
+                normalizedCode === "SV-RENEW500" ||
+                normalizedCode === "SV-NEW90"
+            ) {
                 return true;
             }
 
