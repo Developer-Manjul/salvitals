@@ -805,6 +805,14 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
         })
             .sort({ connectedAt: -1 })
             .lean();
+        
+        console.log("ALL ACTIVE WHATSAPP INTEGRATIONS:", integrations.map(item => ({
+            phoneNumberId: item.phoneNumberId,
+            whatsappBusinessAccountId: item.whatsappBusinessAccountId,
+            verifiedName: item.verifiedName,
+            isActive: item.isActive,
+            connectedAt: item.connectedAt,
+        })));
 
         if (!integrations.length) {
             const error = new Error("No active WhatsApp integration is connected for this workspace.");
@@ -828,6 +836,12 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
             integrations.find(
                 (item) => item.phoneNumberId === existingConversation?.pageId
             ) || integrations[0];
+        
+        console.log("SELECTED WHATSAPP INTEGRATION:", {
+        phoneNumberId: integration?.phoneNumberId,
+        whatsappBusinessAccountId: integration?.whatsappBusinessAccountId,
+        verifiedName: integration?.verifiedName,
+    });
 
         if (!integration.accessTokenEncrypted) {
             throw new Error("WhatsApp access token is unavailable.");
