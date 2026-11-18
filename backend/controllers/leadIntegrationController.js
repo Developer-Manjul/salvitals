@@ -324,7 +324,9 @@ exports.createWebsiteLead = async (req, res) => {
     whatsapp_consent,
     hasWhatsAppOptIn,
     body: req.body,
-  });
+    });
+    
+
 
     const lead = await Lead.create({
       userId: integration.userId,
@@ -349,6 +351,12 @@ exports.createWebsiteLead = async (req, res) => {
       ipAddress: getClientIp(req),
       firstNote: String(firstNote || "").trim(),
     });
+
+      console.log("SAVED WHATSAPP CONSENT:", {
+      whatsappOptIn: lead.whatsappOptIn,
+      whatsappOptInAt: lead.whatsappOptInAt,
+      phone: lead.phone,
+  });
 
    console.log(
     "WEBSITE LEAD PROCESSING START:",
