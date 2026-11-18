@@ -317,6 +317,15 @@ exports.createWebsiteLead = async (req, res) => {
       whatsapp_consent,
     ].some(isExplicitWhatsAppOptIn);
 
+    console.log("WHATSAPP CONSENT DEBUG:", {
+    whatsappOptIn,
+    whatsappConsent,
+    whatsapp_opt_in,
+    whatsapp_consent,
+    hasWhatsAppOptIn,
+    body: req.body,
+  });
+
     const lead = await Lead.create({
       userId: integration.userId,
       name: String(name).trim(),
