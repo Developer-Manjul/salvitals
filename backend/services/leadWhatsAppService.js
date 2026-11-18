@@ -905,6 +905,11 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
                 integration.whatsappBusinessAccountId,
                 accessToken
             );
+
+            console.log(
+                "META TEMPLATE RESPONSE:",
+                JSON.stringify(templateResponse?.data, null, 2)
+            );
             const approvedTemplate = (templateResponse?.data || []).find(
                 (item) =>
                     item.name === templateName &&
