@@ -1,4 +1,6 @@
 const LeadWhatsAppSetting = require("../models/LeadWhatsAppSetting");
+const WhatsAppAutomationSettings = require("../models/WhatsAppAutomationSettings");
+
 const {
     isValidTimezone,
     isValidTime,
@@ -14,6 +16,7 @@ const ALLOWED_SOURCES = [
     "AI Chat",
     "Google Ads",
 ];
+
 
 exports.getSettings = async (req, res) => {
     try {
@@ -33,7 +36,13 @@ exports.getSettings = async (req, res) => {
             });
         }
 
+        // Lead WhatsApp notification settings
         const setting = await LeadWhatsAppSetting.findOne({
+            userId: context.workspaceOwnerId,
+        }).lean();
+
+        // WhatsApp automation template settings
+        const automationSetting = await WhatsAppAutomationSettings.findOne({
             userId: context.workspaceOwnerId,
         }).lean();
 
@@ -47,25 +56,39 @@ exports.getSettings = async (req, res) => {
             country: "",
             leadSources: ALLOWED_SOURCES,
             sendOutsideWindow: false,
+
+            // Meta WhatsApp template
+            leadWelcomeTemplateName:
+                automationSetting?.leadWelcomeTemplateName || "lead_welcome",
+
+            leadWelcomeTemplateLanguage:
+                automationSetting?.leadWelcomeTemplateLanguage || "en",
         };
 
-        const settings = setting
-            ? {
-                ...defaultSettings,
-                ...setting,
-                scheduleMode:
-                    setting.scheduleMode ||
-                    (setting.sendOutsideWindow ? "all_day" : "custom"),
-                leadSources: Array.isArray(setting.leadSources)
-                    ? setting.leadSources
-                    : ALLOWED_SOURCES,
-            }
-            : defaultSettings;
+        const settings = {
+            ...defaultSettings,
+            ...(setting || {}),
+
+            scheduleMode:
+                setting?.scheduleMode ||
+                (setting?.sendOutsideWindow ? "all_day" : "custom"),
+
+            leadSources: Array.isArray(setting?.leadSources)
+                ? setting.leadSources
+                : ALLOWED_SOURCES,
+
+            leadWelcomeTemplateName:
+                automationSetting?.leadWelcomeTemplateName || "lead_welcome",
+
+            leadWelcomeTemplateLanguage:
+                automationSetting?.leadWelcomeTemplateLanguage || "en",
+        };
 
         return res.json({
             success: true,
             settings,
         });
+
     } catch (error) {
         console.error("GET LEAD WHATSAPP SETTINGS ERROR:", error);
 
@@ -75,6 +98,7 @@ exports.getSettings = async (req, res) => {
         });
     }
 };
+
 
 exports.saveSettings = async (req, res) => {
     try {
@@ -95,16 +119,16 @@ exports.saveSettings = async (req, res) => {
         }
 
         const {
-        enabled,
-        recipientNumber,
-        startTime,
-        endTime,
-        timezone,
-        country,
-        scheduleMode,
-        leadSources,
-        sendOutsideWindow,
-    } = req.body;
+            enabled,
+            recipientNumber,
+            startTime,
+            endTime,
+            timezone,
+            country,
+            scheduleMode,
+            leadSources,
+            sendOutsideWindow,
+        } = req.body;
 
         if (typeof enabled !== "boolean") {
             return res.status(400).json({
@@ -138,15 +162,20 @@ exports.saveSettings = async (req, res) => {
             });
         }
 
-        if (normalizedScheduleMode === "custom" &&
-            (!isValidTime(startTime) || !isValidTime(endTime))) {
+        if (
+            normalizedScheduleMode === "custom" &&
+            (!isValidTime(startTime) || !isValidTime(endTime))
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Start and end times must use HH:mm format.",
             });
         }
 
-        if (normalizedScheduleMode === "custom" && startTime === endTime) {
+        if (
+            normalizedScheduleMode === "custom" &&
+            startTime === endTime
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Start and end times cannot be the same.",
@@ -168,13 +197,17 @@ exports.saveSettings = async (req, res) => {
 
         const selectedTimezone = timezone || "Asia/Kolkata";
 
-        if (normalizedScheduleMode === "custom" && !isValidTimezone(selectedTimezone)) {
+        if (
+            normalizedScheduleMode === "custom" &&
+            !isValidTimezone(selectedTimezone)
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid timezone.",
             });
         }
 
+        // Save existing Lead WhatsApp notification settings
         const settings = await LeadWhatsAppSetting.findOneAndUpdate(
             { userId: context.workspaceOwnerId },
             {
@@ -198,15 +231,40 @@ exports.saveSettings = async (req, res) => {
             }
         );
 
+        // Save Meta lead welcome template configuration
+        const automationSettings =
+            await WhatsAppAutomationSettings.findOneAndUpdate(
+                { userId: context.workspaceOwnerId },
+                {
+                    $set: {
+                        leadWelcomeTemplateName: "lead_welcome",
+                        leadWelcomeTemplateLanguage: "en",
+                    },
+                },
+                {
+                    new: true,
+                    upsert: true,
+                    runValidators: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
         return res.json({
             success: true,
             message: "WhatsApp lead settings saved.",
-            settings,
+            settings: {
+                ...settings.toObject(),
+                leadWelcomeTemplateName:
+                    automationSettings.leadWelcomeTemplateName,
+                leadWelcomeTemplateLanguage:
+                    automationSettings.leadWelcomeTemplateLanguage,
+            },
         });
+
     } catch (error) {
         console.error(
             "SAVE LEAD WHATSAPP SETTINGS ERROR:",
-            error.message
+            error
         );
 
         return res.status(500).json({
