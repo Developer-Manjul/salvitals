@@ -901,15 +901,24 @@ async function sendLeadWhatsAppWelcome(lead, { allowAutomatic = true } = {}) {
                 throw new Error("Active WhatsApp integration has no business account ID.");
             }
 
+            console.log("WHATSAPP TEMPLATE API CHECK:", {
+            integrationWabaId: integration.whatsappBusinessAccountId,
+            phoneNumberId: integration.phoneNumberId,
+            accessTokenExists: !!accessToken,
+        });
+
             const templateResponse = await meta.getWhatsAppMessageTemplates(
                 integration.whatsappBusinessAccountId,
                 accessToken
             );
+            
 
-            console.log(
-                "META TEMPLATE RESPONSE:",
-                JSON.stringify(templateResponse?.data, null, 2)
-            );
+           console.log("WHATSAPP TEMPLATE API RESULT:", {
+                wabaId: integration.whatsappBusinessAccountId,
+                responseData: templateResponse?.data,
+                paging: templateResponse?.paging,
+                totalTemplates: templateResponse?.data?.length || 0,
+            });
             const approvedTemplate = (templateResponse?.data || []).find(
                 (item) =>
                     item.name === templateName &&
